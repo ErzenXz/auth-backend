@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  PREMIUM
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  role      Role     @default(USER)
+  photos    Photo[] 
+  albums    Album[]
+
+  Comment Comment[]
+
+  Like Like[]
+}
+
+model Photo {
+  id        Int      @id @default(autoincrement())
+  url       String   // Photo URL or storage path
+  caption   String?  // Optional caption for the photo
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int      // Foreign key to User
+  user      User     @relation(fields: [userId], references: [id])
+  albums    Album[]  @relation("AlbumPhotos") // Many-to-many relationship with Album (implicit)
+  comments  Comment[] // One-to-many relationship with Comment
+  likes     Like[]    // One-to-many relationship with Like
+}
+
+model Album {
+  id        Int      @id @default(autoincrement())
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int      // Foreign key to User
+  user      User     @relation(fields: [userId], references: [id])
+  photos    Photo[]  @relation("AlbumPhotos") // Many-to-many relationship with Photo (implicit)
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String   // Comment content
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int      // Foreign key to User
+  user      User     @relation(fields: [userId], references: [id])
+  photoId   Int      // Foreign key to Photo
+  photo     Photo    @relation(fields: [photoId], references: [id])
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  userId    Int      // Foreign key to User
+  user      User     @relation(fields: [userId], references: [id])
+  photoId   Int      // Foreign key to Photo
+  photo     Photo    @relation(fields: [photoId], references: [id])
+}
