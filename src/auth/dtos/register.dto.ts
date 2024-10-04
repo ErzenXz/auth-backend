@@ -1,4 +1,5 @@
 import {
+  IsDate,
   IsEmail,
   IsNotEmpty,
   IsString,
@@ -19,4 +20,21 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  username: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsDate()
+  birthdate: Date;
+
+  @IsString()
+  @IsNotEmpty()
+  language: string;
+
+  @IsString()
+  @IsNotEmpty()
+  timezone: string;
 }

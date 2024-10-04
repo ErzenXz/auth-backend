@@ -22,32 +22,77 @@ enum Role {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  role      Role     @default(USER)
-  photos    Photo[] 
-  albums    Album[]
+  id                  Int       @id @default(autoincrement())
+  username            String?
+  fullName            String?
+  email               String    @unique
+  password            String
+  firstLogin          DateTime  @default(now())
+  lastLogin           DateTime  @default(now())
+  profilePicture      String?
+  connectingIp        String?
+  birthdate           DateTime?
+  role                Role      @default(USER)
+  tokenVersion        Int       @default(0)
+  isEmailVerified     Boolean   @default(false)
+  passwordLastChanged DateTime?
+  isTwoFactorEnabled  Boolean   @default(false)
+  totpSecret          String?
+  backupCodes         String?
+  externalProvider    String?
+  externalUserId      String?
+  isExternal          Boolean   @default(false)
+  timeZone            String?
+  language            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  Comment Comment[]
+  photos        Photo[]
+  videos        Video[]
+  albums        Album[]
+  comments      Comment[]
+  likes         Like[]
+  refreshTokens RefreshToken[]
+}
 
-  Like Like[]
+model RefreshToken {
+  id               Int       @id @default(autoincrement())
+  token            String
+  userId           Int
+  user             User      @relation(fields: [userId], references: [id])
+  expires          DateTime
+  tokenVersion     Int
+  created          DateTime  @default(now())
+  createdByIp      String?
+  revoked          DateTime?
+  revokedByIp      String?
+  userAgent        String?
+  deviceName       String?
+  revocationReason String?
+  lastUsed         DateTime?
 }
 
 model Photo {
+  id        Int       @id @default(autoincrement())
+  url       String
+  caption   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  albums    Album[]   @relation("AlbumPhotos")
+  comments  Comment[]
+  likes     Like[]
+}
+
+model Video {
   id        Int      @id @default(autoincrement())
-  url       String   // Photo URL or storage path
-  caption   String?  // Optional caption for the photo
+  url       String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    Int      // Foreign key to User
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  albums    Album[]  @relation("AlbumPhotos") // Many-to-many relationship with Album (implicit)
-  comments  Comment[] // One-to-many relationship with Comment
-  likes     Like[]    // One-to-many relationship with Like
+  albums    Album[]  @relation("AlbumVideos")
 }
 
 model Album {
@@ -55,27 +100,28 @@ model Album {
   title     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    Int      // Foreign key to User
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  photos    Photo[]  @relation("AlbumPhotos") // Many-to-many relationship with Photo (implicit)
+  photos    Photo[]  @relation("AlbumPhotos")
+  videos    Video[]  @relation("AlbumVideos")
 }
 
 model Comment {
   id        Int      @id @default(autoincrement())
-  content   String   // Comment content
+  content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    Int      // Foreign key to User
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  photoId   Int      // Foreign key to Photo
+  photoId   Int
   photo     Photo    @relation(fields: [photoId], references: [id])
 }
 
 model Like {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
-  userId    Int      // Foreign key to User
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  photoId   Int      // Foreign key to Photo
+  photoId   Int
   photo     Photo    @relation(fields: [photoId], references: [id])
 }
