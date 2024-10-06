@@ -4,6 +4,8 @@ import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import * as fs from 'fs';
+import { VersioningType } from '@nestjs/common';
+import helmet from 'helmet';
 
 async function bootstrap() {
   // Use HTTPS
@@ -30,6 +32,13 @@ async function bootstrap() {
     .addTag('ErzenPhotos')
     .addBearerAuth()
     .build();
+
+  app.enableVersioning({
+    type: VersioningType.URI,
+  });
+
+  app.use(helmet());
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 

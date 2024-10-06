@@ -14,8 +14,12 @@ import { Auth } from './decorators/auth.decorator';
 import { HttpContext } from './decorators/headers.decorator';
 import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaDto } from './dtos/mfa.dto';
+import { version } from 'os';
 
-@Controller('auth')
+@Controller({
+  path: 'auth',
+  version: '1',
+})
 export class AuthController {
   constructor(private authService: AuthService) {}
 
