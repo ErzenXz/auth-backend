@@ -15,7 +15,9 @@ import { HttpContext } from './decorators/headers.decorator';
 import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaDto } from './dtos/mfa.dto';
 import { version } from 'os';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Authentication')
 @Controller({
   path: 'auth',
   version: '1',

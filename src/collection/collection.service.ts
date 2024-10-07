@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateAlbumDto } from './dtos/create.dto';
 import { XCacheService } from 'src/cache/cache.service';
 import { UpdateAlbumDto } from './dtos/update.dto';
+import { DeleteAlbumDto } from './dtos/delete.dto';
 
 @Injectable()
 export class CollectionService {
@@ -75,7 +76,8 @@ export class CollectionService {
       });
   }
 
-  async deleteAlbum(context: IHttpContext, albumId: string) {
+  async deleteAlbum(context: IHttpContext, deleteDto: DeleteAlbumDto) {
+    const { id: albumId } = deleteDto;
     if (!context.user) {
       throw new Error('User not found');
     }

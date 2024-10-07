@@ -29,8 +29,15 @@ async function bootstrap() {
     .setTitle('ErzenPhotos API')
     .setDescription('The official ErzenPhotos API documentation')
     .setVersion('1.0')
-    .addTag('ErzenPhotos')
     .addBearerAuth()
+    .addServer('https://localhost:3000', 'Local server')
+    .setContact(
+      'Erzen Krasniqi',
+      'https://erzen.tk',
+      'erzenkrasniqi@matrics.io',
+    )
+    .setTermsOfService('https://erzen.tk/terms')
+    .setLicense('AGPL-3.0', 'https://www.gnu.org/licenses/agpl-3.0.en.html')
     .build();
 
   app.enableVersioning({

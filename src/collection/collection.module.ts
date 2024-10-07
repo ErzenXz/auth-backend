@@ -3,11 +3,10 @@ import { CollectionService } from './collection.service';
 import { CollectionController } from './collection.controller';
 import { XCacheModule } from 'src/cache/cache.module';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { AppService } from 'src/app.service';
 
 @Module({
   imports: [XCacheModule, PrismaModule],
-  providers: [CollectionService, AppService],
+  providers: [CollectionService],
   controllers: [CollectionController],
 })
 export class CollectionModule {}
