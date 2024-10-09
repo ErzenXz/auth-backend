@@ -12,6 +12,7 @@ import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaService } from 'src/auth/mfa.service';
 import { MfaDto } from './dtos/mfa.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { time } from 'console';
 
 @Injectable()
 export class AuthService {
@@ -234,6 +235,7 @@ export class AuthService {
 
     let response = {
       name: user.fullName,
+      username: user.username,
       email: user.email,
       role: user.role,
       lastLogin: user.lastLogin,
@@ -241,6 +243,8 @@ export class AuthService {
       emailVerified: user.isEmailVerified,
       externalUser: user.isExternal,
       birthdate: user.birthdate,
+      language: user.language,
+      timezone: user.timeZone,
     };
 
     return response;
@@ -406,6 +410,111 @@ export class AuthService {
       } else {
         throw new BadRequestException('Invalid code');
       }
+    }
+  }
+
+  async generateQrCode(context: IHttpContext) {
+    const refreshToken = context.req.cookies['refreshToken'];
+    const userAgent = context.req.headers['user-agent'];
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const token = await this.prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        expires: { gte: new Date() },
+        revoked: null,
+        userAgent: userAgent,
+      },
+    });
+
+    if (!token) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: token.userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.isTwoFactorEnabled) {
+      throw new BadRequestException('MFA is already enabled');
+    }
+
+    console.log('Generating QR code');
+    const secret = this.mfaService.generateTotpSecret();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { totpSecret: secret },
+    });
+
+    const otpauth = this.mfaService.generateQrCodeUri(user.email, secret);
+    const qrCodeImage = await this.mfaService.generateQrCodeImage(otpauth);
+
+    context.res.setHeader('Content-Type', 'image/png');
+    context.res.send(qrCodeImage);
+  }
+
+  async verifyMfaCode(context: IHttpContext, data: string | any) {
+    const { code } = data;
+    const refreshToken = context.req.cookies['refreshToken'];
+    const userAgent = context.req.headers['user-agent'];
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const token = await this.prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        expires: { gte: new Date() },
+        revoked: null,
+        userAgent: userAgent,
+      },
+    });
+
+    if (!token) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: token.userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!code) {
+      throw new BadRequestException('Verification code is required');
+    }
+
+    console.log('Verifying code');
+    const isValid = this.mfaService.verifyTotp(code, user.totpSecret);
+
+    if (isValid) {
+      const backupCodes = this.mfaService.generateBackupCodes();
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          backupCodes,
+          isTwoFactorEnabled: true,
+        },
+      });
+
+      return {
+        message: 'MFA enabled successfully',
+        backupCodes: backupCodes.split(','),
+      };
+    } else {
+      throw new BadRequestException('Invalid code');
     }
   }
 

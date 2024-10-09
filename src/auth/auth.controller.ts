@@ -58,8 +58,13 @@ export class AuthController {
   }
 
   @Post('mfa/setup')
-  async setupMfa(@HttpContext() req: IHttpContext, @Body() code: string) {
-    return this.authService.setupMfa(req, code);
+  async setupMfa(@HttpContext() req: IHttpContext) {
+    return this.authService.generateQrCode(req);
+  }
+
+  @Post('mfa/setup/verify')
+  async setupMfaSecond(@HttpContext() req: IHttpContext, @Body() code: string) {
+    return this.authService.verifyMfaCode(req, code);
   }
 
   @Post('mfa/verify')
