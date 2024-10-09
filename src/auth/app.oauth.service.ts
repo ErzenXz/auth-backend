@@ -9,7 +9,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
-import { IHttpContext } from './auth/models';
+import { IHttpContext } from './models';
 
 interface ClientCredentials {
   clientId: string;

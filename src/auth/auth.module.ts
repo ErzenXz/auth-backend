@@ -7,8 +7,8 @@ import { JwtSecurity } from './security';
 import { RolesGuard } from './guards/roles.security.jwt';
 import { MfaService } from 'src/auth/mfa.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { OAuthProviderController } from 'src/oauth.controller';
-import { OAuthProviderService } from 'src/app.oauth.service';
+import { OAuthProviderController } from 'src/auth/oauth.controller';
+import { OAuthProviderService } from 'src/auth/app.oauth.service';
 
 @Module({
   imports: [

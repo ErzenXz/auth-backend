@@ -13,8 +13,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { OAuthProviderService } from './app.oauth.service';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Auth, HttpContext } from './auth/decorators';
-import { IHttpContext } from './auth/models';
+import { Auth, HttpContext } from './decorators';
+import { IHttpContext } from './models';
 
 @ApiTags('OAuth Provider')
 @Controller('oauth')
