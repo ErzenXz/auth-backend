@@ -2,6 +2,8 @@ import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ApiTags } from '@nestjs/swagger';
 import * as os from 'os';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { emit } from 'process';
 
 @ApiTags('Info')
 @Controller()

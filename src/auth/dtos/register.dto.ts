@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsDate,
+  IsDateString,
   IsEmail,
   IsNotEmpty,
   IsString,
@@ -33,7 +34,7 @@ export class RegisterDto {
   @ApiProperty({ description: 'User birthdate' })
   @IsString()
   @IsNotEmpty()
-  @IsDate()
+  @IsDateString()
   birthdate: Date;
 
   @ApiProperty({ description: 'User preferred language' })

@@ -8,10 +8,10 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
-import { Request } from 'express';
 import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaService } from 'src/auth/mfa.service';
 import { MfaDto } from './dtos/mfa.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +21,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     mfaService: MfaService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.mfaService = mfaService;
   }
@@ -87,6 +88,11 @@ export class AuthService {
     delete usrCopy.password;
     delete usrCopy.totpSecret;
     delete usrCopy.tokenVersion;
+
+    this.eventEmitter.emit('auth.register', {
+      name: 'Erzen Krasniqi',
+      email: 'njnana2017@gmail.com',
+    });
 
     return {
       accessToken,
