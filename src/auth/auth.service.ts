@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { LoginDto, RegisterDto } from './dtos';
+import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
 import { Request } from 'express';
 import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaService } from 'src/auth/mfa.service';
@@ -542,5 +542,27 @@ export class AuthService {
     );
 
     return refreshToken;
+  }
+
+  async forgotPassword(forgotDto: ForgotPasswordDto) {
+    const { email } = forgotDto;
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const resetToken = this.jwtService.sign(
+      { sub: user.id, use: 'resetPassword' },
+      { expiresIn: '1h' },
+    );
+
+    // Send email with reset token
+    return {
+      message: 'Reset token sent successfully',
+      resetToken,
+    };
   }
 }

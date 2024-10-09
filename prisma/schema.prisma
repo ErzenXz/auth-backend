@@ -53,6 +53,12 @@ model User {
   comments      Comment[]
   likes         Like[]
   refreshTokens RefreshToken[]
+
+  AuthorizationCode AuthorizationCode[]
+
+  OAuthToken OAuthToken[]
+
+  UserConsent UserConsent[]
 }
 
 model RefreshToken {
@@ -124,4 +130,62 @@ model Like {
   user      User     @relation(fields: [userId], references: [id])
   photoId   Int
   photo     Photo    @relation(fields: [photoId], references: [id])
+}
+
+model OAuthClient {
+  id                Int      @id @default(autoincrement())
+  clientId          String   @unique
+  clientSecret      String
+  name              String
+  description       String?
+  redirectUris      String[]
+  allowedScopes     String[]
+  logoUrl           String?
+  privacyPolicyUrl  String?
+  termsOfServiceUrl String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  authCodes    AuthorizationCode[]
+  tokens       OAuthToken[]
+  userConsents UserConsent[]
+}
+
+model AuthorizationCode {
+  id          Int         @id @default(autoincrement())
+  code        String      @unique
+  clientId    Int
+  client      OAuthClient @relation(fields: [clientId], references: [id])
+  userId      Int
+  user        User        @relation(fields: [userId], references: [id])
+  scope       String[]
+  redirectUri String
+  used        Boolean     @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+}
+
+model OAuthToken {
+  id        Int         @id @default(autoincrement())
+  token     String      @unique
+  type      String // 'access_token' or 'refresh_token'
+  clientId  Int
+  client    OAuthClient @relation(fields: [clientId], references: [id])
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id])
+  scope     String[]
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime    @default(now())
+}
+
+model UserConsent {
+  id            Int         @id @default(autoincrement())
+  userId        Int
+  user          User        @relation(fields: [userId], references: [id])
+  clientId      Int
+  client        OAuthClient @relation(fields: [clientId], references: [id])
+  grantedScopes String[]
+  revokedAt     DateTime?
+  createdAt     DateTime    @default(now())
 }

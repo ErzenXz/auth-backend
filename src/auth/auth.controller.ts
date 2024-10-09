@@ -8,7 +8,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto } from './dtos';
+import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
 import { Request, Response } from 'express';
 import { Auth } from './decorators/auth.decorator';
 import { HttpContext } from './decorators/headers.decorator';
@@ -68,5 +68,10 @@ export class AuthController {
     @HttpContext() req: IHttpContext,
   ) {
     return this.authService.verifyMfa(mfaRequest, req);
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() forgotDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotDto);
   }
 }
