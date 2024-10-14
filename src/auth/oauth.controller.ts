@@ -4,15 +4,12 @@ import {
   Post,
   Body,
   Query,
-  UseGuards,
   Req,
-  UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { OAuthProviderService } from './app.oauth.service';
 import { Request } from 'express';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Auth, HttpContext } from './decorators';
 import { IHttpContext } from './models';
 

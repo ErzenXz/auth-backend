@@ -13,6 +13,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EmailModule } from './email/email.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
       isGlobal: true,
     }),
     EmailModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

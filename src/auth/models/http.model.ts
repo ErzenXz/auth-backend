@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { from } from 'rxjs';
 
 export interface HttpContext {
   req: Request;
@@ -10,5 +11,9 @@ export interface HttpContext {
     cloudflare: string | null;
     forwarded: string[];
     real: string;
+  };
+  pagination?: {
+    from: number;
+    to: number;
   };
 }

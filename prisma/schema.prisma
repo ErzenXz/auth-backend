@@ -59,6 +59,12 @@ model User {
   OAuthToken OAuthToken[]
 
   UserConsent UserConsent[]
+
+  UserEvents UserEvents[]
+
+  UserLogin UserLogin[]
+
+  UserPrivaySettings UserPrivaySettings[]
 }
 
 model RefreshToken {
@@ -188,4 +194,48 @@ model UserConsent {
   grantedScopes String[]
   revokedAt     DateTime?
   createdAt     DateTime    @default(now())
+}
+
+model EmailPasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model EmailVerification {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model UserEvents {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  eventType String
+  data      String
+  createdAt DateTime @default(now())
+}
+
+model UserLogin {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  ip        String
+  userAgent String
+  createdAt DateTime @default(now())
+}
+
+model UserPrivaySettings {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  settings  String[]
+  createdAt DateTime @default(now())
 }

@@ -29,7 +29,10 @@ async function bootstrap() {
     .setTitle('ErzenPhotos API')
     .setDescription('The official ErzenPhotos API documentation')
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'access-token',
+    )
     .addServer('https://localhost:3000', 'Local server')
     .setContact(
       'Erzen Krasniqi',

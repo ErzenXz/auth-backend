@@ -6,6 +6,7 @@ import {
   UseGuards,
   Req,
   Res,
+  Patch,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
@@ -16,6 +17,8 @@ import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaDto } from './dtos/mfa.dto';
 import { version } from 'os';
 import { ApiTags } from '@nestjs/swagger';
+import { ForgotPasswordDtoReset } from './dtos/forgot.verify.dto';
+import { ChangePasswordDto } from './dtos/change.password.dto';
 
 @ApiTags('Authentication')
 @Controller({
@@ -78,5 +81,19 @@ export class AuthController {
   @Post('reset-password')
   async resetPassword(@Body() forgotDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotDto);
+  }
+
+  @Get('reset-password/verify/:token')
+  async verifyResetPassword(@HttpContext() context: IHttpContext) {
+    return this.authService.resetPassword(context);
+  }
+
+  @Patch('change-password')
+  @Auth()
+  async changePassword(
+    @HttpContext() req: IHttpContext,
+    @Body() changeDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(req, changeDto);
   }
 }

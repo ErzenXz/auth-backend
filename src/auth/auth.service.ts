@@ -12,13 +12,25 @@ import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaService } from 'src/auth/mfa.service';
 import { MfaDto } from './dtos/mfa.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { time } from 'console';
+import { ApiAcceptedResponse } from '@nestjs/swagger';
+import { ForgotPasswordDtoReset } from './dtos/forgot.verify.dto';
+import { ChangePasswordDto } from './dtos/change.password.dto';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { UserLoginHandler } from './handlers/user-login.handler';
+import { UserLoginCommand } from './commands/user-login.command';
+import { UserRegisterCommand } from './commands/user-register.command';
+import { GetUserInfoQuery } from './queries/get-user-info.query';
+import { UserRefreshTokenCommand } from './commands/user-refresh-token.command';
+import { UserLogoutCommand } from './commands/user-logout.command';
+const crypto = require('crypto');
 
 @Injectable()
 export class AuthService {
   private mfaService: MfaService;
 
   constructor(
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
     private prisma: PrismaService,
     private jwtService: JwtService,
     mfaService: MfaService,
@@ -31,151 +43,26 @@ export class AuthService {
     const { email, password, name, username, birthdate, language, timezone } =
       registerRequest;
 
-    // Check if user already exists
-    const existingUser = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ email }, { username }],
-      },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Email or username is already in use');
-    }
-
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    const user = await this.prisma.user.create({
-      data: {
+    return this.commandBus.execute(
+      new UserRegisterCommand(
         email,
-        password: hashedPassword,
-        fullName: name,
+        password,
+        name,
         username,
         birthdate,
         language,
-        timeZone: timezone,
-      },
-    });
-
-    // Generate JWT token
-    const accessToken = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    // Generate a new refresh token
-    const refreshToken = await this.generateSecureRefreshToken(user);
-
-    // Create a new refresh token object
-    const refreshTokenObj = {
-      userId: user.id,
-      token: refreshToken,
-      expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-      tokenVersion: user.tokenVersion,
-      created: new Date(),
-      createdByIp: context.ip,
-      userAgent: context.req.headers['user-agent'] || 'Unknown',
-      deviceName: 'Unknown',
-    };
-
-    // Save the refresh token to the database
-    await this.prisma.refreshToken.create({
-      data: refreshTokenObj,
-    });
-
-    let usrCopy = { ...user };
-    delete usrCopy.password;
-    delete usrCopy.totpSecret;
-    delete usrCopy.tokenVersion;
-
-    this.eventEmitter.emit('auth.register', {
-      name: 'Erzen Krasniqi',
-      email: 'njnana2017@gmail.com',
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      user: usrCopy,
-    };
+        timezone,
+        context,
+      ),
+    );
   }
 
   async login(loginRequest: LoginDto, context: IHttpContext) {
     const { email, password } = loginRequest;
-    const userAgent = context.req.headers['user-agent'] || 'Unknown';
-    const ip = context.ip;
 
-    // Find user
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Verify password
-    const passwordValid = await bcrypt.compare(password, user.password);
-
-    if (!passwordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Check if the user's refresh token has expired
-    const refreshTokens = await this.prisma.refreshToken.findMany({
-      where: { userId: user.id },
-    });
-
-    const currentRefreshTokenVersion = user.tokenVersion;
-    let newRefreshToken = await this.generateSecureRefreshToken(user);
-    let found = false;
-
-    // Check if any of the refresh tokens are still active
-    for (const token of refreshTokens) {
-      if (
-        currentRefreshTokenVersion === token.tokenVersion &&
-        token.expires > new Date() &&
-        userAgent === token.userAgent &&
-        token.revoked === null
-      ) {
-        await this.prisma.refreshToken.update({
-          where: { id: token.id },
-          data: { lastUsed: new Date() },
-        });
-        found = true;
-        newRefreshToken = token.token;
-        break;
-      }
-    }
-
-    if (!found) {
-      console.log('Creating new refresh token');
-      const refreshTokenObj = {
-        userId: user.id,
-        token: newRefreshToken,
-        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-        tokenVersion: user.tokenVersion,
-        created: new Date(),
-        createdByIp: ip,
-        userAgent: userAgent,
-        deviceName: 'Unknown',
-      };
-
-      await this.prisma.refreshToken.create({
-        data: refreshTokenObj,
-      });
-    }
-
-    // Update user's last login and connecting IP
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        lastLogin: new Date(),
-        connectingIp: ip,
-      },
-    });
+    const { user, refreshToken } = await this.commandBus.execute(
+      new UserLoginCommand(email, password, context),
+    );
 
     // Generate JWT token
     const accessToken = this.jwtService.sign({
@@ -190,7 +77,7 @@ export class AuthService {
         code: 1000,
       };
     } else {
-      context.res.cookie('refreshToken', newRefreshToken, {
+      context.res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
@@ -201,122 +88,24 @@ export class AuthService {
       return {
         message: 'User logged in successfully!',
         accessToken: accessToken,
-        refreshToken: newRefreshToken,
+        refreshToken: refreshToken,
       };
     }
   }
 
   async info(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const token = await this.prisma.refreshToken.findFirst({
-      where: {
-        token: refreshToken,
-        expires: { gte: new Date() },
-        revoked: null,
-      },
-    });
-
-    if (!token) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: token.userId },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    let response = {
-      name: user.fullName,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      lastLogin: user.lastLogin,
-      multifactorEnabled: user.isTwoFactorEnabled,
-      emailVerified: user.isEmailVerified,
-      externalUser: user.isExternal,
-      birthdate: user.birthdate,
-      language: user.language,
-      timezone: user.timeZone,
-    };
-
-    return response;
+    return this.queryBus.execute(new GetUserInfoQuery(refreshToken));
   }
 
   async refresh(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const token = await this.prisma.refreshToken.findFirst({
-      where: {
-        token: refreshToken,
-        expires: { gte: new Date() },
-        revoked: null,
-      },
-    });
-
-    if (!token) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: token.userId },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Generate JWT token
-    const accessToken = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return {
-      accessToken,
-    };
+    return this.commandBus.execute(new UserRefreshTokenCommand(refreshToken));
   }
 
   async logout(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const token = await this.prisma.refreshToken.findFirst({
-      where: {
-        token: refreshToken,
-        expires: { gte: new Date() },
-        revoked: null,
-      },
-    });
-
-    if (!token) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    await this.prisma.refreshToken.update({
-      where: { id: token.id },
-      data: { revoked: new Date(), revocationReason: 'User logged out' },
-    });
-
-    return {
-      message: 'User logged out successfully!',
-      code: 38,
-    };
+    return this.commandBus.execute(new UserLogoutCommand(refreshToken));
   }
 
   async revokeToken(token: string) {
@@ -333,84 +122,21 @@ export class AuthService {
       data: { revoked: new Date(), revocationReason: 'Token revoked by user' },
     });
 
+    await this.prisma.userEvents.create({
+      data: {
+        userId: refreshToken.userId,
+        eventType: 'revoke',
+        data: JSON.stringify({
+          token: refreshToken.token,
+          createdAt: new Date(),
+        }),
+      },
+    });
+
     return {
       message: 'Token revoked successfully!',
       code: 38,
     };
-  }
-
-  async setupMfa(context: IHttpContext, data: string | any) {
-    const { code } = data;
-    const refreshToken = context.req.cookies['refreshToken'];
-    const userAgent = context.req.headers['user-agent'];
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const token = await this.prisma.refreshToken.findFirst({
-      where: {
-        token: refreshToken,
-        expires: { gte: new Date() },
-        revoked: null,
-        userAgent: userAgent,
-      },
-    });
-
-    if (!token) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: token.userId },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    if (user.isTwoFactorEnabled) {
-      throw new BadRequestException('MFA is already enabled');
-    }
-
-    if (!user.isTwoFactorEnabled && (!code || code === 'first')) {
-      console.log('Generating QR code');
-      const secret = this.mfaService.generateTotpSecret();
-
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { totpSecret: secret },
-      });
-
-      const otpauth = this.mfaService.generateQrCodeUri(user.email, secret);
-      const qrCodeImage = await this.mfaService.generateQrCodeImage(otpauth);
-
-      context.res.setHeader('Content-Type', 'image/png');
-      context.res.send(qrCodeImage);
-      return;
-    } else {
-      console.log('Verifying code');
-      const isValid = this.mfaService.verifyTotp(code, user.totpSecret);
-
-      if (isValid) {
-        const backupCodes = this.mfaService.generateBackupCodes();
-
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            backupCodes,
-            isTwoFactorEnabled: true,
-          },
-        });
-
-        return {
-          message: 'MFA enabled successfully',
-          backupCodes: backupCodes.split(','),
-        };
-      } else {
-        throw new BadRequestException('Invalid code');
-      }
-    }
   }
 
   async generateQrCode(context: IHttpContext) {
@@ -509,6 +235,18 @@ export class AuthService {
         },
       });
 
+      await this.prisma.userEvents.create({
+        data: {
+          userId: user.id,
+          eventType: 'mfa.enable',
+          data: JSON.stringify({
+            email: user.email,
+            name: user.fullName,
+            createdAt: user.createdAt,
+          }),
+        },
+      });
+
       return {
         message: 'MFA enabled successfully',
         backupCodes: backupCodes.split(','),
@@ -584,6 +322,19 @@ export class AuthService {
         createdByIp: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
         deviceName: 'Unknown',
+      },
+    });
+
+    await this.prisma.userEvents.create({
+      data: {
+        userId: user.id,
+        eventType: 'mfa.login',
+        data: JSON.stringify({
+          email: user.email,
+          name: user.fullName,
+          createdAt: user.createdAt,
+          usedBackupCode,
+        }),
       },
     });
 
@@ -674,10 +425,193 @@ export class AuthService {
       { expiresIn: '1h' },
     );
 
+    // Save to prisma
+    await this.prisma.emailPasswordReset.create({
+      data: {
+        email: user.email,
+        token: resetToken,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    this.eventEmitter.emit('auth.forgot', {
+      name: user.fullName,
+      email: user.email,
+      token: resetToken,
+    });
+
     // Send email with reset token
     return {
-      message: 'Reset token sent successfully',
-      resetToken,
+      message: 'Password reset email sent successfully',
     };
+  }
+
+  async resetPassword(context: IHttpContext) {
+    const token = context.req.params.token;
+
+    const resetToken = await this.prisma.emailPasswordReset.findFirst({
+      where: {
+        token,
+        used: false,
+        expiresAt: { gte: new Date() },
+      },
+    });
+
+    if (!resetToken) {
+      throw new BadRequestException('Invalid token');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: resetToken.email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const randomSecurePassword = crypto.randomBytes(16).toString('hex');
+
+    const hashedPassword = await bcrypt.hash(randomSecurePassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    await this.prisma.emailPasswordReset.delete({
+      where: { id: resetToken.id },
+    });
+
+    await this.prisma.userEvents.create({
+      data: {
+        userId: user.id,
+        eventType: 'password.reset',
+        data: JSON.stringify({
+          email: user.email,
+          name: user.fullName,
+          createdAt: user.createdAt,
+        }),
+      },
+    });
+
+    return {
+      message: 'Password reset successfully',
+    };
+  }
+
+  async changePassword(
+    context: IHttpContext,
+    changePasswordDto: ChangePasswordDto,
+  ) {
+    const { oldPassword, newPassword } = changePasswordDto;
+
+    const user = await this.findUser(context);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const passwordValid = await bcrypt.compare(oldPassword, user.password);
+
+    if (!passwordValid) {
+      throw new UnauthorizedException('Invalid old password');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        tokenVersion: user.tokenVersion + 1,
+      },
+    });
+
+    await this.prisma.userEvents.create({
+      data: {
+        userId: user.id,
+        eventType: 'password.change',
+        data: JSON.stringify({
+          email: user.email,
+          name: user.fullName,
+          createdAt: user.createdAt,
+        }),
+      },
+    });
+
+    return {
+      message: 'Password changed successfully',
+    };
+  }
+
+  // Helper functions
+
+  async findUser(context: IHttpContext) {
+    const refreshToken = context.req.cookies['refreshToken'];
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const token = await this.prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        expires: { gte: new Date() },
+        revoked: null,
+        tokenVersion: context.user.tokenVersion,
+      },
+    });
+
+    if (!token) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: token.userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return user;
+  }
+
+  // USER MANAGEMENT
+
+  async getAliveSessions(context: IHttpContext) {
+    const user = await this.findUser(context);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const sessions = await this.prisma.refreshToken.findMany({
+      where: {
+        userId: user.id,
+        expires: { gte: new Date() },
+        revoked: null,
+      },
+    });
+
+    return sessions;
+  }
+
+  async getUserEvents(context: IHttpContext) {
+    const user = await this.findUser(context);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const events = await this.prisma.userEvents.findMany({
+      where: {
+        userId: user.id,
+      },
+    });
+
+    return events;
   }
 }

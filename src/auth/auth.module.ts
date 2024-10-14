@@ -9,10 +9,36 @@ import { MfaService } from 'src/auth/mfa.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { OAuthProviderController } from 'src/auth/oauth.controller';
 import { OAuthProviderService } from 'src/auth/app.oauth.service';
+import { UserController } from './user.controller';
+import { UserService } from './user.service';
+import { CqrsModule } from '@nestjs/cqrs';
+import {
+  ChangeBirthdateHandler,
+  ChangeFullNameHandler,
+  ChangeProfilePictureHandler,
+} from './handlers';
+import { UserLoginHandler } from './handlers/user-login.handler';
+import { GetUserInfoHandler } from './handlers/get-user-info.handler';
+import { UserRegisterHandler } from './handlers/user-register.handler';
+import { UserRefreshTokenHandler } from './handlers/user-refresh-token.handler';
+import { UserLogoutHandler } from './handlers/user-logout.handler';
+
+const CommandHandlers = [
+  ChangeFullNameHandler,
+  ChangeBirthdateHandler,
+  ChangeProfilePictureHandler,
+  UserLoginHandler,
+  UserRegisterHandler,
+  UserRefreshTokenHandler,
+  UserLogoutHandler,
+];
+
+const QueryHandlers = [GetUserInfoHandler];
 
 @Module({
   imports: [
     PrismaModule,
+    CqrsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -24,13 +50,16 @@ import { OAuthProviderService } from 'src/auth/app.oauth.service';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, OAuthProviderController],
+  controllers: [AuthController, OAuthProviderController, UserController],
   providers: [
     AuthService,
     JwtSecurity,
     RolesGuard,
     MfaService,
     OAuthProviderService,
+    UserService,
+    ...CommandHandlers,
+    ...QueryHandlers,
   ],
   exports: [AuthService],
 })

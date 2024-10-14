@@ -2,8 +2,8 @@ import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ApiTags } from '@nestjs/swagger';
 import * as os from 'os';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { emit } from 'process';
+import { Auth } from './auth/decorators';
+import { Role } from './auth/enums';
 
 @ApiTags('Info')
 @Controller()
@@ -31,6 +31,7 @@ export class AppController {
   }
 
   @Get('system-info')
+  @Auth(Role.ADMIN, Role.SUPER_ADMIN)
   getSystemInfo(): any {
     return {
       platform: os.platform(),
@@ -38,6 +39,8 @@ export class AppController {
       totalMemory: os.totalmem(),
       freeMemory: os.freemem(),
       uptime: os.uptime(),
+      release: os.release(),
+      loadAverage: os.loadavg(),
     };
   }
 }
