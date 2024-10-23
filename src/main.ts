@@ -6,6 +6,8 @@ import * as cookieParser from 'cookie-parser';
 import * as fs from 'fs';
 import { VersioningType } from '@nestjs/common';
 import helmet from 'helmet';
+import { Logger } from 'winston';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 
 async function bootstrap() {
   // Use HTTPS
@@ -53,10 +55,14 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document);
 
   app.use(cookieParser());
+
+  // Disable CORS restrictions
   app.enableCors({
-    origin: ['https://localhost:5500', 'http://127.0.0.1:5500'],
+    origin: true, // Allow any origin
     credentials: true,
   });
+
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   await app.listen(3000);
 }

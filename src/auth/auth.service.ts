@@ -72,17 +72,41 @@ export class AuthService {
     });
 
     if (user.isTwoFactorEnabled) {
-      return {
-        message: 'MFA is required',
-        code: 1000,
-      };
+      // Check if the user has logged in with this IP before
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+      const userLogins = await this.prisma.userLogin.findMany({
+        where: {
+          userId: user.id,
+          ip: context.ip,
+          createdAt: {
+            gte: twoWeeksAgo,
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (userLogins.length <= 1) {
+        return {
+          message: 'MFA is required',
+          code: 1000,
+        };
+      } else {
+        this.saveCookie(context, 'refreshToken', refreshToken, {
+          expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        });
+
+        return {
+          message: 'User logged in successfully!',
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        };
+      }
     } else {
-      context.res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
+      this.saveCookie(context, 'refreshToken', refreshToken, {
         expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-        domain: process.env.COOKIE_DOMAIN,
       });
 
       return {
@@ -278,8 +302,9 @@ export class AuthService {
       throw new BadRequestException('MFA is not set up');
     }
 
-    let isValid = this.mfaService.verifyTotp(code, user.totpSecret);
     let usedBackupCode = false;
+    // If the user has logged in with this IP before, we don't need to check the MFA code
+    let isValid = this.mfaService.verifyTotp(code, user.totpSecret);
 
     if (!isValid) {
       // Check backup codes
@@ -338,12 +363,8 @@ export class AuthService {
       },
     });
 
-    context.res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+    this.saveCookie(context, 'refreshToken', newRefreshToken, {
       expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-      domain: process.env.COOKIE_DOMAIN,
     });
 
     return {
@@ -613,5 +634,72 @@ export class AuthService {
     });
 
     return events;
+  }
+
+  async disableMfa(context: IHttpContext) {
+    const user = await this.findUser(context);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { isTwoFactorEnabled: false, totpSecret: null, backupCodes: null },
+    });
+
+    return {
+      message: 'MFA disabled successfully',
+    };
+  }
+
+  saveCookie(
+    context: IHttpContext,
+    name: string,
+    value: string,
+    options: {
+      httpOnly?: boolean;
+      secure?: boolean;
+      sameSite?: 'strict' | 'lax' | 'none';
+      expires?: Date;
+      maxAge?: number;
+      domain?: string;
+      path?: string;
+      global?: boolean;
+    } = {},
+  ) {
+    const {
+      httpOnly = true,
+      secure = true,
+      sameSite = 'none',
+      expires,
+      maxAge,
+      domain = process.env.COOKIE_DOMAIN,
+      path = '/',
+      global = false,
+    } = options;
+
+    const cookieOptions: any = {
+      httpOnly,
+      secure,
+      sameSite,
+      path,
+    };
+
+    if (expires) {
+      cookieOptions.expires = expires;
+    } else if (maxAge) {
+      cookieOptions.maxAge = maxAge;
+    }
+
+    if (global) {
+      // For global cookies, we'll set the domain to null
+      // This allows the cookie to be accessible by any domain
+      cookieOptions.domain = null;
+    } else {
+      cookieOptions.domain = domain;
+    }
+
+    context.res.cookie(name, value, cookieOptions);
   }
 }

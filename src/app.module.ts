@@ -9,14 +9,19 @@ import { VideoModule } from './video/video.module';
 import { LocationModule } from './location/location.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EmailModule } from './email/email.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { StorageModule } from './storage/storage.module';
+import { AllExceptionsFilter } from './exception.filters';
+import * as winston from 'winston';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './winston.config';
 
 @Module({
   imports: [
+    WinstonModule.forRoot(winstonConfig),
     AuthModule,
     UserModule,
     CollectionModule,
@@ -40,11 +45,21 @@ import { StorageModule } from './storage/storage.module';
   ],
   controllers: [AppController],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
     AppService,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    winston.Logger,
   ],
 })
-export class AppModule {}
+export class AppModule {
+  constructor() {
+    const logger = winston.createLogger(winstonConfig);
+    winston.loggers.add('default', logger);
+  }
+}

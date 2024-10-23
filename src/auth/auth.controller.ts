@@ -78,6 +78,12 @@ export class AuthController {
     return this.authService.verifyMfa(mfaRequest, req);
   }
 
+  @Auth()
+  @Patch('mfa/disable')
+  async disableMfa(@HttpContext() req: IHttpContext) {
+    return this.authService.disableMfa(req);
+  }
+
   @Post('reset-password')
   async resetPassword(@Body() forgotDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotDto);
