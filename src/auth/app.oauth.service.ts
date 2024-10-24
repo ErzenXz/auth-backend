@@ -32,6 +32,7 @@ interface OAuthClientApplication {
   allowedScopes: string[];
   privacyPolicyUrl: string;
   termsOfServiceUrl: string;
+  logoUrl: string;
 }
 
 interface AuthorizationRequest {
@@ -67,19 +68,25 @@ export class OAuthProviderService {
     private configService: ConfigService,
   ) {}
 
-  async registerApplication(application: Partial<OAuthClientApplication>) {
+  async registerApplication(
+    context: IHttpContext,
+    application: Partial<OAuthClientApplication>,
+  ) {
     const clientId = crypto.randomBytes(16).toString('hex');
     const clientSecret = crypto.randomBytes(32).toString('hex');
+    const hashedSecret = await bcrypt.hash(clientSecret, 10);
 
     const newApplication = await this.prisma.oAuthClient.create({
       data: {
         clientId,
-        clientSecret,
+        clientSecret: hashedSecret,
+        userId: context.user.id,
         name: application.name,
         redirectUris: application.redirectUris,
         allowedScopes: application.allowedScopes,
         privacyPolicyUrl: application.privacyPolicyUrl,
         termsOfServiceUrl: application.termsOfServiceUrl,
+        logoUrl: application.logoUrl,
       },
     });
 
@@ -87,6 +94,60 @@ export class OAuthProviderService {
       clientId: newApplication.clientId,
       clientSecret: clientSecret,
     };
+  }
+
+  async getUserApplications(context: IHttpContext) {
+    const userApplications = this.prisma.oAuthClient.findMany({
+      where: {
+        userId: context.user.id,
+      },
+    });
+
+    return userApplications;
+  }
+
+  async editUserApplication(
+    context: IHttpContext,
+    applicationId: string, // or clientId based on how your system identifies apps
+    applicationData: Partial<OAuthClientApplication>,
+  ) {
+    const existingApplication = await this.prisma.oAuthClient.findUnique({
+      where: {
+        clientId: applicationId,
+        userId: context.user.id,
+      },
+    });
+
+    if (!existingApplication) {
+      throw new Error('Application not found');
+    }
+
+    if (existingApplication.userId !== context.user.id) {
+      throw new Error('You do not have permission to edit this application');
+    }
+
+    const updatedApplication = await this.prisma.oAuthClient.update({
+      where: {
+        clientId: applicationId,
+        userId: context.user.id,
+      },
+      data: {
+        name: applicationData.name || existingApplication.name,
+        redirectUris:
+          applicationData.redirectUris || existingApplication.redirectUris,
+        allowedScopes:
+          applicationData.allowedScopes || existingApplication.allowedScopes,
+        privacyPolicyUrl:
+          applicationData.privacyPolicyUrl ||
+          existingApplication.privacyPolicyUrl,
+        termsOfServiceUrl:
+          applicationData.termsOfServiceUrl ||
+          existingApplication.termsOfServiceUrl,
+        logoUrl: applicationData.logoUrl || existingApplication.logoUrl,
+      },
+    });
+
+    return updatedApplication;
   }
 
   async handleAuthorizationRequest(
@@ -172,6 +233,7 @@ export class OAuthProviderService {
       })),
       privacyPolicyUrl: client.privacyPolicyUrl,
       termsOfServiceUrl: client.termsOfServiceUrl,
+      logoUrl: client.logoUrl,
     };
   }
 
@@ -398,12 +460,9 @@ export class OAuthProviderService {
       throw new UnauthorizedException('Invalid client');
     }
 
-    const isValidSecret = crypto.timingSafeEqual(
-      Buffer.from(clientSecret),
-      Buffer.from(client.clientSecret),
-    );
+    const isVALID = bcrypt.compare(clientSecret, client.clientSecret);
 
-    if (!isValidSecret) {
+    if (!isVALID) {
       throw new UnauthorizedException('Invalid client credentials');
     }
 

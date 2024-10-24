@@ -6,6 +6,7 @@ import {
   Query,
   Req,
   BadRequestException,
+  Put,
 } from '@nestjs/common';
 import { OAuthProviderService } from './app.oauth.service';
 import { Request } from 'express';
@@ -21,8 +22,33 @@ export class OAuthProviderController {
   @Post('applications/register')
   @Auth()
   @ApiOperation({ summary: 'Register a new OAuth client application' })
-  async registerApplication(@Body() application: any) {
-    return this.oAuthProviderService.registerApplication(application);
+  async registerApplication(
+    @HttpContext() context: IHttpContext,
+    @Body() application: any,
+  ) {
+    return this.oAuthProviderService.registerApplication(context, application);
+  }
+
+  @Get('applications/dev')
+  @Auth()
+  @ApiOperation({ summary: 'Returns all the applications created by the user' })
+  async getUserApplications(@HttpContext() context: IHttpContext) {
+    return this.oAuthProviderService.getUserApplications(context);
+  }
+
+  @Put('applications/edit')
+  @Auth()
+  @ApiOperation({ summary: 'Edit an existing OAuth client application' })
+  async editUserApplication(
+    @HttpContext() context: IHttpContext,
+    @Query('application_id') applicationId: string,
+    @Body() applicationData: any,
+  ) {
+    return this.oAuthProviderService.editUserApplication(
+      context,
+      applicationId,
+      applicationData,
+    );
   }
 
   @Get('authorize')

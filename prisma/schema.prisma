@@ -65,6 +65,8 @@ model User {
   UserLogin UserLogin[]
 
   UserPrivaySettings UserPrivaySettings[]
+
+  OAuthClient OAuthClient[]
 }
 
 model RefreshToken {
@@ -140,6 +142,8 @@ model Like {
 
 model OAuthClient {
   id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  user              User     @relation(fields: [userId], references: [id])
   clientId          String   @unique
   clientSecret      String
   name              String
