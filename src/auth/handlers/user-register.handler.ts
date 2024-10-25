@@ -7,6 +7,7 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UserRegisterCommand } from '../commands/user-register.command';
+import { PrivacyService } from 'src/privacy/privacy.service';
 
 @CommandHandler(UserRegisterCommand)
 export class UserRegisterHandler
@@ -16,6 +17,7 @@ export class UserRegisterHandler
     private prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private jwtService: JwtService,
+    private privacySettingsService: PrivacyService,
   ) {}
 
   async execute(command: UserRegisterCommand) {
@@ -102,6 +104,8 @@ export class UserRegisterHandler
       name: 'Erzen Krasniqi',
       email: 'njnana2017@gmail.com',
     });
+
+    await this.privacySettingsService.initializeDefaultSettings(user.id);
 
     return { user: usrCopy, accessToken, refreshToken };
   }

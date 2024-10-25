@@ -43,6 +43,13 @@ export class UserRefreshTokenHandler
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Update the refresh token last used date
+
+    await this.prisma.refreshToken.update({
+      where: { id: token.id },
+      data: { lastUsed: new Date() },
+    });
+
     // Generate JWT token
     const accessToken = this.jwtService.sign({
       sub: user.id,

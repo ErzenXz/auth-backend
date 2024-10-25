@@ -22,6 +22,7 @@ import { UserRegisterCommand } from './commands/user-register.command';
 import { GetUserInfoQuery } from './queries/get-user-info.query';
 import { UserRefreshTokenCommand } from './commands/user-refresh-token.command';
 import { UserLogoutCommand } from './commands/user-logout.command';
+import { PrivacyService } from 'src/privacy/privacy.service';
 const crypto = require('crypto');
 
 @Injectable()
@@ -35,6 +36,7 @@ export class AuthService {
     private jwtService: JwtService,
     mfaService: MfaService,
     private readonly eventEmitter: EventEmitter2,
+    private privacySettingsService: PrivacyService,
   ) {
     this.mfaService = mfaService;
   }
@@ -98,6 +100,8 @@ export class AuthService {
           expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         });
 
+        await this.privacySettingsService.initializeDefaultSettings(user.id);
+
         return {
           message: 'User logged in successfully!',
           accessToken: accessToken,
@@ -108,6 +112,8 @@ export class AuthService {
       this.saveCookie(context, 'refreshToken', refreshToken, {
         expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       });
+
+      await this.privacySettingsService.initializeDefaultSettings(user.id);
 
       return {
         message: 'User logged in successfully!',
@@ -177,6 +183,7 @@ export class AuthService {
         expires: { gte: new Date() },
         revoked: null,
         userAgent: userAgent,
+        tokenVersion: context.user.tokenVersion,
       },
     });
 
@@ -226,6 +233,7 @@ export class AuthService {
         expires: { gte: new Date() },
         revoked: null,
         userAgent: userAgent,
+        tokenVersion: context.user.tokenVersion,
       },
     });
 
@@ -389,6 +397,7 @@ export class AuthService {
         expires: { gte: new Date() },
         revoked: null,
         userAgent: userAgent,
+        tokenVersion: context.user.tokenVersion,
       },
     });
 
@@ -550,6 +559,27 @@ export class AuthService {
       },
     });
 
+    const newRefreshToken = await this.generateSecureRefreshToken(user);
+
+    // Create refresh token in database
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: newRefreshToken,
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        tokenVersion: user.tokenVersion + 1,
+        created: new Date(),
+        createdByIp: context.ip,
+        userAgent: context.req.headers['user-agent'] || 'Unknown',
+        deviceName: 'Unknown',
+      },
+    });
+
+    // Set cookie
+    this.saveCookie(context, 'refreshToken', newRefreshToken, {
+      expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    });
+
     await this.prisma.userEvents.create({
       data: {
         userId: user.id,
@@ -614,6 +644,7 @@ export class AuthService {
         userId: user.id,
         expires: { gte: new Date() },
         revoked: null,
+        tokenVersion: user.tokenVersion,
       },
     });
 

@@ -22,6 +22,7 @@ import { GetUserInfoHandler } from './handlers/get-user-info.handler';
 import { UserRegisterHandler } from './handlers/user-register.handler';
 import { UserRefreshTokenHandler } from './handlers/user-refresh-token.handler';
 import { UserLogoutHandler } from './handlers/user-logout.handler';
+import { PrivacyService } from 'src/privacy/privacy.service';
 
 const CommandHandlers = [
   ChangeFullNameHandler,
@@ -58,6 +59,7 @@ const QueryHandlers = [GetUserInfoHandler];
     MfaService,
     OAuthProviderService,
     UserService,
+    PrivacyService,
     ...CommandHandlers,
     ...QueryHandlers,
   ],

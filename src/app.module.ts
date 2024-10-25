@@ -18,6 +18,7 @@ import { AllExceptionsFilter } from './exception.filters';
 import * as winston from 'winston';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './winston.config';
+import { PrivacyModule } from './privacy/privacy.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { winstonConfig } from './winston.config';
     }),
     EmailModule,
     StorageModule,
+    PrivacyModule,
   ],
   controllers: [AppController],
   providers: [
