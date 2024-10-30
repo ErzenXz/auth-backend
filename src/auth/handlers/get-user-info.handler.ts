@@ -30,6 +30,10 @@ export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
       where: { id: token.userId },
     });
 
+    if (user.tokenVersion !== token.tokenVersion) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -46,6 +50,7 @@ export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
       birthdate: user.birthdate,
       language: user.language,
       timezone: user.timeZone,
+      image: user.profilePicture,
     };
   }
 }
