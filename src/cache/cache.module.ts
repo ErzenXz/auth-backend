@@ -10,7 +10,8 @@ import { XCacheService } from './cache.service';
         const store = await redisStore({
           socket: {
             host: '77.237.244.202',
-            port: 6379,
+            port: 6389,
+            timeout: 10000,
           },
           ttl: 60,
           password: 'mySuperDuperSECUREPASSWORD',
