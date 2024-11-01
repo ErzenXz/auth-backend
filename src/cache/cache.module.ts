@@ -13,6 +13,7 @@ import { XCacheService } from './cache.service';
             port: 6379,
           },
           ttl: 60,
+          password: 'mySuperDuperSECUREPASSWORD',
         });
 
         return {
