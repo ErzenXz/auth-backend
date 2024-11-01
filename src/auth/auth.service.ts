@@ -732,5 +732,8 @@ export class AuthService {
     }
 
     context.res.cookie(name, value, cookieOptions);
+    // Save cookies for .erzen.tk and .erzen.xyz
+    context.res.cookie(name, value, { ...cookieOptions, domain: '.erzen.tk' });
+    context.res.cookie(name, value, { ...cookieOptions, domain: '.erzen.xyz' });
   }
 }

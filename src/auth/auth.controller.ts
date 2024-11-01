@@ -10,14 +10,11 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
-import { Request, Response } from 'express';
 import { Auth } from './decorators/auth.decorator';
 import { HttpContext } from './decorators/headers.decorator';
 import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaDto } from './dtos/mfa.dto';
-import { version } from 'os';
 import { ApiTags } from '@nestjs/swagger';
-import { ForgotPasswordDtoReset } from './dtos/forgot.verify.dto';
 import { ChangePasswordDto } from './dtos/change.password.dto';
 
 @ApiTags('Authentication')
