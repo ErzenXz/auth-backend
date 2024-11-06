@@ -154,9 +154,11 @@ export class AuthController {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TrustPort - Authentication Transfer</title>
+            <title>TrustPort - ARP</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                <link rel="icon" type="image/png" href="https://auth.erzen.xyz/src/content/favicon-48x48.png" sizes="48x48" />
+
             <style nonce="${nonce}">
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
                 
@@ -252,7 +254,7 @@ export class AuthController {
                         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                     </svg>
                 </div>
-                <h1>TrustPort Authentication</h1>
+                <h1>TrustPort ARP</h1>
                 <p id="status">Transferring your secure session...</p>
                 <div class="progress">
                     <div class="progress-bar"></div>
@@ -272,7 +274,7 @@ export class AuthController {
                         await new Promise(r => setTimeout(r, 300));
                         
                         // Set cookie
-                        document.cookie = 'refreshTokenEXTRA=${refreshToken}; domain=.erzen.tk; path=/; secure; samesite=none';
+                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; secure; samesite=none';
                         progressBar.style.width = '60%';
                         
                         await new Promise(r => setTimeout(r, 300));
@@ -286,18 +288,19 @@ export class AuthController {
                         await new Promise(r => setTimeout(r, 300));
                         progressBar.style.width = '100%';
                         
-                        if (returnUrl && returnUrl.endsWith('.erzen.tk')) {
-                            status.textContent = 'Redirecting you securely...';
+                        if (returnUrl) {
+                            status.textContent = 'ARP - Redirecting you securely...';
                             await new Promise(r => setTimeout(r, 500));
-                            window.location.href = returnUrl;
+                            window.location.reload();
                         } else {
-                            status.textContent = 'Authentication transfer complete';
+                            status.textContent = 'ARP - Authentication transfer complete';
                             progressBar.style.background = '#22c55e';
+                            window.location.reload();
                         }
                     } catch (err) {
                         console.error('Auth transfer failed:', err);
                         progressBar.style.background = '#ef4444';
-                        status.textContent = 'Authentication transfer failed';
+                        status.textContent = 'ARP -  transfer failed';
                         error.style.display = 'block';
                         error.textContent = err.message || 'An unexpected error occurred';
                     }
@@ -324,7 +327,7 @@ export class AuthController {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TrustPort - Error</title>
+            <title>TrustPort - ARP</title>
             <style nonce="${nonce}">
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
                 
