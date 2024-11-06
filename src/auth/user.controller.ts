@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
 import { Auth } from './decorators/auth.decorator';
@@ -9,6 +9,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Patch, Body } from '@nestjs/common';
 import { NameDto, BirthdateDto, PhotoDto } from './dtos';
 import { UserService } from './user.service';
+import { RevokeDto } from './dtos/user/revoke.dto';
 
 @ApiTags('User')
 @Controller({
@@ -70,5 +71,14 @@ export class UserController {
     return {
       message: 'Profile picture changed successfully',
     };
+  }
+
+  @Patch('revoke-token')
+  @Auth()
+  async revokeToken(
+    @HttpContext() context: IHttpContext,
+    @Body('token') revokeDto: RevokeDto,
+  ) {
+    return await this.authService.revokeToken(context, revokeDto.token);
   }
 }

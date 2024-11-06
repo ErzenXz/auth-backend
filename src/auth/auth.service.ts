@@ -23,6 +23,7 @@ import { GetUserInfoQuery } from './queries/get-user-info.query';
 import { UserRefreshTokenCommand } from './commands/user-refresh-token.command';
 import { UserLogoutCommand } from './commands/user-logout.command';
 import { PrivacyService } from 'src/privacy/privacy.service';
+import { Request } from 'express';
 const crypto = require('crypto');
 
 @Injectable()
@@ -138,9 +139,9 @@ export class AuthService {
     return this.commandBus.execute(new UserLogoutCommand(refreshToken));
   }
 
-  async revokeToken(token: string) {
+  async revokeToken(context: IHttpContext, token: string) {
     const refreshToken = await this.prisma.refreshToken.findFirst({
-      where: { token },
+      where: { token, userId: context.user.id, revoked: null },
     });
 
     if (!refreshToken) {
@@ -155,7 +156,7 @@ export class AuthService {
     await this.prisma.userEvents.create({
       data: {
         userId: refreshToken.userId,
-        eventType: 'revoke',
+        eventType: 'auth.token.revoke',
         data: JSON.stringify({
           token: refreshToken.token,
           createdAt: new Date(),
@@ -165,7 +166,6 @@ export class AuthService {
 
     return {
       message: 'Token revoked successfully!',
-      code: 38,
     };
   }
 
@@ -630,6 +630,40 @@ export class AuthService {
     return user;
   }
 
+  async findUserSe(req: Request): Promise<Boolean> {
+    const refreshToken = req.cookies['refreshToken'];
+
+    if (!refreshToken) {
+      return false;
+    }
+
+    const token = await this.prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        expires: { gte: new Date() },
+        revoked: null,
+      },
+    });
+
+    if (!token) {
+      return false;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: token.userId },
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    if (user.tokenVersion !== token.tokenVersion) {
+      return false;
+    }
+
+    return true;
+  }
+
   // USER MANAGEMENT
 
   async getAliveSessions(context: IHttpContext) {
@@ -735,5 +769,6 @@ export class AuthService {
     // Save cookies for .erzen.tk and .erzen.xyz
     context.res.cookie(name, value, { ...cookieOptions, domain: '.erzen.tk' });
     context.res.cookie(name, value, { ...cookieOptions, domain: '.erzen.xyz' });
+    context.res.cookie(name, value, { ...cookieOptions, domain: 'localhost' });
   }
 }
