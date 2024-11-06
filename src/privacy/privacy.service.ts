@@ -71,8 +71,8 @@ export class PrivacyService {
     const settingsWithTimestamps = {
       ...settings,
       timestamps: {
-        lastUpdated: new Date().toUTCString(),
-        lastReviewed: new Date().toUTCString(),
+        lastUpdated: new Date().toISOString(),
+        lastReviewed: new Date().toISOString(),
       },
       version: '1.0',
     };
@@ -104,7 +104,7 @@ export class PrivacyService {
         : {}),
       ...newSettings,
       timestamps: {
-        lastUpdated: new Date().toUTCString(),
+        lastUpdated: new Date().toISOString(),
         lastReviewed: (existingSettings.settings as any).timestamps
           ?.lastReviewed,
       },
@@ -117,7 +117,7 @@ export class PrivacyService {
       },
       data: {
         settings: mergedSettings,
-        updatedAt: new Date().toUTCString(),
+        updatedAt: new Date().toISOString(),
       },
     });
   }

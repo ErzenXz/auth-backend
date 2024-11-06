@@ -26,7 +26,7 @@ export class UserRefreshTokenHandler
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
       },
     });
@@ -47,7 +47,7 @@ export class UserRefreshTokenHandler
 
     await this.prisma.refreshToken.update({
       where: { id: token.id },
-      data: { lastUsed: new Date().toUTCString() },
+      data: { lastUsed: new Date().toISOString() },
     });
 
     // Generate JWT token

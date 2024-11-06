@@ -79,7 +79,7 @@ export class AuthService {
       // Check if the user has logged in with this IP before
       const twoWeeksAgo = new Date(
         Date.now() - 14 * 24 * 60 * 60 * 1000,
-      ).toUTCString();
+      ).toISOString();
 
       const userLogins = await this.prisma.userLogin.findMany({
         where: {
@@ -165,7 +165,7 @@ export class AuthService {
         eventType: 'auth.token.revoke',
         data: JSON.stringify({
           token: refreshToken.token,
-          createdAt: new Date().toUTCString(),
+          createdAt: new Date().toISOString(),
         }),
       },
     });
@@ -186,7 +186,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
         userAgent: userAgent,
         tokenVersion: context.user.tokenVersion,
@@ -236,7 +236,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
         userAgent: userAgent,
         tokenVersion: context.user.tokenVersion,
@@ -355,9 +355,9 @@ export class AuthService {
       data: {
         userId: user.id,
         token: newRefreshToken,
-        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString(),
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
         tokenVersion: user.tokenVersion,
-        created: new Date().toUTCString(),
+        created: new Date().toISOString(),
         createdByIp: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
         deviceName: 'Unknown',
@@ -400,7 +400,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
         userAgent: userAgent,
         tokenVersion: context.user.tokenVersion,
@@ -466,7 +466,7 @@ export class AuthService {
       data: {
         email: user.email,
         token: resetToken,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toUTCString(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       },
     });
 
@@ -489,7 +489,7 @@ export class AuthService {
       where: {
         token,
         used: false,
-        expiresAt: { gte: new Date().toUTCString() },
+        expiresAt: { gte: new Date().toISOString() },
       },
     });
 
@@ -572,9 +572,9 @@ export class AuthService {
       data: {
         userId: user.id,
         token: newRefreshToken,
-        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString(),
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
         tokenVersion: user.tokenVersion + 1,
-        created: new Date().toUTCString(),
+        created: new Date().toISOString(),
         createdByIp: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
         deviceName: 'Unknown',
@@ -615,7 +615,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
         tokenVersion: context.user.tokenVersion,
       },
@@ -641,7 +641,7 @@ export class AuthService {
 
     if (!refreshToken) {
       return {
-        expires: new Date().toUTCString(),
+        expires: new Date().toISOString(),
         valid: false,
       };
     }
@@ -649,14 +649,14 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
       },
     });
 
     if (!token) {
       return {
-        expires: new Date().toUTCString(),
+        expires: new Date().toISOString(),
         valid: false,
       };
     }
@@ -667,20 +667,20 @@ export class AuthService {
 
     if (!user) {
       return {
-        expires: new Date().toUTCString(),
+        expires: new Date().toISOString(),
         valid: false,
       };
     }
 
     if (user.tokenVersion !== token.tokenVersion) {
       return {
-        expires: new Date().toUTCString(),
+        expires: new Date().toISOString(),
         valid: false,
       };
     }
 
     return {
-      expires: token.expires.toUTCString(),
+      expires: token.expires.toISOString(),
       valid: true,
     };
   }
@@ -697,7 +697,7 @@ export class AuthService {
     const sessions = await this.prisma.refreshToken.findMany({
       where: {
         userId: user.id,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
         tokenVersion: user.tokenVersion,
       },

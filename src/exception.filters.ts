@@ -52,7 +52,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     response.status(status).json({
       statusCode: status,
-      timestamp: new Date().toUTCString(),
+      timestamp: new Date().toISOString(),
       path: request.url,
       message: userFriendlyMessage,
     });

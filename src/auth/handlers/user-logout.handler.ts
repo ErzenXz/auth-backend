@@ -19,7 +19,7 @@ export class UserLogoutHandler implements ICommandHandler<UserLogoutCommand> {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date().toUTCString() },
+        expires: { gte: new Date().toISOString() },
         revoked: null,
       },
     });
@@ -31,7 +31,7 @@ export class UserLogoutHandler implements ICommandHandler<UserLogoutCommand> {
     await this.prisma.refreshToken.update({
       where: { id: token.id },
       data: {
-        revoked: new Date().toUTCString(),
+        revoked: new Date().toISOString(),
         revocationReason: 'User logged out',
       },
     });
