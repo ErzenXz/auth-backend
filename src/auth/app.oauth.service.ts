@@ -174,7 +174,7 @@ export class OAuthProviderService {
         userId,
         scope: authRequest.scope,
         redirectUri: authRequest.redirectUri,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toUTCString(), // 10 minutes
       },
     });
 
@@ -258,7 +258,7 @@ export class OAuthProviderService {
         revokedAt: null,
       },
       data: {
-        revokedAt: new Date(),
+        revokedAt: new Date().toUTCString(),
       },
     });
 
@@ -289,7 +289,7 @@ export class OAuthProviderService {
         revokedAt: null,
       },
       data: {
-        revokedAt: new Date(),
+        revokedAt: new Date().toUTCString(),
       },
     });
 
@@ -301,7 +301,7 @@ export class OAuthProviderService {
         revokedAt: null,
       },
       data: {
-        revokedAt: new Date(),
+        revokedAt: new Date().toUTCString(),
       },
     });
   }
@@ -316,7 +316,7 @@ export class OAuthProviderService {
         clientId: client.id,
         used: false,
         expiresAt: {
-          gt: new Date(),
+          gt: new Date().toUTCString(),
         },
       },
       include: {
@@ -366,7 +366,7 @@ export class OAuthProviderService {
         type: 'refresh_token',
         revokedAt: null,
         expiresAt: {
-          gt: new Date(),
+          gt: new Date().toUTCString(),
         },
       },
       include: {
@@ -417,7 +417,9 @@ export class OAuthProviderService {
         clientId: client.id,
         type: 'refresh_token',
         scope,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        expiresAt: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000,
+        ).toUTCString(), // 30 days
       },
     });
 

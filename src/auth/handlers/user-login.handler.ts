@@ -50,13 +50,13 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
     for (const token of refreshTokens) {
       if (
         currentRefreshTokenVersion === token.tokenVersion &&
-        token.expires > new Date() &&
+        token.expires.getTime() > Date.now() &&
         userAgent === token.userAgent &&
         token.revoked === null
       ) {
         await this.prisma.refreshToken.update({
           where: { id: token.id },
-          data: { lastUsed: new Date() },
+          data: { lastUsed: new Date().toUTCString() },
         });
         found = true;
         newRefreshToken = token.token;
@@ -69,9 +69,9 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
       const refreshTokenObj = {
         userId: user.id,
         token: newRefreshToken,
-        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString(),
         tokenVersion: user.tokenVersion,
-        created: new Date(),
+        created: new Date().toUTCString(),
         createdByIp: ip,
         userAgent: userAgent,
         deviceName: 'Unknown',
@@ -86,7 +86,7 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
-        lastLogin: new Date(),
+        lastLogin: new Date().toUTCString(),
         connectingIp: ip,
       },
     });
@@ -110,7 +110,7 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
         userId: user.id,
         ip: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
-        createdAt: new Date(),
+        createdAt: new Date().toUTCString(),
       },
     });
 

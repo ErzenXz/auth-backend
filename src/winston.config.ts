@@ -18,7 +18,7 @@ export const winstonConfig = {
         winston.format.colorize(),
         winston.format.simple(),
         winston.format.printf((info) => {
-          const readableTimestamp = new Date(info.timestamp).toLocaleString();
+          const readableTimestamp = new Date(info.timestamp).toUTCString();
           return `${readableTimestamp} ${info.level}: ${info.message}`;
         }),
       ),

@@ -75,7 +75,7 @@ export class UserRegisterHandler
       token: refreshToken,
       expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       tokenVersion: user.tokenVersion,
-      created: new Date(),
+      created: new Date().toUTCString(),
       createdByIp: context.ip,
       userAgent: context.req.headers['user-agent'] || 'Unknown',
       deviceName: 'Unknown',
@@ -91,7 +91,7 @@ export class UserRegisterHandler
         userId: user.id,
         ip: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
-        createdAt: new Date(),
+        createdAt: new Date().toUTCString(),
       },
     });
 

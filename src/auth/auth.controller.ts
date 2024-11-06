@@ -113,7 +113,7 @@ export class AuthController {
 
       const user = await this.authService.findUserSe(req);
 
-      if (!refreshToken || !user) {
+      if (!refreshToken || !user.valid) {
         // Get the original returnUrl from the current request
         const currentReturnUrl = (req.query.returnUrl as string) || '';
 
@@ -272,9 +272,9 @@ export class AuthController {
                         // Animate progress bar
                         progressBar.style.width = '30%';
                         await new Promise(r => setTimeout(r, 300));
-                        
+
                         // Set cookie
-                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; secure; samesite=none';
+                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; expires=${user.expires}; secure; samesite=none';
                         progressBar.style.width = '60%';
                         
                         await new Promise(r => setTimeout(r, 300));

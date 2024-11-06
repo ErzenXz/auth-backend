@@ -24,6 +24,7 @@ import { UserRefreshTokenCommand } from './commands/user-refresh-token.command';
 import { UserLogoutCommand } from './commands/user-logout.command';
 import { PrivacyService } from 'src/privacy/privacy.service';
 import { Request } from 'express';
+import { ArpResponse } from './models/arp.model';
 const crypto = require('crypto');
 
 @Injectable()
@@ -76,7 +77,9 @@ export class AuthService {
 
     if (user.isTwoFactorEnabled) {
       // Check if the user has logged in with this IP before
-      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      const twoWeeksAgo = new Date(
+        Date.now() - 14 * 24 * 60 * 60 * 1000,
+      ).toUTCString();
 
       const userLogins = await this.prisma.userLogin.findMany({
         where: {
@@ -150,7 +153,10 @@ export class AuthService {
 
     await this.prisma.refreshToken.update({
       where: { id: refreshToken.id },
-      data: { revoked: new Date(), revocationReason: 'Token revoked by user' },
+      data: {
+        revoked: new Date().toISOString(),
+        revocationReason: 'Token revoked by user',
+      },
     });
 
     await this.prisma.userEvents.create({
@@ -159,7 +165,7 @@ export class AuthService {
         eventType: 'auth.token.revoke',
         data: JSON.stringify({
           token: refreshToken.token,
-          createdAt: new Date(),
+          createdAt: new Date().toUTCString(),
         }),
       },
     });
@@ -180,7 +186,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
         userAgent: userAgent,
         tokenVersion: context.user.tokenVersion,
@@ -230,7 +236,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
         userAgent: userAgent,
         tokenVersion: context.user.tokenVersion,
@@ -349,9 +355,9 @@ export class AuthService {
       data: {
         userId: user.id,
         token: newRefreshToken,
-        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString(),
         tokenVersion: user.tokenVersion,
-        created: new Date(),
+        created: new Date().toUTCString(),
         createdByIp: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
         deviceName: 'Unknown',
@@ -394,7 +400,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
         userAgent: userAgent,
         tokenVersion: context.user.tokenVersion,
@@ -460,7 +466,7 @@ export class AuthService {
       data: {
         email: user.email,
         token: resetToken,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toUTCString(),
       },
     });
 
@@ -483,7 +489,7 @@ export class AuthService {
       where: {
         token,
         used: false,
-        expiresAt: { gte: new Date() },
+        expiresAt: { gte: new Date().toUTCString() },
       },
     });
 
@@ -566,9 +572,9 @@ export class AuthService {
       data: {
         userId: user.id,
         token: newRefreshToken,
-        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString(),
         tokenVersion: user.tokenVersion + 1,
-        created: new Date(),
+        created: new Date().toUTCString(),
         createdByIp: context.ip,
         userAgent: context.req.headers['user-agent'] || 'Unknown',
         deviceName: 'Unknown',
@@ -609,7 +615,7 @@ export class AuthService {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
         tokenVersion: context.user.tokenVersion,
       },
@@ -630,23 +636,29 @@ export class AuthService {
     return user;
   }
 
-  async findUserSe(req: Request): Promise<Boolean> {
+  async findUserSe(req: Request): Promise<ArpResponse> {
     const refreshToken = req.cookies['refreshToken'];
 
     if (!refreshToken) {
-      return false;
+      return {
+        expires: new Date().toUTCString(),
+        valid: false,
+      };
     }
 
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
       },
     });
 
     if (!token) {
-      return false;
+      return {
+        expires: new Date().toUTCString(),
+        valid: false,
+      };
     }
 
     const user = await this.prisma.user.findUnique({
@@ -654,14 +666,23 @@ export class AuthService {
     });
 
     if (!user) {
-      return false;
+      return {
+        expires: new Date().toUTCString(),
+        valid: false,
+      };
     }
 
     if (user.tokenVersion !== token.tokenVersion) {
-      return false;
+      return {
+        expires: new Date().toUTCString(),
+        valid: false,
+      };
     }
 
-    return true;
+    return {
+      expires: token.expires.toUTCString(),
+      valid: true,
+    };
   }
 
   // USER MANAGEMENT
@@ -676,7 +697,7 @@ export class AuthService {
     const sessions = await this.prisma.refreshToken.findMany({
       where: {
         userId: user.id,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
         tokenVersion: user.tokenVersion,
       },

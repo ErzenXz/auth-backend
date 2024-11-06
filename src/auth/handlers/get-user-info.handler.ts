@@ -17,7 +17,7 @@ export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
     const token = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
-        expires: { gte: new Date() },
+        expires: { gte: new Date().toUTCString() },
         revoked: null,
       },
     });
