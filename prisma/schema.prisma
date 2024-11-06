@@ -244,3 +244,11 @@ model UserPrivaySettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model AllowedOrigins {
+  id        Int      @id @default(autoincrement())
+  origin    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  active    Boolean  @default(true)
+}

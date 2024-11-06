@@ -56,9 +56,19 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  // Disable CORS restrictions
   app.enableCors({
-    origin: true,
+    origin: (requestOrigin, callback) => {
+      if (!requestOrigin) {
+        return callback(null, true);
+      }
+
+      app.use((req, res, next) => {
+        res.header('Access-Control-Allow-Origin', requestOrigin);
+        next();
+      });
+
+      callback(null, true);
+    },
     credentials: true,
   });
 
