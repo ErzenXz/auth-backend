@@ -107,6 +107,9 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: false }) res: Response,
   ) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
     try {
       const refreshToken = req.cookies?.['refreshToken'];
       const nonce = randomBytes(16).toString('base64');
