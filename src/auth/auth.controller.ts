@@ -113,39 +113,14 @@ export class AuthController {
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
 
+    const validUser = await this.authService.findUserSe(req);
+
     try {
       const refreshToken = req.cookies?.['refreshToken'];
       const nonce = randomBytes(16).toString('base64');
 
-      const user = await this.authService.findUserSe(req);
-
-      if (!refreshToken || !user.valid) {
-        // Get the original returnUrl from the current request
-        const currentReturnUrl = (req.query.returnUrl as string) || '';
-
-        // Build the auth URL
-        const authUrl = new URL('https://auth.erzen.xyz');
-
-        // Set returnTo to the current API endpoint with its original returnUrl
-        const currentUrl = new URL(
-          `${req.protocol}://${req.get('host')}${req.originalUrl}`,
-        );
-
-        // If we already have a returnUrl, keep it for after authentication
-        if (currentReturnUrl) {
-          authUrl.searchParams.set(
-            'return_to',
-            `${currentUrl.origin}${currentUrl.pathname}?return_to=${encodeURIComponent(currentReturnUrl)}`,
-          );
-        } else {
-          authUrl.searchParams.set(
-            'return_to',
-            `${currentUrl.origin}${currentUrl.pathname}`,
-          );
-        }
-
-        // Redirect to auth.erzen.xyz
-        return res.redirect(authUrl.toString());
+      if (!refreshToken || !validUser) {
+        throw new UnauthorizedException('Invalid credentials');
       }
 
       // Set CSP headers
@@ -280,7 +255,7 @@ export class AuthController {
                         await new Promise(r => setTimeout(r, 300));
 
                         // Set cookie
-                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; expires=${new Date(user.expires).toUTCString()}; secure; samesite=none';
+                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; expires=${new Date(validUser.expires).toUTCString()}; secure; samesite=none';
                         progressBar.style.width = '60%';
                         
                         await new Promise(r => setTimeout(r, 300));
@@ -297,11 +272,11 @@ export class AuthController {
                         if (returnUrl) {
                             status.textContent = 'ARP - Redirecting you securely...';
                             await new Promise(r => setTimeout(r, 500));
-                            window.location.reload();
+                            window.location.href = returnUrl;
                         } else {
                             status.textContent = 'ARP - Authentication transfer complete';
                             progressBar.style.background = '#22c55e';
-                            window.location.reload();
+                            window.location.href = 'https://auth.erzen.xyz';
                         }
                     } catch (err) {
                         console.error('Auth transfer failed:', err);
@@ -326,6 +301,31 @@ export class AuthController {
         'Content-Security-Policy',
         `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'nonce-${nonce}'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:;`,
       );
+
+      const authUrl = new URL('https://auth.erzen.xyz');
+
+      // Get the original returnUrl from the current request
+      const currentReturnUrl = (req.query.returnUrl as string) || '';
+
+      // Build the auth URL
+
+      // Set returnTo to the current API endpoint with its original returnUrl
+      const currentUrl = new URL(
+        `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+      );
+
+      // If we already have a returnUrl, keep it for after authentication
+      if (currentReturnUrl) {
+        authUrl.searchParams.set(
+          'return_to',
+          `${currentUrl.origin}${currentUrl.pathname}?return_to=${encodeURIComponent(currentReturnUrl)}`,
+        );
+      } else {
+        authUrl.searchParams.set(
+          'return_to',
+          `${currentUrl.origin}${currentUrl.pathname}`,
+        );
+      }
 
       const errorPage = `
         <!DOCTYPE html>
@@ -432,6 +432,11 @@ export class AuthController {
                 <h1>Authentication Error</h1>
                 <p id="error-message">${error.message}</p>
             </div>
+
+            <script nonce="${nonce}">
+            window.location.href = ${authUrl.toString()};
+            </script>
+
         </body>
         </html>
       `;
