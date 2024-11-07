@@ -269,7 +269,7 @@ export class AuthController {
                         
                         status.textContent = 'ARP - Redirecting you securely...';
                         await new Promise(r => setTimeout(r, 500));
-                        window.location.href = ${returnURL.returnUrl};
+                        window.location.href = "${returnURL.returnUrl}";
                         
                     } catch (err) {
                         console.error('Auth transfer failed:', err);
