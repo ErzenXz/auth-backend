@@ -274,7 +274,7 @@ export class AuthController {
                         await new Promise(r => setTimeout(r, 300));
 
                         // Set cookie
-                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; expires=${user.expires}; secure; samesite=none';
+                        document.cookie = 'refreshToken=${refreshToken}; domain=.erzen.tk; path=/; expires=${new Date(user.expires).toUTCString()}; secure; samesite=none';
                         progressBar.style.width = '60%';
                         
                         await new Promise(r => setTimeout(r, 300));
