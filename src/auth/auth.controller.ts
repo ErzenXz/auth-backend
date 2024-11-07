@@ -7,6 +7,7 @@ import {
   UnauthorizedException,
   Req,
   Res,
+  Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
@@ -106,6 +107,7 @@ export class AuthController {
   async transferAuth(
     @Req() req: Request,
     @Res({ passthrough: false }) res: Response,
+    @Query() returnURL: { returnUrl?: string },
   ) {
     const origin = req.headers.origin;
     if (origin) {
@@ -113,9 +115,9 @@ export class AuthController {
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
 
-    const validUser = await this.authService.findUserSe(req);
-
     try {
+      const validUser = await this.authService.findUserSe(req);
+
       const refreshToken = req.cookies?.['refreshToken'];
       const nonce = randomBytes(16).toString('base64');
 
@@ -260,24 +262,15 @@ export class AuthController {
                         
                         await new Promise(r => setTimeout(r, 300));
                         progressBar.style.width = '90%';
-                        
-                        // Get return URL
-                        const params = new URLSearchParams(window.location.search);
-                        const returnUrl = params.get('returnUrl');
-                        
+                                               
                         // Final delay to ensure cookie is set
                         await new Promise(r => setTimeout(r, 300));
                         progressBar.style.width = '100%';
                         
-                        if (returnUrl) {
-                            status.textContent = 'ARP - Redirecting you securely...';
-                            await new Promise(r => setTimeout(r, 500));
-                            window.location.href = returnUrl;
-                        } else {
-                            status.textContent = 'ARP - Authentication transfer complete';
-                            progressBar.style.background = '#22c55e';
-                            window.location.href = 'https://auth.erzen.xyz';
-                        }
+                        status.textContent = 'ARP - Redirecting you securely...';
+                        await new Promise(r => setTimeout(r, 500));
+                        window.location.href = ${returnURL};
+                        
                     } catch (err) {
                         console.error('Auth transfer failed:', err);
                         progressBar.style.background = '#ef4444';
@@ -433,12 +426,12 @@ export class AuthController {
                 <p id="error-message">${error.message}</p>
             </div>
 
-            <script nonce="${nonce}">
-            window.location.href = ${authUrl.toString()};
-            </script>
-
-        </body>
-        </html>
+      <script nonce="${nonce}">
+      window.location.href = "${authUrl.toString()}?returnTo=${returnURL.returnUrl}";
+      </script>
+      
+      </body>
+      </html>
       `;
 
       res.status(401).send(errorPage);
