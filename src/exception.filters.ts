@@ -21,40 +21,45 @@ Sentry.init({
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-
-    const userFriendlyMessage =
-      'An unexpected error occurred. Please try again later. :(';
-
     const isHttpException = exception instanceof HttpException;
-    const exceptionMessage = isHttpException
-      ? (exception.getResponse() as any).message || userFriendlyMessage
-      : userFriendlyMessage;
+    const status = isHttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    Sentry.captureException(exception);
+    const defaultMessage =
+      'An unexpected error occurred. Please try again later.';
+    let errorMessage = defaultMessage;
 
-    if (exceptionMessage !== 'Unauthorized') {
+    if (isHttpException) {
+      const exceptionResponse = exception.getResponse();
+      if (typeof exceptionResponse === 'string') {
+        errorMessage = exceptionResponse;
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        'message' in exceptionResponse
+      ) {
+        errorMessage = (exceptionResponse as any).message;
+      }
+    }
+
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `Exception occurred at ${request.url}: ${JSON.stringify({
-          message: exceptionMessage,
-          stack: (exception as Error).stack || exception.toString(),
-        })}`,
+        `Error ${status} at ${request.method} ${request.url}: ${errorMessage}`,
+        (exception as Error).stack,
       );
+      Sentry.captureException(exception);
     }
 
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: userFriendlyMessage,
+      message: errorMessage,
     });
   }
 }

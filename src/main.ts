@@ -26,16 +26,17 @@ async function bootstrap() {
       transform: true,
     }),
   );
-
   const config = new DocumentBuilder()
-    .setTitle('ErzenPhotos API')
-    .setDescription('The official ErzenPhotos API documentation')
+    .setTitle('XENAuth API')
+    .setDescription('The official XENAuth API documentation')
     .setVersion('1.0')
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'access-token',
     )
+    .addSecurityRequirements('access-token')
     .addServer('https://localhost:3000', 'Local server')
+    .addServer('https://api.erzen.xyz', 'Production server')
     .setContact(
       'Erzen Krasniqi',
       'https://erzen.tk',
