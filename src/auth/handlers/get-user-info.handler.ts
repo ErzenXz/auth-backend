@@ -39,6 +39,7 @@ export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
     }
 
     return {
+      id: user.id,
       name: user.fullName,
       username: user.username,
       email: user.email,

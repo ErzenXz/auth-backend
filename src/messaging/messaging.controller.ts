@@ -39,4 +39,10 @@ export class MessagingController {
       +page,
     );
   }
+
+  @Get('searchUsers')
+  @Auth()
+  async searchUsers(@Query('query') query: string) {
+    return this.messagingService.searchUsers(query);
+  }
 }

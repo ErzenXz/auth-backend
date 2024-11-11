@@ -66,7 +66,12 @@ export class MessagingService {
 
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, username: true },
+      select: {
+        id: true,
+        username: true,
+        profilePicture: true,
+        fullName: true,
+      },
     });
 
     return users;
@@ -85,12 +90,12 @@ export class MessagingService {
           { senderId: conversationUserId, receiverId: userId },
         ],
       },
-      orderBy: { timestamp: 'asc' },
+      orderBy: { timestamp: 'desc' },
       take: pageSize,
       skip: (page - 1) * pageSize,
     });
 
-    return messages.map((message) => ({
+    return messages.reverse().map((message) => ({
       ...message,
       content: this.encryptionService.decrypt(
         JSON.parse(message.content).iv,
@@ -119,7 +124,7 @@ export class MessagingService {
       where: {
         OR: [{ username: { contains: query } }, { email: { contains: query } }],
       },
-      select: { id: true, username: true },
+      select: { id: true, username: true, profilePicture: true },
     });
   }
 
