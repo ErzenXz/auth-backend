@@ -110,6 +110,12 @@ export class AuthController {
     @Query() returnURL: { returnUrl?: string },
   ) {
     const origin = req.headers.origin;
+
+    // Check if the origin is erzen.tk
+    if (origin && !origin.includes('erzen.tk')) {
+      throw new UnauthorizedException('Invalid origin');
+    }
+
     if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -311,7 +317,7 @@ export class AuthController {
       if (currentReturnUrl) {
         authUrl.searchParams.set(
           'return_to',
-          `${currentUrl.origin}${currentUrl.pathname}?return_to=${encodeURIComponent(currentReturnUrl)}`,
+          `${currentUrl.origin}${currentUrl.pathname}?returnUrl=${encodeURIComponent(currentReturnUrl)}`,
         );
       } else {
         authUrl.searchParams.set(

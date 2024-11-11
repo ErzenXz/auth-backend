@@ -19,6 +19,7 @@ import * as winston from 'winston';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './winston.config';
 import { PrivacyModule } from './privacy/privacy.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { PrivacyModule } from './privacy/privacy.module';
     EmailModule,
     StorageModule,
     PrivacyModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [

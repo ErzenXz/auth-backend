@@ -6,8 +6,8 @@ import * as cookieParser from 'cookie-parser';
 import * as fs from 'fs';
 import { VersioningType } from '@nestjs/common';
 import helmet from 'helmet';
-import { Logger } from 'winston';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import * as compression from 'compression';
 
 async function bootstrap() {
   // Use HTTPS
@@ -15,6 +15,7 @@ async function bootstrap() {
   const httpsOptions = {
     key: fs.readFileSync('./src/cert/key.pem'),
     cert: fs.readFileSync('./src/cert/cert.pem'),
+    http1: true,
   };
 
   const app = await NestFactory.create(AppModule, { httpsOptions });
@@ -74,6 +75,13 @@ async function bootstrap() {
   });
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
+  app.use(
+    compression({
+      brotli: true,
+      threshold: 1024,
+    }),
+  );
 
   await app.listen(3000);
 }

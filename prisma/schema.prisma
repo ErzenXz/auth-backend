@@ -67,6 +67,9 @@ model User {
   UserPrivaySettings UserPrivaySettings[]
 
   OAuthClient OAuthClient[]
+
+  sentMessages     Message[] @relation("Sender")
+  receivedMessages Message[] @relation("Receiver")
 }
 
 model RefreshToken {
@@ -245,10 +248,12 @@ model UserPrivaySettings {
   updatedAt DateTime @updatedAt
 }
 
-model AllowedOrigins {
-  id        Int      @id @default(autoincrement())
-  origin    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  active    Boolean  @default(true)
+model Message {
+  id         Int      @id @default(autoincrement())
+  senderId   Int
+  sender     User     @relation("Sender", fields: [senderId], references: [id])
+  receiverId Int
+  receiver   User     @relation("Receiver", fields: [receiverId], references: [id])
+  content    String
+  timestamp  DateTime @default(now())
 }
