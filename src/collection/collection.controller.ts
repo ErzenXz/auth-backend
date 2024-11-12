@@ -3,7 +3,6 @@ import { Auth, HttpContext } from 'src/auth/decorators';
 import type { HttpContext as IHttpContext } from '../auth/models/http.model';
 import { CreateAlbumDto } from './dtos/create.dto';
 import { CollectionService } from './collection.service';
-import { AppService } from 'src/app.service';
 import { UpdateAlbumDto } from './dtos/update.dto';
 import { DeleteAlbumDto } from './dtos/delete.dto';
 import { ApiTags } from '@nestjs/swagger';

@@ -14,7 +14,8 @@ import { XCacheService } from './cache.service';
             timeout: 10000,
           },
           ttl: 60,
-          // password: 'mySuperDuperSECUREPASSWORD',
+          username: 'default',
+          password: 'ifW4WlzrmePojpRz5i72aBsfj8o9yaAY',
         });
 
         return {

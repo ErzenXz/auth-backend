@@ -1,9 +1,20 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { MessagingService } from './messaging.service';
 import { MessageDto } from './dtos/message.dto';
 import { Auth, HttpContext } from 'src/auth/decorators';
 import { IHttpContext } from 'src/auth/models';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Messaging')
 @Controller('messaging')
 export class MessagingController {
   constructor(private messagingService: MessagingService) {}
@@ -44,5 +55,32 @@ export class MessagingController {
   @Auth()
   async searchUsers(@Query('query') query: string) {
     return this.messagingService.searchUsers(query);
+  }
+
+  @Get('unreadMessages')
+  @Auth()
+  async getUnreadMessages(@HttpContext() context: IHttpContext) {
+    return this.messagingService.getUnreadMessages(context);
+  }
+
+  @Delete('delete/:messageId')
+  @Auth()
+  async deleteMessage(
+    @HttpContext() context: IHttpContext,
+    @Param('messageId') messageId: number,
+  ) {
+    return this.messagingService.deleteMessage(context, messageId);
+  }
+
+  @Delete('deleteConversation/:conversationUserId')
+  @Auth()
+  async deleteConversation(
+    @HttpContext() context: IHttpContext,
+    @Param('conversationUserId') conversationUserId: number,
+  ) {
+    return this.messagingService.deleteConversation(
+      context,
+      conversationUserId,
+    );
   }
 }

@@ -49,9 +49,6 @@ export class CollectionService {
 
       await this.cacheService.setCache(`albums:${context.user.id}`, albums);
     }
-
-    console.log('Fetching from cache');
-
     return albums;
   }
 

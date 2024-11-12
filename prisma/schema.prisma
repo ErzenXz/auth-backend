@@ -70,6 +70,10 @@ model User {
 
   sentMessages     Message[] @relation("Sender")
   receivedMessages Message[] @relation("Receiver")
+
+  MessageRead MessageRead[]
+
+  MessageDeletion MessageDeletion[]
 }
 
 model RefreshToken {
@@ -256,4 +260,27 @@ model Message {
   receiver   User     @relation("Receiver", fields: [receiverId], references: [id])
   content    String
   timestamp  DateTime @default(now())
+
+  MessageRead MessageRead[]
+
+  MessageDeletion MessageDeletion[]
+}
+
+model MessageRead {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  message   Message  @relation(fields: [messageId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  readAt    DateTime @default(now())
+}
+
+model MessageDeletion {
+  id        Int     @id @default(autoincrement())
+  message   Message @relation(fields: [messageId], references: [id])
+  messageId Int
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
 }

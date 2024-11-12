@@ -27,7 +27,7 @@ export class MessagingGateway implements OnGatewayConnection {
 
   @OnEvent('message.sent')
   handleMessageSent(message: any) {
-    const receiverId = message.senderId;
+    const receiverId = message.receiverId;
     this.server.to(`user_${receiverId}`).emit('refreshMessages');
   }
 }

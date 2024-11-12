@@ -5,6 +5,8 @@ import { IHttpContext } from 'src/auth/models';
 import { MessageDto } from './dtos/message.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserMessage } from './models/message.modal';
+import { response } from 'express';
+import { XCacheService } from 'src/cache/cache.service';
 
 @Injectable()
 export class MessagingService {
@@ -12,6 +14,7 @@ export class MessagingService {
     private prisma: PrismaService,
     private encryptionService: EncryptionService,
     private eventEmitter: EventEmitter2,
+    private cacheService: XCacheService,
   ) {}
 
   async sendMessage(
@@ -44,37 +47,84 @@ export class MessagingService {
 
     this.eventEmitter.emit('message.sent', uMessage);
 
+    this.cacheService.delCache(`messages:${context.user.id}/${receiver.id}`);
+    this.cacheService.delCache(`conversationThreads:${context.user.id}`);
+
     return message;
   }
 
   async getConversationThreads(userId: number) {
+    const cacheKey = `conversationThreads:${userId}`;
+    const cachedThreads = await this.cacheService.getCache(cacheKey);
+
+    if (cachedThreads) {
+      return JSON.parse(cachedThreads);
+    }
+
     const threads = await this.prisma.message.findMany({
       where: {
         OR: [{ senderId: userId }, { receiverId: userId }],
       },
-      select: {
-        senderId: true,
-        receiverId: true,
+      orderBy: {
+        timestamp: 'desc',
+      },
+      include: {
+        MessageRead: {
+          where: {
+            AND: [
+              { userId: userId },
+              {
+                message: {
+                  receiverId: userId,
+                },
+              },
+            ],
+          },
+        },
       },
     });
 
-    const userIds = threads
-      .map((message) =>
-        message.senderId !== userId ? message.senderId : message.receiverId,
-      )
-      .filter((value, index, self) => self.indexOf(value) === index);
+    const conversationsMap = new Map<number, any>();
 
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: {
-        id: true,
-        username: true,
-        profilePicture: true,
-        fullName: true,
-      },
-    });
+    for (const message of threads) {
+      const otherUserId =
+        message.senderId !== userId ? message.senderId : message.receiverId;
 
-    return users;
+      if (!conversationsMap.has(otherUserId)) {
+        const otherUser = await this.prisma.user.findUnique({
+          where: { id: otherUserId },
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+            fullName: true,
+          },
+        });
+
+        const decryptedContent = this.encryptionService.decrypt(
+          JSON.parse(message.content).iv,
+          JSON.parse(message.content).content,
+        );
+        const lastMessageContent = decryptedContent
+          .split(' ')
+          .slice(0, 10)
+          .join(' ');
+
+        const hasSeen =
+          message.senderId === userId || message.MessageRead.length > 0;
+
+        conversationsMap.set(otherUserId, {
+          ...otherUser,
+          lastChat: message.timestamp,
+          lastMessage: lastMessageContent,
+          hasSeen: hasSeen,
+        });
+      }
+    }
+
+    const conversations = Array.from(conversationsMap.values());
+    await this.cacheService.setCache(cacheKey, JSON.stringify(conversations));
+    return conversations;
   }
 
   async getMessagesForConversation(
@@ -89,28 +139,44 @@ export class MessagingService {
           { senderId: userId, receiverId: conversationUserId },
           { senderId: conversationUserId, receiverId: userId },
         ],
+        NOT: {
+          MessageDeletion: {
+            some: {
+              userId: userId,
+            },
+          },
+        },
       },
       orderBy: { timestamp: 'desc' },
       take: pageSize,
       skip: (page - 1) * pageSize,
+      include: {
+        MessageRead: true,
+        MessageDeletion: true,
+      },
     });
+
+    // Identify unread messages
+    const unreadMessages = messages.filter(
+      (message) =>
+        message.receiverId === userId &&
+        !message.MessageRead.some((read) => read.userId === userId),
+    );
+
+    // Mark unread messages as read
+    if (unreadMessages.length > 0) {
+      const messageReads = unreadMessages.map((message) => ({
+        messageId: message.id,
+        userId: userId,
+      }));
+
+      await this.prisma.messageRead.createMany({
+        data: messageReads,
+        skipDuplicates: true,
+      });
+    }
 
     return messages.reverse().map((message) => ({
-      ...message,
-      content: this.encryptionService.decrypt(
-        JSON.parse(message.content).iv,
-        JSON.parse(message.content).content,
-      ),
-    }));
-  }
-
-  async getMessagesForUser(userId: number) {
-    const messages = await this.prisma.message.findMany({
-      where: { OR: [{ senderId: userId }, { receiverId: userId }] },
-      orderBy: { timestamp: 'asc' },
-    });
-
-    return messages.map((message) => ({
       ...message,
       content: this.encryptionService.decrypt(
         JSON.parse(message.content).iv,
@@ -129,20 +195,35 @@ export class MessagingService {
   }
 
   async deleteMessage(context: IHttpContext, messageId: number) {
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-    });
+    try {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+      });
 
-    if (!message) {
-      throw new Error('Message not found');
+      if (!message) {
+        return { error: 'Message not found' };
+      }
+
+      if (message.senderId !== context.user.id) {
+        return { error: 'You are not authorized' };
+      }
+
+      await this.prisma.messageRead.deleteMany({
+        where: { messageId: messageId },
+      });
+
+      await this.prisma.messageRead.deleteMany({
+        where: { messageId: messageId },
+      });
+      await this.prisma.message.delete({ where: { id: messageId } });
+
+      return { success: true };
+    } catch (error) {
+      return { error: 'An unexpected error occurred. Please try again later.' };
     }
-
-    if (message.senderId !== context.user.id) {
-      throw new Error('You can only delete your own messages');
-    }
-
-    return this.prisma.message.delete({ where: { id: messageId } });
   }
+
+  // Updated deleteConversation method
 
   async deleteConversation(context: IHttpContext, userId: number) {
     const messages = await this.prisma.message.findMany({
@@ -155,16 +236,61 @@ export class MessagingService {
     });
 
     if (messages.length === 0) {
-      throw new Error('No conversation found between the users');
+      return response.status(404).json({ message: 'Conversation not found' });
     }
 
-    return this.prisma.message.deleteMany({
+    // Add deletion records for the requesting user
+    const deletions = messages.map((message) => ({
+      messageId: message.id,
+      userId: context.user.id,
+    }));
+
+    await this.prisma.messageDeletion.createMany({
+      data: deletions,
+      skipDuplicates: true,
+    });
+
+    // delete messages from DB if both users have deleted them
+    await this.prisma.message.deleteMany({
       where: {
-        OR: [
-          { senderId: context.user.id, receiverId: userId },
-          { senderId: userId, receiverId: context.user.id },
-        ],
+        id: { in: messages.map((m) => m.id) },
+        AND: {
+          MessageDeletion: {
+            every: {
+              userId: { in: [context.user.id, userId] },
+            },
+          },
+        },
       },
     });
+
+    return { success: true };
+  }
+
+  async getUnreadMessages(context: IHttpContext) {
+    const unreadMessages = await this.prisma.message.findMany({
+      where: {
+        receiverId: context.user.id,
+        NOT: {
+          MessageRead: {
+            some: {
+              userId: context.user.id,
+            },
+          },
+        },
+      },
+      orderBy: { timestamp: 'desc' },
+      include: {
+        MessageRead: true,
+      },
+    });
+
+    return unreadMessages.reverse().map((message) => ({
+      ...message,
+      content: this.encryptionService.decrypt(
+        JSON.parse(message.content).iv,
+        JSON.parse(message.content).content,
+      ),
+    }));
   }
 }
