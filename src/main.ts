@@ -8,6 +8,7 @@ import { VersioningType } from '@nestjs/common';
 import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import * as compression from 'compression';
+import { RedisIoAdapter } from './messaging/adapters/redis-io.adapter';
 
 async function bootstrap() {
   // Use HTTPS
@@ -82,6 +83,8 @@ async function bootstrap() {
       threshold: 1024,
     }),
   );
+
+  app.useWebSocketAdapter(new RedisIoAdapter(app));
 
   await app.listen(3000);
 }

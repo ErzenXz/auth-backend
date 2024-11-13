@@ -20,6 +20,8 @@ import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './winston.config';
 import { PrivacyModule } from './privacy/privacy.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { CustomEventEmitterModule } from './services/event-emitter.module';
+import { MailerService } from '@nestjs-modules/mailer';
 
 @Module({
   imports: [
@@ -31,7 +33,7 @@ import { MessagingModule } from './messaging/messaging.module';
     VideoModule,
     LocationModule,
     PrismaModule,
-    EventEmitterModule.forRoot(),
+    CustomEventEmitterModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
@@ -46,6 +48,7 @@ import { MessagingModule } from './messaging/messaging.module';
     StorageModule,
     PrivacyModule,
     MessagingModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [

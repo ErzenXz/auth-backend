@@ -5,14 +5,19 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 
-@WebSocketGateway()
+@WebSocketGateway({
+  namespace: '/messaging',
+})
 export class MessagingGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   async handleConnection(client: Socket) {
     const token = client.handshake.query.token as string;

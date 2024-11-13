@@ -3,17 +3,20 @@ import { EmailService } from './email.service';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { join } from 'path';
-
 @Module({
   imports: [
     MailerModule.forRoot({
       transport: {
-        host: 'smtp.freesmtpservers.com',
-        port: Number('25'),
-        secure: false,
+        host: 'smtp.resend.com',
+        port: Number('465'),
+        secure: true,
+        auth: {
+          user: 'resend',
+          pass: 're_K7xUDADU_HaF1qcreJdh23T7bKMACHnS8',
+        },
       },
       defaults: {
-        from: '"From Name" <noreply@blog.erzen.tk>',
+        from: '"From Name" <noreply@auth.erzen.xyz>',
       },
       template: {
         dir: join(__dirname, 'templates'),
