@@ -6,6 +6,8 @@ COPY package*.json ./
 
 RUN yarn install
 
+RUN yarn prisma generate
+
 COPY . .
 
 RUN yarn build
