@@ -12,8 +12,6 @@ RUN yarn build
 
 ENV NODE_ENV=production
 
-COPY .env .env
-
 RUN yarn install --production
 
 EXPOSE 3000
