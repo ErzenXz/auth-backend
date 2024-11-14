@@ -7,6 +7,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserMessage } from './models/message.modal';
 import { response } from 'express';
 import { XCacheService } from 'src/cache/cache.service';
+import { UserSettings } from 'src/privacy/models/user-settings.model';
+import { DetailedUserInfo } from 'src/privacy/models/profile-user.model';
 
 @Injectable()
 export class MessagingService {
@@ -186,11 +188,20 @@ export class MessagingService {
   }
 
   async searchUsers(query: string) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      return [];
+    }
+
     return this.prisma.user.findMany({
       where: {
-        OR: [{ username: { contains: query } }, { email: { contains: query } }],
+        OR: [
+          { username: { contains: trimmedQuery, mode: 'insensitive' } },
+          { email: { contains: trimmedQuery, mode: 'insensitive' } },
+        ],
       },
       select: { id: true, username: true, profilePicture: true },
+      take: 8,
     });
   }
 
@@ -222,8 +233,6 @@ export class MessagingService {
       return { error: 'An unexpected error occurred. Please try again later.' };
     }
   }
-
-  // Updated deleteConversation method
 
   async deleteConversation(context: IHttpContext, userId: number) {
     const messages = await this.prisma.message.findMany({
@@ -292,5 +301,40 @@ export class MessagingService {
         JSON.parse(message.content).content,
       ),
     }));
+  }
+
+  async getUserInfo(username: string): Promise<DetailedUserInfo | null> {
+    const user = await this.prisma.user.findFirst({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        email: true,
+        profilePicture: true,
+        UserPrivaySettings: {
+          select: {
+            settings: true,
+          },
+        },
+      },
+    });
+
+    if (!user) return null;
+
+    const userPrivacySetting = user.UserPrivaySettings[0];
+    const settings: UserSettings =
+      (userPrivacySetting?.settings as UserSettings) || {};
+
+    const activityStatus = settings.profile?.activeStatus || false;
+
+    return {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      email: user.email,
+      profilePicture: user.profilePicture,
+      activityStatus,
+    };
   }
 }

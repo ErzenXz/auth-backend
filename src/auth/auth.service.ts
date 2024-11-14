@@ -532,6 +532,12 @@ export class AuthService {
       },
     });
 
+    this.eventEmitter.emit('auth.forgot.reset', {
+      email: user.email,
+      name: user.fullName,
+      password: randomSecurePassword,
+    });
+
     return {
       message: 'Password reset successfully',
     };

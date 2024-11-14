@@ -48,18 +48,9 @@ export class AppController {
     };
   }
 
-  @Get('send-email')
-  async sendEmail(): Promise<any> {
-    await this.mailerService.sendMail({
-      from: 'noreply@auth.erzen.xyz',
-      to: 'erzenkrasniqi@matrics.io',
-      subject: 'Test Email',
-      text: 'This is a test email',
-      html: '<p>This is a test email</p>',
-    });
-
-    return {
-      message: 'Email sent successfully',
-    };
+  @Get('infrastructure-info')
+  // @Auth(Role.ADMIN, Role.SUPER_ADMIN)
+  async getInfrastructureInfo(): Promise<any> {
+    return this.appService.getInfrastructureInfo();
   }
 }

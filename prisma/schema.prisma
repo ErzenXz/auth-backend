@@ -47,33 +47,29 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  photos        Photo[]
-  videos        Video[]
-  albums        Album[]
-  comments      Comment[]
-  likes         Like[]
-  refreshTokens RefreshToken[]
-
-  AuthorizationCode AuthorizationCode[]
-
-  OAuthToken OAuthToken[]
-
-  UserConsent UserConsent[]
-
-  UserEvents UserEvents[]
-
-  UserLogin UserLogin[]
-
+  photos             Photo[]
+  videos             Video[]
+  albums             Album[]
+  comments           Comment[]
+  likes              Like[]
+  refreshTokens      RefreshToken[]
+  AuthorizationCode  AuthorizationCode[]
+  OAuthToken         OAuthToken[]
+  UserConsent        UserConsent[]
+  UserEvents         UserEvents[]
+  UserLogin          UserLogin[]
   UserPrivaySettings UserPrivaySettings[]
+  OAuthClient        OAuthClient[]
+  sentMessages       Message[]            @relation("Sender")
+  receivedMessages   Message[]            @relation("Receiver")
+  MessageRead        MessageRead[]
+  MessageDeletion    MessageDeletion[]
 
-  OAuthClient OAuthClient[]
-
-  sentMessages     Message[] @relation("Sender")
-  receivedMessages Message[] @relation("Receiver")
-
-  MessageRead MessageRead[]
-
-  MessageDeletion MessageDeletion[]
+  @@index([email])
+  @@index([username])
+  @@index([role])
+  @@index([username, email])
+  @@index([username, email, role])
 }
 
 model RefreshToken {
@@ -91,6 +87,15 @@ model RefreshToken {
   deviceName       String?
   revocationReason String?
   lastUsed         DateTime?
+
+  @@index([userId])
+  @@index([token])
+  @@index([expires])
+  @@index([revoked])
+  @@index([userId, expires])
+  @@index([userId, revoked])
+  @@index([userId, expires, revoked])
+  @@index([userId, expires, revoked, tokenVersion])
 }
 
 model Photo {
@@ -104,6 +109,9 @@ model Photo {
   albums    Album[]   @relation("AlbumPhotos")
   comments  Comment[]
   likes     Like[]
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Video {
@@ -114,6 +122,9 @@ model Video {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   albums    Album[]  @relation("AlbumVideos")
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Album {
@@ -125,6 +136,9 @@ model Album {
   user      User     @relation(fields: [userId], references: [id])
   photos    Photo[]  @relation("AlbumPhotos")
   videos    Video[]  @relation("AlbumVideos")
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Comment {
@@ -136,6 +150,9 @@ model Comment {
   user      User     @relation(fields: [userId], references: [id])
   photoId   Int
   photo     Photo    @relation(fields: [photoId], references: [id])
+
+  @@index([userId])
+  @@index([photoId])
 }
 
 model Like {
@@ -145,6 +162,9 @@ model Like {
   user      User     @relation(fields: [userId], references: [id])
   photoId   Int
   photo     Photo    @relation(fields: [photoId], references: [id])
+
+  @@index([userId])
+  @@index([photoId])
 }
 
 model OAuthClient {
@@ -166,6 +186,11 @@ model OAuthClient {
   authCodes    AuthorizationCode[]
   tokens       OAuthToken[]
   userConsents UserConsent[]
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([createdAt])
+  @@index([userId, clientId])
 }
 
 model AuthorizationCode {
@@ -180,6 +205,14 @@ model AuthorizationCode {
   used        Boolean     @default(false)
   expiresAt   DateTime
   createdAt   DateTime    @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([used])
+  @@index([clientId, userId])
+  @@index([clientId, userId, expiresAt])
+  @@index([clientId, userId, expiresAt, used])
 }
 
 model OAuthToken {
@@ -194,6 +227,14 @@ model OAuthToken {
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime    @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@index([clientId, userId])
+  @@index([clientId, userId, expiresAt])
+  @@index([clientId, userId, expiresAt, revokedAt])
 }
 
 model UserConsent {
@@ -205,6 +246,12 @@ model UserConsent {
   grantedScopes String[]
   revokedAt     DateTime?
   createdAt     DateTime    @default(now())
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([revokedAt])
+  @@index([userId, clientId])
+  @@index([userId, clientId, revokedAt])
 }
 
 model EmailPasswordReset {
@@ -214,6 +261,15 @@ model EmailPasswordReset {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([used])
+  @@index([email, expiresAt])
+  @@index([email, expiresAt, used])
+  @@index([email, token, expiresAt])
+  @@index([email, token, expiresAt, used])
 }
 
 model EmailVerification {
@@ -223,6 +279,15 @@ model EmailVerification {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([used])
+  @@index([email, expiresAt])
+  @@index([email, expiresAt, used])
+  @@index([email, token, expiresAt])
+  @@index([email, token, expiresAt, used])
 }
 
 model UserEvents {
@@ -232,6 +297,10 @@ model UserEvents {
   eventType String
   data      String
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
 }
 
 model UserLogin {
@@ -241,6 +310,10 @@ model UserLogin {
   ip        String
   userAgent String
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([ip])
 }
 
 model UserPrivaySettings {
@@ -250,6 +323,8 @@ model UserPrivaySettings {
   settings  Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Message {
@@ -261,9 +336,14 @@ model Message {
   content    String
   timestamp  DateTime @default(now())
 
-  MessageRead MessageRead[]
-
+  MessageRead     MessageRead[]
   MessageDeletion MessageDeletion[]
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([timestamp])
+  @@index([senderId, receiverId])
+  @@index([senderId, receiverId, timestamp])
 }
 
 model MessageRead {
@@ -273,6 +353,12 @@ model MessageRead {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   readAt    DateTime @default(now())
+
+  @@index([messageId])
+  @@index([userId])
+  @@index([readAt])
+  @@index([messageId, userId])
+  @@index([messageId, userId, readAt])
 }
 
 model MessageDeletion {
@@ -283,4 +369,7 @@ model MessageDeletion {
   user      User    @relation(fields: [userId], references: [id])
 
   @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([messageId, userId])
 }
