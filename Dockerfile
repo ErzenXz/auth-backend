@@ -4,17 +4,17 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN yarn install
 
 COPY . .
 
-RUN npm run build
+RUN yarn build
 
 ENV NODE_ENV=production
 
 COPY .env .env
 
-RUN npm ci --only=production
+RUN yarn install --production
 
 EXPOSE 3000
 
