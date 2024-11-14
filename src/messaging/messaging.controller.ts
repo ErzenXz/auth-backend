@@ -43,6 +43,10 @@ export class MessagingController {
     @Query('pageSize') pageSize = 20,
     @Query('page') page = 1,
   ) {
+    if (!conversationUserId) {
+      return [];
+    }
+
     return this.messagingService.getMessagesForConversation(
       context.user.id,
       +conversationUserId,
@@ -82,5 +86,14 @@ export class MessagingController {
       context,
       conversationUserId,
     );
+  }
+
+  @Get('userInfo/:username')
+  @Auth()
+  async getUserInfo(
+    @Param('username') username: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return this.messagingService.getUserInfo(username);
   }
 }

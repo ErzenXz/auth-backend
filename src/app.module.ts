@@ -22,6 +22,9 @@ import { PrivacyModule } from './privacy/privacy.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { CustomEventEmitterModule } from './services/event-emitter.module';
 import { MailerService } from '@nestjs-modules/mailer';
+import { LoadBalancerService } from './services/load-balancer.service';
+import { CommandControlService } from './services/command-control.service';
+import { CommandControlController } from './command-control.controller';
 
 @Module({
   imports: [
@@ -49,6 +52,7 @@ import { MailerService } from '@nestjs-modules/mailer';
     PrivacyModule,
     MessagingModule,
     EmailModule,
+    CustomEventEmitterModule,
   ],
   controllers: [AppController],
   providers: [

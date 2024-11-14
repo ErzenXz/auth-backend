@@ -30,7 +30,7 @@ export class EmailService {
 
     const subject = `Forgot Password Request`;
 
-    const url = `https://localhost:3000/v1/auth/reset-password/verify/${token}`;
+    const url = `https://api.erzen.xyz/v1/auth/reset-password/verify/${token}`;
 
     await this.mailerService.sendMail({
       to: email,
@@ -40,6 +40,24 @@ export class EmailService {
         name,
         email,
         token: url,
+      },
+    });
+  }
+
+  @OnEvent('auth.forgot.reset')
+  async sendPasswordResetEmail(data: any) {
+    const { name, email, password } = data;
+
+    const subject = `Forgot Password Request`;
+
+    await this.mailerService.sendMail({
+      to: email,
+      subject,
+      template: './auth/reset-password-email.hbs',
+      context: {
+        name,
+        email,
+        password,
       },
     });
   }

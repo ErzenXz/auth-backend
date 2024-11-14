@@ -16,7 +16,7 @@ import { join } from 'path';
         },
       },
       defaults: {
-        from: '"From Name" <noreply@auth.erzen.xyz>',
+        from: '"XENSystem" <info@auth.erzen.xyz>',
       },
       template: {
         dir: join(__dirname, 'templates'),

@@ -101,8 +101,8 @@ export class UserRegisterHandler
     delete usrCopy.tokenVersion;
 
     this.eventEmitter.emit('auth.register', {
-      name: 'Erzen Krasniqi',
-      email: 'njnana2017@gmail.com',
+      name: user.fullName,
+      email: user.email,
     });
 
     await this.privacySettingsService.initializeDefaultSettings(user.id);

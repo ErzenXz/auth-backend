@@ -43,7 +43,10 @@ import Redis from 'ioredis';
         subClient.on('ready', () => {
           subClient.subscribe('message.sent');
           console.info(
-            '[Redis Subscriber] Successfully subscribed to message.sent',
+            '[Redis Subscriber] Successfully subscribed to all channels',
+          );
+          console.info(
+            '[GCM Node] Listening for control commands and messages',
           );
         });
 
