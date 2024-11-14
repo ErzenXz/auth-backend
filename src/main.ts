@@ -19,7 +19,7 @@ async function bootstrap() {
     http1: true,
   };
 
-  const app = await NestFactory.create(AppModule, { httpsOptions });
+  const app = await NestFactory.create(AppModule);
 
   app.useGlobalPipes(
     new ValidationPipe({
