@@ -23,6 +23,7 @@ import { UserRegisterHandler } from './handlers/user-register.handler';
 import { UserRefreshTokenHandler } from './handlers/user-refresh-token.handler';
 import { UserLogoutHandler } from './handlers/user-logout.handler';
 import { PrivacyService } from 'src/privacy/privacy.service';
+import { ChangeIPLocationHandler } from './handlers/update-ip-location.handler';
 
 const CommandHandlers = [
   ChangeFullNameHandler,
@@ -32,6 +33,7 @@ const CommandHandlers = [
   UserRegisterHandler,
   UserRefreshTokenHandler,
   UserLogoutHandler,
+  ChangeIPLocationHandler,
 ];
 
 const QueryHandlers = [GetUserInfoHandler];
