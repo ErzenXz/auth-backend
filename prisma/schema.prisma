@@ -373,3 +373,24 @@ model MessageDeletion {
   @@index([userId])
   @@index([messageId, userId])
 }
+
+model IpLocation {
+  id          Int      @id @default(autoincrement())
+  ip          String   @unique
+  country     String
+  countryCode String
+  region      String
+  city        String
+  latitude    Float
+  longitude   Float
+  timezone    String
+  offset      Int
+  isp         String
+  asn         String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ip])
+  @@index([latitude])
+  @@index([longitude])
+}

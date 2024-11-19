@@ -12,10 +12,10 @@ export class RedisIoAdapter extends IoAdapter {
     super(app);
 
     this.pubClient = new Redis({
-      host: 'redis-17198.c328.europe-west3-1.gce.redns.redis-cloud.com',
-      port: 17198,
+      host: '34.154.211.57',
+      port: 6379,
       username: 'default',
-      password: 'ifW4WlzrmePojpRz5i72aBsfj8o9yaAY',
+      password: 'pbc9jnykneyvd2au',
     });
     this.subClient = this.pubClient.duplicate();
   }

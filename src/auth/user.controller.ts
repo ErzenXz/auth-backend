@@ -81,4 +81,9 @@ export class UserController {
   ) {
     return await this.authService.revokeToken(context, revokeDto.token);
   }
+
+  @Get('change-ip')
+  async changeIP(@HttpContext() context: IHttpContext) {
+    return this.userService.changeIP(context);
+  }
 }

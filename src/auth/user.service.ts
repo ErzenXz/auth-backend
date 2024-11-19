@@ -7,6 +7,7 @@ import { PhotoDto } from './dtos/user/photo.dto';
 import { ChangeFullNameCommand } from './commands/change-full-name.command';
 import { ChangeBirthdateCommand } from './commands/change-birthdate.command';
 import { ChangeProfilePictureCommand } from './commands/change-profile-picture.command';
+import { ChangeIPLocationCommand } from './commands/update-ip-location.command';
 
 @Injectable()
 export class UserService {
@@ -35,5 +36,9 @@ export class UserService {
     return this.commandBus.execute(
       new ChangeProfilePictureCommand(user.id, photo),
     );
+  }
+
+  async changeIP(context: IHttpContext) {
+    return this.commandBus.execute(new ChangeIPLocationCommand(context));
   }
 }

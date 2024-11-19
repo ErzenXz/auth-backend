@@ -9,13 +9,13 @@ import { XCacheService } from './cache.service';
       useFactory: async () => {
         const store = await redisStore({
           socket: {
-            host: 'redis-17198.c328.europe-west3-1.gce.redns.redis-cloud.com',
-            port: 17198,
+            host: '34.154.211.57',
+            port: 6379,
             timeout: 10000,
           },
           ttl: 60,
           username: 'default',
-          password: 'ifW4WlzrmePojpRz5i72aBsfj8o9yaAY',
+          password: 'pbc9jnykneyvd2au',
         });
 
         return {
