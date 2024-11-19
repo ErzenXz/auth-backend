@@ -593,7 +593,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NameDto"
+                "$ref": "#/components/schemas/ChangeNameDto"
               }
             }
           }
@@ -617,7 +617,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BirthdateDto"
+                "$ref": "#/components/schemas/ChangeBirthdateDto"
               }
             }
           }
@@ -641,7 +641,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PhotoDto"
+                "$ref": "#/components/schemas/ChangePhotoDto"
               }
             }
           }
@@ -1408,7 +1408,7 @@
           "newPassword"
         ]
       },
-      "NameDto": {
+      "ChangeNameDto": {
         "type": "object",
         "properties": {
           "name": {
@@ -1419,7 +1419,7 @@
           "name"
         ]
       },
-      "BirthdateDto": {
+      "ChangeBirthdateDto": {
         "type": "object",
         "properties": {
           "birthdate": {
@@ -1431,7 +1431,7 @@
           "birthdate"
         ]
       },
-      "PhotoDto": {
+      "ChangePhotoDto": {
         "type": "object",
         "properties": {
           "photo": {

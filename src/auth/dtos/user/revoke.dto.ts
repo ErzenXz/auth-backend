@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
 
-export class RevokeDto {
+export class RevokeAccessTokenDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty()

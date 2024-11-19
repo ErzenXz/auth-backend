@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty } from 'class-validator';
 
-export class PhotoDto {
+export class ChangePhotoDto {
   @IsNotEmpty()
   @ApiProperty({
     type: 'string',

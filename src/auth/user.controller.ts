@@ -7,9 +7,9 @@ import type { HttpContext as IHttpContext } from './models/http.model';
 
 import { ApiTags } from '@nestjs/swagger';
 import { Patch, Body } from '@nestjs/common';
-import { NameDto, BirthdateDto, PhotoDto } from './dtos';
+import { ChangeNameDto, ChangeBirthdateDto, ChangePhotoDto } from './dtos';
 import { UserService } from './user.service';
-import { RevokeDto } from './dtos/user/revoke.dto';
+import { RevokeAccessTokenDto } from './dtos/user/revoke.dto';
 
 @ApiTags('User')
 @Controller({
@@ -38,7 +38,7 @@ export class UserController {
   @Auth()
   async changeFullName(
     @HttpContext() context: IHttpContext,
-    @Body() changeDto: NameDto,
+    @Body() changeDto: ChangeNameDto,
   ) {
     await this.userService.changeFullName(context, changeDto);
 
@@ -51,7 +51,7 @@ export class UserController {
   @Auth()
   async changeBirthDate(
     @HttpContext() context: IHttpContext,
-    @Body() changeDto: BirthdateDto,
+    @Body() changeDto: ChangeBirthdateDto,
   ) {
     await this.userService.changeBirthDate(context, changeDto);
 
@@ -64,7 +64,7 @@ export class UserController {
   @Auth()
   async changeProfilePicture(
     @HttpContext() context: IHttpContext,
-    @Body() changeDto: PhotoDto,
+    @Body() changeDto: ChangePhotoDto,
   ) {
     await this.userService.changeProfilePicture(context, changeDto);
 
@@ -77,7 +77,7 @@ export class UserController {
   @Auth()
   async revokeToken(
     @HttpContext() context: IHttpContext,
-    @Body('token') revokeDto: RevokeDto,
+    @Body('token') revokeDto: RevokeAccessTokenDto,
   ) {
     return await this.authService.revokeToken(context, revokeDto.token);
   }
