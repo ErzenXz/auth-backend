@@ -1,0 +1,1577 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "AppController_getHello",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "AppController_getHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "AppController_getVersion",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/author": {
+      "get": {
+        "operationId": "AppController_getAuthor",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/system-info": {
+      "get": {
+        "operationId": "AppController_getSystemInfo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/infrastructure-info": {
+      "get": {
+        "operationId": "AppController_getInfrastructureInfo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/docs": {
+      "get": {
+        "operationId": "AppController_getScalarDocs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Info"
+        ]
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/info": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/mfa/setup": {
+      "post": {
+        "operationId": "AuthController_setupMfa",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/mfa/setup/verify": {
+      "post": {
+        "operationId": "AuthController_setupMfaSecond",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/mfa/verify": {
+      "post": {
+        "operationId": "AuthController_verifyMfa",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/mfa/disable": {
+      "patch": {
+        "operationId": "AuthController_disableMfa",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/reset-password/verify/{token}": {
+      "get": {
+        "operationId": "AuthController_verifyResetPassword",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/change-password": {
+      "patch": {
+        "operationId": "AuthController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/arp-transfer": {
+      "get": {
+        "operationId": "AuthController_transferAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/oauth/applications/register": {
+      "post": {
+        "operationId": "OAuthProviderController_registerApplication",
+        "summary": "Register a new OAuth client application",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/applications/dev": {
+      "get": {
+        "operationId": "OAuthProviderController_getUserApplications",
+        "summary": "Returns all the applications created by the user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/applications/edit": {
+      "put": {
+        "operationId": "OAuthProviderController_editUserApplication",
+        "summary": "Edit an existing OAuth client application",
+        "parameters": [
+          {
+            "name": "application_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/authorize": {
+      "get": {
+        "operationId": "OAuthProviderController_authorize",
+        "summary": "Authorize an OAuth client",
+        "parameters": [
+          {
+            "name": "client_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "response_type",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "operationId": "OAuthProviderController_token",
+        "summary": "Exchange authorization code for tokens",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/consent": {
+      "get": {
+        "operationId": "OAuthProviderController_getConsentScreen",
+        "summary": "Get consent screen information",
+        "parameters": [
+          {
+            "name": "client_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      },
+      "post": {
+        "operationId": "OAuthProviderController_grantConsent",
+        "summary": "Grant consent for an application",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "operationId": "OAuthProviderController_revokeAccess",
+        "summary": "Revoke application access",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/applications": {
+      "get": {
+        "operationId": "OAuthProviderController_listApplications",
+        "summary": "List authorized applications for user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/oauth/applications/rotate-secret": {
+      "post": {
+        "operationId": "OAuthProviderController_rotateClientSecret",
+        "summary": "Rotate client secret",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuth Provider"
+        ]
+      }
+    },
+    "/v1/user/active-sessions": {
+      "get": {
+        "operationId": "UserController_activeSessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/user/events": {
+      "get": {
+        "operationId": "UserController_events",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/user/change-fullName": {
+      "patch": {
+        "operationId": "UserController_changeFullName",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/user/change-birthdate": {
+      "patch": {
+        "operationId": "UserController_changeBirthDate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BirthdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/user/change-profilePicture": {
+      "patch": {
+        "operationId": "UserController_changeProfilePicture",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/user/revoke-token": {
+      "patch": {
+        "operationId": "UserController_revokeToken",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/user/change-ip": {
+      "get": {
+        "operationId": "UserController_changeIP",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/v1/collection/create": {
+      "post": {
+        "operationId": "CollectionController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlbumDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collection/update": {
+      "put": {
+        "operationId": "CollectionController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAlbumDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collection/delete": {
+      "delete": {
+        "operationId": "CollectionController_delete",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAlbumDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/collection/list": {
+      "get": {
+        "operationId": "CollectionController_getMy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/v1/photo/create": {
+      "post": {
+        "operationId": "PhotoController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/create-multiple": {
+      "post": {
+        "operationId": "PhotoController_createMultiple",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo": {
+      "get": {
+        "operationId": "PhotoController_getPhotos",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/update": {
+      "put": {
+        "operationId": "PhotoController_updatePhoto",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/delete": {
+      "delete": {
+        "operationId": "PhotoController_deletePhoto",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/delete-multiple": {
+      "delete": {
+        "operationId": "PhotoController_deleteMultiplePhotos",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/{id}": {
+      "get": {
+        "operationId": "PhotoController_getPhotoById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The unique identifier of the photo",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/album/{albumId}/user": {
+      "get": {
+        "operationId": "PhotoController_getPhotosByAlbumIdAndUserId",
+        "parameters": [
+          {
+            "name": "albumId",
+            "required": true,
+            "in": "path",
+            "description": "The ID of the album which to get the photos",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/v1/photo/albums/user": {
+      "post": {
+        "operationId": "PhotoController_getPhotosByAlbumIdsAndUserId",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetMultipleAlbumPhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Photos"
+        ]
+      }
+    },
+    "/storage/upload": {
+      "post": {
+        "operationId": "StorageController_uploadFile",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/privacy-settings/initialize": {
+      "post": {
+        "operationId": "PrivacyController_initializePrivacySettings",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Privacy"
+        ]
+      }
+    },
+    "/v1/privacy-settings/list": {
+      "get": {
+        "operationId": "PrivacyController_getPrivacySettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Privacy"
+        ]
+      }
+    },
+    "/v1/privacy-settings/create": {
+      "post": {
+        "operationId": "PrivacyController_createPrivacySettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePrivacySettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Privacy"
+        ]
+      }
+    },
+    "/v1/privacy-settings/update": {
+      "put": {
+        "operationId": "PrivacyController_updatePrivacySettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePrivacySettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Privacy"
+        ]
+      }
+    },
+    "/v1/privacy-settings/delete": {
+      "delete": {
+        "operationId": "PrivacyController_deletePrivacySettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Privacy"
+        ]
+      }
+    },
+    "/messaging/send/{username}": {
+      "post": {
+        "operationId": "MessagingController_sendMessage",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/conversations": {
+      "get": {
+        "operationId": "MessagingController_getConversations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/messages/{conversationUserId}": {
+      "get": {
+        "operationId": "MessagingController_getMessages",
+        "parameters": [
+          {
+            "name": "conversationUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/searchUsers": {
+      "get": {
+        "operationId": "MessagingController_searchUsers",
+        "parameters": [
+          {
+            "name": "query",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/unreadMessages": {
+      "get": {
+        "operationId": "MessagingController_getUnreadMessages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/delete/{messageId}": {
+      "delete": {
+        "operationId": "MessagingController_deleteMessage",
+        "parameters": [
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/deleteConversation/{conversationUserId}": {
+      "delete": {
+        "operationId": "MessagingController_deleteConversation",
+        "parameters": [
+          {
+            "name": "conversationUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/userInfo/{username}": {
+      "get": {
+        "operationId": "MessagingController_getUserInfo",
+        "parameters": [
+          {
+            "name": "username",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "XENAuth API",
+    "description": "The official XENAuth API documentation",
+    "version": "1.0",
+    "contact": {
+      "name": "Erzen Krasniqi",
+      "url": "https://erzen.tk",
+      "email": "erzenkrasniqi@matrics.io"
+    },
+    "termsOfService": "https://erzen.tk/terms",
+    "license": {
+      "name": "AGPL-3.0",
+      "url": "https://www.gnu.org/licenses/agpl-3.0.en.html"
+    }
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "https://localhost:3000",
+      "description": "Local server"
+    },
+    {
+      "url": "https://api.erzen.xyz",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "access-token": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password"
+          },
+          "name": {
+            "type": "string",
+            "description": "User full name"
+          },
+          "username": {
+            "type": "string",
+            "description": "User username"
+          },
+          "birthdate": {
+            "format": "date-time",
+            "type": "string",
+            "description": "User birthdate"
+          },
+          "language": {
+            "type": "string",
+            "description": "User preferred language"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "User timezone"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "name",
+          "username",
+          "birthdate",
+          "language",
+          "timezone"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "MfaDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password"
+          },
+          "code": {
+            "type": "string",
+            "description": "MFA code"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "code"
+        ]
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "oldPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "oldPassword",
+          "newPassword"
+        ]
+      },
+      "NameDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "BirthdateDto": {
+        "type": "object",
+        "properties": {
+          "birthdate": {
+            "type": "string",
+            "description": "User new birthdate"
+          }
+        },
+        "required": [
+          "birthdate"
+        ]
+      },
+      "PhotoDto": {
+        "type": "object",
+        "properties": {
+          "photo": {
+            "type": "string",
+            "format": "binary",
+            "description": "User new photo"
+          }
+        },
+        "required": [
+          "photo"
+        ]
+      },
+      "CreateAlbumDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the album"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "UpdateAlbumDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the album"
+          },
+          "id": {
+            "type": "number",
+            "description": "The ID of the album"
+          }
+        },
+        "required": [
+          "title",
+          "id"
+        ]
+      },
+      "DeleteAlbumDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "The ID of the album to delete"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "CreatePhotoDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL of the photo",
+            "example": "http://example.com/photo.jpg"
+          },
+          "caption": {
+            "type": "string",
+            "description": "The caption for the photo",
+            "example": "A beautiful sunset"
+          },
+          "albumIds": {
+            "description": "The IDs of the albums this photo belongs to",
+            "example": [
+              1,
+              2,
+              3
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "UpdatePhotoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "The unique identifier of the photo"
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL of the photo"
+          },
+          "caption": {
+            "type": "string",
+            "description": "The caption for the photo"
+          }
+        },
+        "required": [
+          "id",
+          "url"
+        ]
+      },
+      "DeletePhotoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "ID of the photo to be deleted"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "GetMultipleAlbumPhotoDto": {
+        "type": "object",
+        "properties": {
+          "albumIds": {
+            "description": "Array of album IDs to get the photos from",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "albumIds"
+        ]
+      },
+      "UpdatePrivacySettingsDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MessageDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  },
+  "security": [
+    {
+      "access-token": []
+    }
+  ]
+}

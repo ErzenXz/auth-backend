@@ -1,5 +1,5 @@
 import * as winston from 'winston';
-import * as SeqTransport from '@datalust/winston-seq';
+// import * as SeqTransport from '@datalust/winston-seq';
 
 // Define the interface for Winston log info
 interface WinstonLogInfo extends winston.Logform.TransformableInfo {
@@ -10,14 +10,14 @@ interface WinstonLogInfo extends winston.Logform.TransformableInfo {
 
 export const winstonConfig = {
   transports: [
-    new SeqTransport.SeqTransport({
-      serverUrl: process.env.SEQ_SERVER_URL,
-      apiKey: process.env.SEQ_API_KEY,
-      level: 'info',
-      onError: (e) => {
-        console.error('Error sending logs to Seq:', e);
-      },
-    }),
+    // new SeqTransport.SeqTransport({
+    //   serverUrl: process.env.SEQ_SERVER_URL,
+    //   apiKey: process.env.SEQ_API_KEY,
+    //   level: 'info',
+    //   onError: (e) => {
+    //     console.error('Error sending logs to Seq:', e);
+    //   },
+    // }),
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.timestamp(),

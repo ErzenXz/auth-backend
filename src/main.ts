@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,6 +10,7 @@ import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import * as compression from 'compression';
 import { RedisIoAdapter } from './messaging/adapters/redis-io.adapter';
+import { join } from 'path';
 
 async function bootstrap() {
   // Use HTTPS
@@ -19,7 +21,9 @@ async function bootstrap() {
     http1: true,
   };
 
-  const app = await NestFactory.create(AppModule, { httpsOptions });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    httpsOptions,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -37,8 +41,9 @@ async function bootstrap() {
       'access-token',
     )
     .addSecurityRequirements('access-token')
-    .addServer('https://localhost:3000', 'Local server')
-    .addServer('https://api.erzen.xyz', 'Production server')
+    .addServer('https://localhost:3000', 'LOCAL server')
+    .addServer('https://api.erzen.xyz', 'DEV server')
+    .addServer('https://apis.erzen.xyz', 'PRODUCTION server')
     .setContact(
       'Erzen Krasniqi',
       'https://erzen.tk',
@@ -55,6 +60,17 @@ async function bootstrap() {
   app.use(helmet());
 
   const document = SwaggerModule.createDocument(app, config);
+  const publicPath = join(__dirname, '..', 'public');
+  if (!fs.existsSync(publicPath)) {
+    fs.mkdirSync(publicPath, { recursive: true });
+  }
+  fs.writeFileSync(
+    join(publicPath, 'swagger.json'),
+    JSON.stringify(document, null, 2),
+  );
+
+  // Serve static files from public directory
+  app.useStaticAssets(publicPath);
   SwaggerModule.setup('api', app, document);
 
   app.use(cookieParser());
