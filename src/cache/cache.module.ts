@@ -9,13 +9,13 @@ import { XCacheService } from './cache.service';
       useFactory: async () => {
         const store = await redisStore({
           socket: {
-            host: '34.154.211.57',
-            port: 6379,
+            host: process.env.REDIS_URL,
+            port: parseInt(process.env.REDIS_PORT, 10) || 6379,
             timeout: 10000,
           },
           ttl: 60,
-          username: 'default',
-          password: 'pbc9jnykneyvd2au',
+          username: process.env.REDIS_USER || 'default',
+          password: process.env.REDIS_PASSWORD,
         });
 
         return {

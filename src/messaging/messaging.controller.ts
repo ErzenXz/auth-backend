@@ -13,11 +13,20 @@ import { MessageDto } from './dtos/message.dto';
 import { Auth, HttpContext } from 'src/auth/decorators';
 import { IHttpContext } from 'src/auth/models';
 import { ApiTags } from '@nestjs/swagger';
+import * as webPush from 'web-push';
+import { Logger } from 'winston';
+import { Http } from 'winston/lib/winston/transports';
 
 @ApiTags('Messaging')
 @Controller('messaging')
 export class MessagingController {
-  constructor(private messagingService: MessagingService) {}
+  constructor(private messagingService: MessagingService) {
+    webPush.setVapidDetails(
+      'mailto:njnana2017@gmail.com',
+      process.env.WEB_PUSH_PUBLIC_KEY,
+      process.env.WEB_PUSH_PRIVATE_KEY,
+    );
+  }
 
   @Post('send/:username')
   @Auth()
@@ -26,6 +35,25 @@ export class MessagingController {
     @Body() messageDto: MessageDto,
     @HttpContext() context: IHttpContext,
   ) {
+    try {
+      const subscription =
+        this.messagingService.findUserAndSubscriptionByUsername(username);
+      if (subscription) {
+        await webPush.sendNotification(
+          subscription,
+          JSON.stringify({
+            title: 'New Message from ' + context.user.fullName,
+            body: messageDto.content,
+          }),
+        );
+      } else {
+        console.info(`User ${username} has no subscriptions`);
+        return;
+      }
+    } catch (error) {
+      console.info('Error sending push notification', error);
+    }
+
     return this.messagingService.sendMessage(context, username, messageDto);
   }
 
@@ -95,5 +123,16 @@ export class MessagingController {
     @HttpContext() context: IHttpContext,
   ) {
     return this.messagingService.getUserInfo(username);
+  }
+
+  @Post('subscribe')
+  @Auth()
+  async subscribe(
+    @HttpContext() context: IHttpContext,
+    @Body() subscription: any,
+  ) {
+    const userId = context.user.id;
+    await this.messagingService.saveSubscription(userId, subscription);
+    return { message: 'Subscription saved successfully!' };
   }
 }

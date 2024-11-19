@@ -14,10 +14,10 @@ import Redis from 'ioredis';
       provide: EventEmitter2,
       useFactory: () => {
         const pubClient = new Redis({
-          host: '34.154.211.57',
-          port: 6379,
-          username: 'default',
-          password: 'pbc9jnykneyvd2au',
+          host: process.env.REDIS_URL,
+          port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+          username: process.env.REDIS_USER || 'default',
+          password: process.env.REDIS_PASSWORD,
         });
 
         const subClient = pubClient.duplicate();

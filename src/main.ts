@@ -1,3 +1,5 @@
+import 'dotenv/config';
+import 'newrelic';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -18,7 +20,7 @@ async function bootstrap() {
   const httpsOptions = {
     key: fs.readFileSync('./src/cert/key.pem'),
     cert: fs.readFileSync('./src/cert/cert.pem'),
-    http1: true,
+    http2: true,
   };
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);

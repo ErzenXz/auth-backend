@@ -337,4 +337,35 @@ export class MessagingService {
       activityStatus,
     };
   }
+
+  async saveSubscription(userId: number, subscription: any) {
+    await this.prisma.pushSubscription.create({
+      data: {
+        userId: userId,
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: subscription.keys.p256dh,
+          auth: subscription.keys.auth,
+        },
+      },
+    });
+  }
+
+  async getSubscriptions(userId: number) {
+    return this.prisma.pushSubscription.findMany({
+      where: { userId },
+    });
+  }
+
+  async findUserAndSubscriptionByUsername(username: string) {
+    let user = await this.prisma.user.findFirst({
+      where: { username },
+    });
+
+    let subscription = await this.prisma.pushSubscription.findFirst({
+      where: { userId: user.id },
+    });
+
+    return { user, subscription };
+  }
 }

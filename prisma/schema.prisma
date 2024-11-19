@@ -64,6 +64,7 @@ model User {
   receivedMessages   Message[]            @relation("Receiver")
   MessageRead        MessageRead[]
   MessageDeletion    MessageDeletion[]
+  PushSubscription   PushSubscription[]
 
   @@index([email])
   @@index([username])
@@ -393,4 +394,14 @@ model IpLocation {
   @@index([ip])
   @@index([latitude])
   @@index([longitude])
+}
+
+model PushSubscription {
+  id       Int    @id @default(autoincrement())
+  userId   Int
+  endpoint String
+  keys     Json
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
