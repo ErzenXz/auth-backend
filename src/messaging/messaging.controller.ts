@@ -50,25 +50,30 @@ export class MessagingController {
     @HttpContext() context: IHttpContext,
   ) {
     try {
-      const subscription =
-        await this.messagingService.findUserAndSubscriptionByUsername(username);
-      if (subscription.subscription) {
-        await webPush.sendNotification(
-          subscription.subscription,
-          JSON.stringify({
-            title: 'New Message from ' + context.user.fullName,
-            body: messageDto.content,
-          }),
+      const subscriptions =
+        await this.messagingService.findUserAndSubscriptionsByUsername(
+          username,
         );
-      } else {
-        console.info(`User ${username} has no subscriptions`);
-        return;
+      for (const subscription of subscriptions.subscriptions) {
+        if (subscription.endpoint) {
+          await webPush.sendNotification(
+            subscription.endpoint,
+            JSON.stringify({
+              title: 'New Message from ' + context.user.fullName,
+              body: messageDto.content,
+            }),
+          );
+        }
       }
     } catch (error) {
-      console.info('Error sending push notification', error);
+      console.info('Error sending push notifications', error);
     }
 
-    return this.messagingService.sendMessage(context, username, messageDto);
+    return await this.messagingService.sendMessage(
+      context,
+      username,
+      messageDto,
+    );
   }
 
   /**
@@ -180,10 +185,7 @@ export class MessagingController {
    */
   @Get('userInfo/:username')
   @Auth()
-  async getUserInfo(
-    @Param('username') username: string,
-    @HttpContext() context: IHttpContext,
-  ) {
+  async getUserInfo(@Param('username') username: string) {
     return this.messagingService.getUserInfo(username);
   }
 
@@ -203,5 +205,24 @@ export class MessagingController {
     const userId = context.user.id;
     await this.messagingService.saveSubscription(userId, subscription);
     return { message: 'Subscription saved successfully!' };
+  }
+
+  /**
+   * Deletes a user's subscription for push notifications.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {any} subscription - The subscription object containing push notification details.
+   * @returns {Promise<{ message: string }>} A promise that resolves to a success message.
+   */
+  @Delete('unsubscribe')
+  @Auth()
+  async unsubscribe(
+    @HttpContext() context: IHttpContext,
+    @Body() subscription: any,
+  ) {
+    const { userId } = context.user;
+    const { endpoint } = subscription;
+
+    return await this.messagingService.deleteSubscription(userId, endpoint);
   }
 }

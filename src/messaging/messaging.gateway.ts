@@ -21,7 +21,7 @@ export class MessagingGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
-  constructor(private jwtService: JwtService) {}
+  constructor(private readonly jwtService: JwtService) {}
 
   /**
    * Handles a new WebSocket connection from a client.
@@ -41,6 +41,7 @@ export class MessagingGateway implements OnGatewayConnection {
       client.join(`user_${payload.sub}`);
       client.data.userId = payload.sub;
     } catch (err) {
+      console.info('Invalid token:', err.message);
       client.disconnect();
     }
   }

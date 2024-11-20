@@ -1262,6 +1262,20 @@
           "Messaging"
         ]
       }
+    },
+    "/messaging/unsubscribe": {
+      "delete": {
+        "operationId": "MessagingController_unsubscribe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
     }
   },
   "info": {

@@ -214,7 +214,7 @@ export class OAuthProviderService {
     clientId: string,
     requestedScopes: string[],
   ) {
-    let client = await this.prisma.oAuthClient.findUnique({
+    const client = await this.prisma.oAuthClient.findUnique({
       where: { clientId },
     });
 
@@ -304,7 +304,7 @@ export class OAuthProviderService {
    * @throws NotFoundException if the client application is not found.
    */
   async revokeAccess(userId: number, clientId: string) {
-    let client = await this.prisma.oAuthClient.findUnique({
+    const client = await this.prisma.oAuthClient.findUnique({
       where: { clientId },
     });
 
@@ -586,6 +586,7 @@ export class OAuthProviderService {
 
       return decoded;
     } catch (error) {
+      console.info('Token validation error:', error);
       throw new UnauthorizedException('Invalid token');
     }
   }

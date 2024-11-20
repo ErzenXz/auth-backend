@@ -275,6 +275,7 @@ export class MessagingService {
 
       return { success: true };
     } catch (error) {
+      console.info('Error deleting message:', error);
       return { error: 'An unexpected error occurred. Please try again later.' };
     }
   }
@@ -384,7 +385,9 @@ export class MessagingService {
       },
     });
 
-    if (!user) return null;
+    if (!user) {
+      return null;
+    }
 
     const userPrivacySetting = user.UserPrivaySettings[0];
     const settings: UserSettings =
@@ -435,20 +438,43 @@ export class MessagingService {
   }
 
   /**
-   * Finds a user and their subscription based on the username.
+   * Finds a user and their subscriptions based on the username.
    *
    * @param {string} username - The username of the user to find.
-   * @returns {Promise<{ user: any; subscription: any }>} A promise that resolves to an object containing the user and their subscription.
+   * @returns {Promise<{ user: any; subscriptions: any }>} A promise that resolves to an object containing the user and their subscription.
    */
-  async findUserAndSubscriptionByUsername(username: string) {
-    let user = await this.prisma.user.findFirst({
+  async findUserAndSubscriptionsByUsername(username: string) {
+    const user = await this.prisma.user.findFirst({
       where: { username },
     });
 
-    let subscription = await this.prisma.pushSubscription.findFirst({
+    if (!user) {
+      return { user: null, subscriptions: [] };
+    }
+
+    const subscriptions = await this.prisma.pushSubscription.findMany({
       where: { userId: user.id },
     });
 
-    return { user, subscription };
+    return { user, subscriptions };
+  }
+
+  /**
+   * Deletes a user's subscription for push notifications.
+   *
+   * @param {number} userId - The ID of the user whose subscription is to be deleted.
+   * @param {string} endpoint - The endpoint of the subscription to be deleted.
+   * @returns {Promise<void>} A promise that resolves when the subscription is deleted.
+   */
+
+  async deleteSubscription(userId: number, endpoint: string) {
+    await this.prisma.pushSubscription.deleteMany({
+      where: {
+        userId,
+        endpoint,
+      },
+    });
+
+    return { message: 'Subscription deleted successfully!' };
   }
 }

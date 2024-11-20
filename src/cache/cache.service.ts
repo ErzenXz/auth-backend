@@ -11,7 +11,7 @@ import { Cache } from 'cache-manager';
  */
 @Injectable()
 export class XCacheService {
-  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
+  constructor(@Inject(CACHE_MANAGER) private readonly cacheManager: Cache) {}
 
   /**
    * Sets a value in the cache with the specified key.

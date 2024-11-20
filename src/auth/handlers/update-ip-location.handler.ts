@@ -4,8 +4,6 @@ import { ChangeIPLocationCommand } from '../commands/update-ip-location.command'
 import axios from 'axios';
 
 const API_KEYS = process.env.API_KEYS.split(',');
-let apiKeyIndex = 0;
-
 @CommandHandler(ChangeIPLocationCommand)
 export class ChangeIPLocationHandler
   implements ICommandHandler<ChangeIPLocationCommand>
@@ -35,9 +33,23 @@ export class ChangeIPLocationHandler
     const ip = this.getHeaderValue(headers, 'cf-connecting-ip');
     const countryCode = this.getHeaderValue(headers, 'cf-ipcountry');
 
-    // Select API key using round-robin
-    const apiKey = API_KEYS[apiKeyIndex];
-    apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
+    // Select API key randomly
+    const apiKey = API_KEYS[Math.floor(Math.random() * API_KEYS.length)];
+
+    // First check if the IP location is already saved in the last 7 days
+
+    const ipLocation = await this.prisma.ipLocation.findUnique({
+      where: {
+        ip,
+        updatedAt: {
+          gte: new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    if (ipLocation?.countryCode) {
+      return { message: 'IP location already saved' };
+    }
 
     try {
       const geoResponse = await axios.get(`https://ipinfo.io/${ip}/json`, {
@@ -82,6 +94,7 @@ export class ChangeIPLocationHandler
 
       return { message: 'IP location saved successfully' };
     } catch (error) {
+      console.info(error);
       return { message: 'Failed to fetch IP information' };
     }
   }

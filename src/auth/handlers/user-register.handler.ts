@@ -130,7 +130,7 @@ export class UserRegisterHandler
       },
     });
 
-    let usrCopy = { ...user };
+    const usrCopy = { ...user };
     delete usrCopy.password;
     delete usrCopy.totpSecret;
     delete usrCopy.tokenVersion;
