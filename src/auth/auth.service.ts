@@ -21,6 +21,7 @@ import { UserLogoutCommand } from './commands/user-logout.command';
 import { PrivacyService } from 'src/privacy/privacy.service';
 import { Request } from 'express';
 import { ArpResponse } from './models/arp.model';
+import { ChangeIPLocationCommand } from './commands/update-ip-location.command';
 const crypto = require('crypto');
 
 /**
@@ -163,7 +164,8 @@ export class AuthService {
    */
   async info(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
-    return this.queryBus.execute(new GetUserInfoQuery(refreshToken));
+    this.commandBus.execute(new ChangeIPLocationCommand(context));
+    return await this.queryBus.execute(new GetUserInfoQuery(refreshToken));
   }
 
   /**
@@ -533,12 +535,7 @@ export class AuthService {
    * @returns The generated refresh token.
    */
   async generateSecureRefreshToken(user: any) {
-    const refreshToken = this.jwtService.sign(
-      { sub: user.id },
-      { expiresIn: '90d' },
-    );
-
-    return refreshToken;
+    return this.jwtService.sign({ sub: user.id }, { expiresIn: '90d' });
   }
 
   /**

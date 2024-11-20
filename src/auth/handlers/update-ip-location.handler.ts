@@ -39,6 +39,21 @@ export class ChangeIPLocationHandler
     const apiKey = API_KEYS[apiKeyIndex];
     apiKeyIndex = (apiKeyIndex + 1) % API_KEYS.length;
 
+    // First check if the IP location is already saved in the last 7 days
+
+    const ipLocation = await this.prisma.ipLocation.findUnique({
+      where: {
+        ip,
+        updatedAt: {
+          gte: new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    if (ipLocation && ipLocation.countryCode) {
+      return { message: 'IP location already saved' };
+    }
+
     try {
       const geoResponse = await axios.get(`https://ipinfo.io/${ip}/json`, {
         params: {
