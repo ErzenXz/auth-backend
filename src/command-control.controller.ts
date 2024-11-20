@@ -1,9 +1,6 @@
 // command-control.controller.ts
 import { Controller, Post, Param, Get, ParseUUIDPipe } from '@nestjs/common';
-import {
-  CommandControlService,
-  Node,
-} from './services/command-control.service';
+import { CommandControlService } from './services/command-control.service';
 
 @Controller('nodes')
 export class CommandControlController {

@@ -1,6 +1,5 @@
 import {
   Injectable,
-  ConflictException,
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
@@ -12,11 +11,8 @@ import type { HttpContext as IHttpContext } from './models/http.model';
 import { MfaService } from 'src/auth/mfa.service';
 import { MfaDto } from './dtos/mfa.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ApiAcceptedResponse } from '@nestjs/swagger';
-import { ForgotPasswordDtoReset } from './dtos/forgot.verify.dto';
 import { ChangePasswordDto } from './dtos/change.password.dto';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
-import { UserLoginHandler } from './handlers/user-login.handler';
 import { UserLoginCommand } from './commands/user-login.command';
 import { UserRegisterCommand } from './commands/user-register.command';
 import { GetUserInfoQuery } from './queries/get-user-info.query';
@@ -27,15 +23,33 @@ import { Request } from 'express';
 import { ArpResponse } from './models/arp.model';
 const crypto = require('crypto');
 
+/**
+ * Service for handling authentication-related operations.
+ *
+ * This service provides methods for user registration, login, password management,
+ * multi-factor authentication (MFA), and session management. It integrates with
+ * various services and utilizes command and query buses for handling operations.
+ */
 @Injectable()
 export class AuthService {
-  private mfaService: MfaService;
+  private readonly mfaService: MfaService;
 
+  /**
+   * Constructs the AuthService with necessary dependencies.
+   *
+   * @param commandBus - The command bus for executing commands.
+   * @param queryBus - The query bus for executing queries.
+   * @param prisma - The Prisma service for database interactions.
+   * @param jwtService - The JWT service for token management.
+   * @param mfaService - The service for managing multi-factor authentication.
+   * @param eventEmitter - The event emitter for handling events.
+   * @param privacySettingsService - The service for managing privacy settings.
+   */
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
-    private prisma: PrismaService,
-    private jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
     mfaService: MfaService,
     private readonly eventEmitter: EventEmitter2,
     private privacySettingsService: PrivacyService,
@@ -43,6 +57,13 @@ export class AuthService {
     this.mfaService = mfaService;
   }
 
+  /**
+   * Registers a new user.
+   *
+   * @param registerRequest - The registration data for the new user.
+   * @param context - The HTTP context containing user information.
+   * @returns The result of the registration process.
+   */
   async register(registerRequest: RegisterDto, context: IHttpContext) {
     const { email, password, name, username, birthdate, language, timezone } =
       registerRequest;
@@ -61,6 +82,13 @@ export class AuthService {
     );
   }
 
+  /**
+   * Logs in a user and generates access and refresh tokens.
+   *
+   * @param loginRequest - The login credentials for the user.
+   * @param context - The HTTP context containing user information.
+   * @returns An object containing the login message and tokens.
+   */
   async login(loginRequest: LoginDto, context: IHttpContext) {
     const { email, password } = loginRequest;
 
@@ -127,21 +155,47 @@ export class AuthService {
     }
   }
 
+  /**
+   * Retrieves user information based on the refresh token.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns The user's information.
+   */
   async info(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
     return this.queryBus.execute(new GetUserInfoQuery(refreshToken));
   }
 
+  /**
+   * Refreshes the user's authentication session using the refresh token.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns The result of the refresh process.
+   */
   async refresh(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
     return this.commandBus.execute(new UserRefreshTokenCommand(refreshToken));
   }
 
+  /**
+   * Logs out the user by invalidating the refresh token.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns The result of the logout process.
+   */
   async logout(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
     return this.commandBus.execute(new UserLogoutCommand(refreshToken));
   }
 
+  /**
+   * Revokes a specified refresh token for the user.
+   *
+   * @param context - The HTTP context containing user information.
+   * @param token - The refresh token to revoke.
+   * @returns A message indicating the revocation status.
+   * @throws UnauthorizedException if the token is invalid.
+   */
   async revokeToken(context: IHttpContext, token: string) {
     const refreshToken = await this.prisma.refreshToken.findFirst({
       where: { token, userId: context.user.id, revoked: null },
@@ -175,6 +229,14 @@ export class AuthService {
     };
   }
 
+  /**
+   * Generates a QR code for setting up multi-factor authentication (MFA).
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns The QR code image for MFA setup.
+   * @throws UnauthorizedException if the refresh token is invalid.
+   * @throws BadRequestException if MFA is already enabled.
+   */
   async generateQrCode(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
     const userAgent = context.req.headers['user-agent'];
@@ -217,14 +279,24 @@ export class AuthService {
       data: { totpSecret: secret },
     });
 
-    const otpauth = this.mfaService.generateQrCodeUri(user.email, secret);
-    const qrCodeImage = await this.mfaService.generateQrCodeImage(otpauth);
+    const otpQrCodeLink = this.mfaService.generateQrCodeUri(user.email, secret);
+    const mfaQrCodeImage =
+      await this.mfaService.generateQrCodeImage(otpQrCodeLink);
 
     context.res.setHeader('Content-Type', 'image/png');
-    context.res.send(qrCodeImage);
+    context.res.send(mfaQrCodeImage);
   }
 
-  async verifyMfaCode(context: IHttpContext, data: string | any) {
+  /**
+   * Verifies the MFA code provided by the user.
+   *
+   * @param context - The HTTP context containing user information.
+   * @param data - The MFA verification data containing the code.
+   * @returns A message indicating the verification status and backup codes if MFA is enabled.
+   * @throws UnauthorizedException if the refresh token is invalid.
+   * @throws BadRequestException if the verification code is invalid.
+   */
+  async verifyMfaCode(context: IHttpContext, data: { code: string }) {
     const { code } = data;
     const refreshToken = context.req.cookies['refreshToken'];
     const userAgent = context.req.headers['user-agent'];
@@ -294,6 +366,15 @@ export class AuthService {
     }
   }
 
+  /**
+   * Verifies the MFA code during login.
+   *
+   * @param mfaRequest - The MFA request containing email, password, and code.
+   * @param context - The HTTP context containing user information.
+   * @returns An object containing the verification status and tokens.
+   * @throws UnauthorizedException if the credentials are invalid.
+   * @throws BadRequestException if MFA is not set up or the code is invalid.
+   */
   async verifyMfa(mfaRequest: MfaDto, context: IHttpContext) {
     const { email, password, code } = mfaRequest;
 
@@ -389,6 +470,14 @@ export class AuthService {
     };
   }
 
+  /**
+   * Generates new backup codes for the user.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns An object containing the new backup codes.
+   * @throws UnauthorizedException if the refresh token is invalid.
+   * @throws BadRequestException if MFA is not enabled.
+   */
   async generateNewBackupCodes(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
     const userAgent = context.req.headers['user-agent'];
@@ -437,6 +526,12 @@ export class AuthService {
     };
   }
 
+  /**
+   * Generates a secure refresh token for the user.
+   *
+   * @param user - The user for whom the refresh token is generated.
+   * @returns The generated refresh token.
+   */
   async generateSecureRefreshToken(user: any) {
     const refreshToken = this.jwtService.sign(
       { sub: user.id },
@@ -446,6 +541,12 @@ export class AuthService {
     return refreshToken;
   }
 
+  /**
+   * Initiates the password reset process for the user.
+   *
+   * @param forgotDto - The data required to reset the password.
+   * @returns A message indicating the status of the password reset email.
+   */
   async forgotPassword(forgotDto: ForgotPasswordDto) {
     const { email } = forgotDto;
     const user = await this.prisma.user.findUnique({
@@ -482,8 +583,15 @@ export class AuthService {
     };
   }
 
+  /**
+   * Resets the user's password using a valid reset token.
+   *
+   * @param context - The HTTP context containing the reset token.
+   * @returns A message indicating the status of the password reset.
+   * @throws BadRequestException if the token is invalid or expired.
+   */
   async resetPassword(context: IHttpContext) {
-    const token = context.req.params.token;
+    const { token } = context.req.params;
 
     const resetToken = await this.prisma.emailPasswordReset.findFirst({
       where: {
@@ -543,6 +651,14 @@ export class AuthService {
     };
   }
 
+  /**
+   * Changes the user's password.
+   *
+   * @param context - The HTTP context containing user information.
+   * @param changePasswordDto - The data required to change the password.
+   * @returns A message indicating the status of the password change.
+   * @throws UnauthorizedException if the old password is invalid.
+   */
   async changePassword(
     context: IHttpContext,
     changePasswordDto: ChangePasswordDto,
@@ -611,6 +727,13 @@ export class AuthService {
 
   // Helper functions
 
+  /**
+   * Finds the user associated with the current context.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns The user object.
+   * @throws UnauthorizedException if the refresh token is invalid.
+   */
   async findUser(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
 
@@ -642,7 +765,13 @@ export class AuthService {
     return user;
   }
 
-  async findUserSe(req: Request): Promise<ArpResponse> {
+  /**
+   * Checks the status of the user's session.
+   *
+   * @param req - The HTTP request object.
+   * @returns An object indicating the session status.
+   */
+  async getUserSessionStatus(req: Request): Promise<ArpResponse> {
     const refreshToken = req.cookies['refreshToken'];
 
     if (!refreshToken) {
@@ -693,6 +822,13 @@ export class AuthService {
 
   // USER MANAGEMENT
 
+  /**
+   * Retrieves all active sessions for the user.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns An array of active refresh tokens for the user.
+   * @throws UnauthorizedException if the user is not found.
+   */
   async getAliveSessions(context: IHttpContext) {
     const user = await this.findUser(context);
 
@@ -700,7 +836,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const sessions = await this.prisma.refreshToken.findMany({
+    return await this.prisma.refreshToken.findMany({
       where: {
         userId: user.id,
         expires: { gte: new Date().toISOString() },
@@ -708,10 +844,15 @@ export class AuthService {
         tokenVersion: user.tokenVersion,
       },
     });
-
-    return sessions;
   }
 
+  /**
+   * Retrieves the user's event history.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns An array of user events.
+   * @throws UnauthorizedException if the user is not found.
+   */
   async getUserEvents(context: IHttpContext) {
     const user = await this.findUser(context);
 
@@ -719,15 +860,20 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const events = await this.prisma.userEvents.findMany({
+    return await this.prisma.userEvents.findMany({
       where: {
         userId: user.id,
       },
     });
-
-    return events;
   }
 
+  /**
+   * Disables multi-factor authentication (MFA) for the user.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns A message indicating the status of MFA disablement.
+   * @throws UnauthorizedException if the user is not found.
+   */
   async disableMfa(context: IHttpContext) {
     const user = await this.findUser(context);
 
@@ -745,6 +891,14 @@ export class AuthService {
     };
   }
 
+  /**
+   * Saves a cookie in the response.
+   *
+   * @param context - The HTTP context containing user information.
+   * @param name - The name of the cookie.
+   * @param value - The value of the cookie.
+   * @param options - Additional options for the cookie.
+   */
   saveCookie(
     context: IHttpContext,
     name: string,

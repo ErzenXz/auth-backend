@@ -2,10 +2,26 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_PRIVACY_SETTINGS } from './constants';
 
+/**
+ * Service for managing user privacy settings in the application.
+ *
+ * This class provides methods to initialize, retrieve, create, update, and delete
+ * privacy settings for users. It interacts with the Prisma ORM to perform database
+ * operations and ensures that user existence is validated before performing any
+ * operations. It also handles default settings initialization and merging of
+ * existing settings with new updates.
+ */
 @Injectable()
 export class PrivacyService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Initializes default privacy settings for a user.
+   *
+   * @param {number} userId - The ID of the user for whom to initialize settings.
+   * @returns {Promise<any>} A promise that resolves to the user's privacy settings.
+   * @throws {NotFoundException} Throws an exception if the user is not found.
+   */
   async initializeDefaultSettings(userId: number) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
@@ -33,6 +49,13 @@ export class PrivacyService {
     return DEFAULT_PRIVACY_SETTINGS;
   }
 
+  /**
+   * Validates the existence of a user by their ID.
+   *
+   * @param {number} userId - The ID of the user to validate.
+   * @returns {Promise<any>} A promise that resolves to the user object if found.
+   * @throws {NotFoundException} Throws an exception if the user is not found.
+   */
   private async validateUser(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -43,6 +66,13 @@ export class PrivacyService {
     return user;
   }
 
+  /**
+   * Retrieves the privacy settings for a user.
+   *
+   * @param {number} userId - The ID of the user whose settings are to be retrieved.
+   * @returns {Promise<any>} A promise that resolves to the user's privacy settings.
+   * @throws {NotFoundException} Throws an exception if the privacy settings are not found.
+   */
   async getPrivacySettings(userId: number) {
     const settings = await this.prisma.userPrivaySettings.findFirst({
       where: { userId: userId },
@@ -55,6 +85,15 @@ export class PrivacyService {
     return settings;
   }
 
+  /**
+   * Creates new privacy settings for a user.
+   *
+   * @param {number} userId - The ID of the user for whom to create settings.
+   * @param {any} settings - The privacy settings to be created.
+   * @returns {Promise<any>} A promise that resolves to the created privacy settings.
+   * @throws {Error} Throws an error if privacy settings already exist for the user.
+   * @throws {NotFoundException} Throws an exception if the user is not found.
+   */
   async createPrivacySettings(userId: number, settings: any) {
     await this.validateUser(userId);
 
@@ -85,6 +124,14 @@ export class PrivacyService {
     });
   }
 
+  /**
+   * Updates existing privacy settings for a user.
+   *
+   * @param {number} userId - The ID of the user whose settings are to be updated.
+   * @param {any} newSettings - The new privacy settings to be applied.
+   * @returns {Promise<any>} A promise that resolves to the updated privacy settings.
+   * @throws {NotFoundException} Throws an exception if the user or existing settings are not found.
+   */
   async updatePrivacySettings(userId: number, newSettings: any) {
     await this.validateUser(userId);
 
@@ -122,6 +169,13 @@ export class PrivacyService {
     });
   }
 
+  /**
+   * Deletes the privacy settings for a user.
+   *
+   * @param {number} userId - The ID of the user whose settings are to be deleted.
+   * @returns {Promise<any>} A promise that resolves to the result of the deletion operation.
+   * @throws {NotFoundException} Throws an exception if the user or settings are not found.
+   */
   async deletePrivacySettings(userId: number) {
     await this.validateUser(userId);
 

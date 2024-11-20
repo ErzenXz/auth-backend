@@ -1,10 +1,7 @@
 import { Module } from '@nestjs/common';
 import { StorageService } from './storage.service';
 import { S3StorageProvider } from './providers/s3-storage.provider';
-import {
-  STORAGE_PROVIDER,
-  StorageProvider,
-} from './storage-provider.interface';
+import { STORAGE_PROVIDER } from './storage-provider.interface';
 import { StorageController } from './storage.controller';
 
 @Module({

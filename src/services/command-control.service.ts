@@ -18,10 +18,10 @@ export interface Node {
 @Injectable()
 export class CommandControlService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CommandControlService.name);
-  private nodes: Map<string, Node> = new Map();
+  private readonly nodes: Map<string, Node> = new Map();
   private currentNode: Node;
 
-  constructor(private eventEmitter: EventEmitter2) {}
+  constructor(private readonly eventEmitter: EventEmitter2) {}
 
   onModuleInit() {
     const nodeId = uuidv4();

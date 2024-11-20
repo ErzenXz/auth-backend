@@ -12,6 +12,19 @@ export class ChangeIPLocationHandler
 {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Handles the process of changing and saving the IP location information.
+   *
+   * This method retrieves the user's IP address and country code from the request headers,
+   * fetches geographical information using an external API, and updates or creates an entry
+   * in the database with the retrieved location data. It handles errors gracefully and returns
+   * a success message upon completion.
+   *
+   * @param {ChangeIPLocationCommand} command - The command containing the context with request headers.
+   * @param {any} command.context - The context containing the request object with headers.
+   * @throws {Error} Throws an error if the IP information cannot be fetched.
+   * @returns {Promise<{ message: string }>} A promise that resolves to an object containing a success message.
+   */
   private getHeaderValue(headers: any, key: string): string {
     const value = headers[key];
     return Array.isArray(value) ? value[0] : value || '';

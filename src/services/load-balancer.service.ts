@@ -9,11 +9,11 @@ interface NodeStatus {
 
 @Injectable()
 export class LoadBalancerService {
-  private nodes: Map<number, NodeStatus> = new Map();
-  private taskQueue: any[] = [];
+  private readonly nodes: Map<number, NodeStatus> = new Map();
+  private readonly taskQueue: any[] = [];
   private currentNodeIndex = 0;
 
-  constructor(private eventEmitter: EventEmitter2) {
+  constructor(private readonly eventEmitter: EventEmitter2) {
     this.eventEmitter.on('node.status', (status: NodeStatus) => {
       this.nodes.set(status.nodeId, status);
     });

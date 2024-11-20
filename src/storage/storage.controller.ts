@@ -9,10 +9,25 @@ import { StorageService } from './storage.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 
+/**
+ * Controller for handling file upload operations.
+ *
+ * This class provides an endpoint for uploading files to a storage service.
+ * It utilizes the FileInterceptor to handle file uploads and streams the upload
+ * progress back to the client using Server-Sent Events (SSE). The response headers
+ * are set to maintain a persistent connection for real-time updates during the upload process.
+ */
 @Controller('storage')
 export class StorageController {
-  constructor(private storageService: StorageService) {}
+  constructor(private readonly storageService: StorageService) {}
 
+  /**
+   * Uploads a file and streams the upload progress to the client.
+   *
+   * @param {Express.Multer.File} file - The uploaded file object containing file data.
+   * @param {Response} res - The HTTP response object used to send updates to the client.
+   * @returns {Promise<void>} A promise that resolves when the upload process is complete.
+   */
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(

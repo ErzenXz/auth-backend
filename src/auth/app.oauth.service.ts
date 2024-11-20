@@ -6,68 +6,37 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { IHttpContext } from './models';
+import {
+  OAuthClientApplication,
+  AuthorizationRequest,
+  TokenRequest,
+} from './models/oauth.model';
+import { scopes } from './models/scopes.model';
 
-interface ClientCredentials {
-  clientId: string;
-  clientSecret: string;
-}
-
-interface TokenResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-  expires_in: number;
-  scope: string;
-}
-
-interface OAuthClientApplication {
-  clientId: string;
-  clientSecret: string;
-  name: string;
-  redirectUris: string[];
-  allowedScopes: string[];
-  privacyPolicyUrl: string;
-  termsOfServiceUrl: string;
-  logoUrl: string;
-}
-
-interface AuthorizationRequest {
-  clientId: string;
-  redirectUri: string;
-  scope: string[];
-  state: string;
-  responseType: 'code' | 'token';
-}
-
-interface TokenRequest {
-  grantType: 'authorization_code' | 'refresh_token';
-  code?: string;
-  refreshToken?: string;
-  clientId: string;
-  clientSecret: string;
-  redirectUri?: string;
-}
-
+/**
+ * Service for managing OAuth client applications and handling authorization flows.
+ *
+ * This service provides methods for registering applications, managing user consent,
+ * handling authorization and token requests, and revoking access. It integrates with
+ * a database through Prisma and utilizes JWT for token generation and validation.
+ */
 @Injectable()
 export class OAuthProviderService {
-  private readonly availableScopes = {
-    profile: 'Access to basic profile information',
-    email: 'Access to email address',
-    photos: 'Access to photo albums',
-    videos: 'Access to video content',
-    offline_access: 'Maintain persistent access',
-  };
-
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-    private configService: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
   ) {}
 
+  /**
+   * Registers a new OAuth client application.
+   *
+   * @param context - The HTTP context containing user information.
+   * @param application - Partial data for the new application.
+   * @returns An object containing the generated client ID and client secret.
+   */
   async registerApplication(
     context: IHttpContext,
     application: Partial<OAuthClientApplication>,
@@ -96,16 +65,29 @@ export class OAuthProviderService {
     };
   }
 
+  /**
+   * Retrieves all OAuth applications registered by the user.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns An array of OAuth client applications associated with the user.
+   */
   async getUserApplications(context: IHttpContext) {
-    const userApplications = this.prisma.oAuthClient.findMany({
+    return this.prisma.oAuthClient.findMany({
       where: {
         userId: context.user.id,
       },
     });
-
-    return userApplications;
   }
 
+  /**
+   * Edits an existing OAuth client application.
+   *
+   * @param context - The HTTP context containing user information.
+   * @param applicationId - The ID of the application to edit.
+   * @param applicationData - Partial data to update the application.
+   * @returns The updated OAuth client application.
+   * @throws Error if the application is not found or the user lacks permission.
+   */
   async editUserApplication(
     context: IHttpContext,
     applicationId: string, // or clientId based on how your system identifies apps
@@ -126,7 +108,7 @@ export class OAuthProviderService {
       throw new Error('You do not have permission to edit this application');
     }
 
-    const updatedApplication = await this.prisma.oAuthClient.update({
+    return await this.prisma.oAuthClient.update({
       where: {
         clientId: applicationId,
         userId: context.user.id,
@@ -146,10 +128,20 @@ export class OAuthProviderService {
         logoUrl: applicationData.logoUrl || existingApplication.logoUrl,
       },
     });
-
-    return updatedApplication;
   }
 
+  /**
+   * Handles an authorization request from a client.
+   *
+   * Validates the client and requested scopes, generates an authorization code,
+   * and stores the authorization request in the database.
+   *
+   * @param authRequest - The authorization request containing client ID, redirect URI, and requested scopes.
+   * @param userId - The ID of the user making the request.
+   * @returns An object containing the redirect URI with the authorization code.
+   * @throws UnauthorizedException if the client or redirect URI is invalid.
+   * @throws BadRequestException if the requested scopes are invalid.
+   */
   async handleAuthorizationRequest(
     authRequest: AuthorizationRequest,
     userId: number,
@@ -183,6 +175,15 @@ export class OAuthProviderService {
     };
   }
 
+  /**
+   * Handles a token request from a client.
+   *
+   * Validates client credentials and processes the request based on the grant type.
+   *
+   * @param tokenRequest - The token request containing client ID, secret, and grant type.
+   * @returns An object containing access and refresh tokens.
+   * @throws BadRequestException if the grant type is invalid.
+   */
   async handleTokenRequest(tokenRequest: TokenRequest) {
     const client = await this.validateClientCredentials(
       tokenRequest.clientId,
@@ -198,6 +199,16 @@ export class OAuthProviderService {
     throw new BadRequestException('Invalid grant type');
   }
 
+  /**
+   * Retrieves user consent for a specific client application.
+   *
+   * Checks if the user has previously granted consent and returns the consent details.
+   *
+   * @param userId - The ID of the user.
+   * @param clientId - The ID of the client application.
+   * @param requestedScopes - The scopes requested by the client.
+   * @returns An object containing application details and requested scopes.
+   */
   async getUserConsent(
     userId: number,
     clientId: string,
@@ -229,7 +240,7 @@ export class OAuthProviderService {
       applicationName: client.name,
       requestedScopes: requestedScopes.map((scope) => ({
         name: scope,
-        description: this.availableScopes[scope],
+        description: scopes[scope],
       })),
       privacyPolicyUrl: client.privacyPolicyUrl,
       termsOfServiceUrl: client.termsOfServiceUrl,
@@ -237,6 +248,17 @@ export class OAuthProviderService {
     };
   }
 
+  /**
+   * Grants consent to a user for a specific client application.
+   *
+   * Revokes any existing consent before creating a new consent record.
+   *
+   * @param userId - The ID of the user granting consent.
+   * @param clientId - The ID of the client application.
+   * @param grantedScopes - The scopes being granted.
+   * @returns The newly created user consent record.
+   * @throws NotFoundException if the client application is not found.
+   */
   async grantConsent(
     userId: number,
     clientId: string,
@@ -272,6 +294,15 @@ export class OAuthProviderService {
     });
   }
 
+  /**
+   * Revokes access for a user to a specific client application.
+   *
+   * Revokes both user consent and any active tokens associated with the client.
+   *
+   * @param userId - The ID of the user.
+   * @param clientId - The ID of the client application.
+   * @throws NotFoundException if the client application is not found.
+   */
   async revokeAccess(userId: number, clientId: string) {
     let client = await this.prisma.oAuthClient.findUnique({
       where: { clientId },
@@ -306,6 +337,16 @@ export class OAuthProviderService {
     });
   }
 
+  /**
+   * Handles the authorization code grant type for token requests.
+   *
+   * Validates the authorization code and generates access and refresh tokens.
+   *
+   * @param tokenRequest - The token request containing the authorization code.
+   * @param client - The validated client application.
+   * @returns An object containing access and refresh tokens.
+   * @throws UnauthorizedException if the authorization code is invalid.
+   */
   private async handleAuthorizationCodeGrant(
     tokenRequest: TokenRequest,
     client: any,
@@ -355,6 +396,16 @@ export class OAuthProviderService {
     };
   }
 
+  /**
+   * Handles the refresh token grant type for token requests.
+   *
+   * Validates the refresh token and generates a new access token.
+   *
+   * @param tokenRequest - The token request containing the refresh token.
+   * @param client - The validated client application.
+   * @returns An object containing the new access token.
+   * @throws UnauthorizedException if the refresh token is invalid.
+   */
   private async handleRefreshTokenGrant(
     tokenRequest: TokenRequest,
     client: any,
@@ -393,6 +444,14 @@ export class OAuthProviderService {
     };
   }
 
+  /**
+   * Generates an access token for a user.
+   *
+   * @param user - The user for whom the token is generated.
+   * @param client - The client application requesting the token.
+   * @param scope - The scopes associated with the token.
+   * @returns The generated access token.
+   */
   private generateAccessToken(user: any, client: any, scope: string[]) {
     return this.jwtService.sign(
       {
@@ -406,6 +465,14 @@ export class OAuthProviderService {
     );
   }
 
+  /**
+   * Generates a refresh token for a user.
+   *
+   * @param user - The user for whom the token is generated.
+   * @param client - The client application requesting the token.
+   * @param scope - The scopes associated with the token.
+   * @returns The generated refresh token.
+   */
   private generateRefreshToken(user: any, client: any, scope: string[]) {
     const token = crypto.randomBytes(32).toString('hex');
 
@@ -426,21 +493,36 @@ export class OAuthProviderService {
     return token;
   }
 
+  /**
+   * Validates a client based on client ID and redirect URI.
+   *
+   * @param clientId - The ID of the client to validate.
+   * @param redirectUri - The redirect URI to validate against the client.
+   * @returns The validated client object.
+   * @throws UnauthorizedException if the client or redirect URI is invalid.
+   */
   private async validateClient(clientId: string, redirectUri: string) {
     const client = await this.prisma.oAuthClient.findUnique({
       where: { clientId, redirectUris: { hasSome: [redirectUri] } },
     });
 
-    if (!client || !client.redirectUris.includes(redirectUri)) {
+    if (!client?.redirectUris?.includes(redirectUri)) {
       throw new UnauthorizedException('Invalid client or redirect URI');
     }
 
     return client;
   }
 
+  /**
+   * Validates requested scopes against allowed scopes.
+   *
+   * @param requestedScopes - The scopes requested by the client.
+   * @param allowedScopes - The scopes allowed for the client.
+   * @throws BadRequestException if any requested scopes are invalid.
+   */
   private validateScopes(requestedScopes: string[], allowedScopes: string[]) {
     const invalidScopes = requestedScopes.filter(
-      (scope) => !allowedScopes.includes(scope) || !this.availableScopes[scope],
+      (scope) => !allowedScopes.includes(scope) || !scopes[scope],
     );
 
     if (invalidScopes.length > 0) {
@@ -450,6 +532,14 @@ export class OAuthProviderService {
     }
   }
 
+  /**
+   * Validates client credentials (ID and secret).
+   *
+   * @param clientId - The ID of the client to validate.
+   * @param clientSecret - The secret of the client to validate.
+   * @returns The validated client object.
+   * @throws UnauthorizedException if the client is invalid or credentials do not match.
+   */
   private async validateClientCredentials(
     clientId: string,
     clientSecret: string,
@@ -471,6 +561,13 @@ export class OAuthProviderService {
     return client;
   }
 
+  /**
+   * Validates a JWT token and checks if it has been revoked.
+   *
+   * @param token - The JWT token to validate.
+   * @returns The decoded token payload.
+   * @throws UnauthorizedException if the token is invalid or has been revoked.
+   */
   async validateToken(token: string): Promise<any> {
     try {
       const decoded = this.jwtService.verify(token);
@@ -493,6 +590,12 @@ export class OAuthProviderService {
     }
   }
 
+  /**
+   * Lists all applications associated with a user, including consent details.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns An array of user applications with consent details.
+   */
   async listUserApplications(context: IHttpContext) {
     const consents = await this.prisma.userConsent.findMany({
       where: {
@@ -521,6 +624,16 @@ export class OAuthProviderService {
     }));
   }
 
+  /**
+   * Rotates the client secret for a specific client application.
+   *
+   * Validates the current secret before generating a new one.
+   *
+   * @param clientId - The ID of the client application.
+   * @param currentSecret - The current secret of the client application.
+   * @returns An object containing the client ID and the new client secret.
+   * @throws UnauthorizedException if the current secret is invalid.
+   */
   async rotateClientSecret(clientId: string, currentSecret: string) {
     // Validate current credentials before allowing rotation
     const client = await this.validateClientCredentials(

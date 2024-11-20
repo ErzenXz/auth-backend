@@ -1,5 +1,4 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { ChangeBirthdateCommand } from '../commands/change-birthdate.command';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserLoginCommand } from '../commands/user-login.command';
@@ -9,10 +8,24 @@ import { JwtService } from '@nestjs/jwt';
 
 @CommandHandler(UserLoginCommand)
 export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
+  /**
+   * Handles the user login process by validating credentials and generating a refresh token.
+   *
+   * This method retrieves the user by email, verifies the provided password, checks for active
+   * refresh tokens, and either reuses an existing token or generates a new one. It also updates
+   * the user's last login information and emits an event if the login occurs from a new IP address.
+   *
+   * @param {UserLoginCommand} command - The command containing the user's login credentials and context.
+   * @param {string} command.email - The email of the user attempting to log in.
+   * @param {string} command.password - The password of the user attempting to log in.
+   * @param {any} command.context - The context containing request information, including IP and headers.
+   * @throws {UnauthorizedException} Throws an exception if the email or password is invalid.
+   * @returns {Promise<{ user: any, refreshToken: string }>} A promise that resolves to an object containing the user details and a refresh token.
+   */
   constructor(
-    private prisma: PrismaService,
+    private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
-    private jwtService: JwtService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async execute(command: UserLoginCommand) {
@@ -40,7 +53,7 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
     });
 
     const userAgent = context.req.headers['user-agent'] || 'Unknown';
-    const ip = context.ip;
+    const { ip } = context;
 
     const currentRefreshTokenVersion = user.tokenVersion;
     let newRefreshToken = await this.generateSecureRefreshToken(user);
@@ -118,11 +131,6 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
   }
 
   async generateSecureRefreshToken(user: any) {
-    const refreshToken = this.jwtService.sign(
-      { sub: user.id },
-      { expiresIn: '90d' },
-    );
-
-    return refreshToken;
+    return this.jwtService.sign({ sub: user.id }, { expiresIn: '90d' });
   }
 }

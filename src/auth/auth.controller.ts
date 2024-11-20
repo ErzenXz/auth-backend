@@ -20,14 +20,28 @@ import { ChangePasswordDto } from './dtos/change.password.dto';
 import { Response, Request } from 'express';
 import { randomBytes } from 'crypto';
 
+/**
+ * Controller for handling authentication-related requests.
+ *
+ * This controller provides endpoints for user registration, login, password management,
+ * multi-factor authentication (MFA), and session transfer. It interacts with the
+ * AuthService to perform the necessary authentication logic.
+ */
 @ApiTags('Authentication')
 @Controller({
   path: 'auth',
   version: '1',
 })
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {}
 
+  /**
+   * Registers a new user.
+   *
+   * @param registerRequest - The registration data for the new user.
+   * @param context - The HTTP context containing user information.
+   * @returns The result of the registration process.
+   */
   @Post('register')
   async register(
     @Body() registerRequest: RegisterDto,
@@ -37,6 +51,13 @@ export class AuthController {
     return this.authService.register(registerRequest, context);
   }
 
+  /**
+   * Logs in a user.
+   *
+   * @param loginRequest - The login credentials for the user.
+   * @param context - The HTTP context containing user information.
+   * @returns The result of the login process.
+   */
   @Post('login')
   async login(
     @Body() loginRequest: LoginDto,
@@ -45,31 +66,72 @@ export class AuthController {
     return this.authService.login(loginRequest, context);
   }
 
+  /**
+   * Retrieves information about the currently authenticated user.
+   *
+   * @param req - The HTTP context containing user information.
+   * @returns The user's information.
+   */
   @Get('info')
   async me(@HttpContext() req: IHttpContext) {
     return this.authService.info(req);
   }
 
+  /**
+   * Refreshes the user's authentication session.
+   *
+   * @param req - The HTTP context containing user information.
+   * @returns The result of the refresh process.
+   */
   @Post('refresh')
   async refresh(@HttpContext() req: IHttpContext) {
     return this.authService.refresh(req);
   }
 
+  /**
+   * Logs out the currently authenticated user.
+   *
+   * @param req - The HTTP context containing user information.
+   * @returns The result of the logout process.
+   */
   @Post('logout')
   async logout(@HttpContext() req: IHttpContext) {
     return this.authService.logout(req);
   }
 
+  /**
+   * Initiates the setup of multi-factor authentication (MFA) for the user.
+   *
+   * @param req - The HTTP context containing user information.
+   * @returns The result of the MFA setup process.
+   */
   @Post('mfa/setup')
   async setupMfa(@HttpContext() req: IHttpContext) {
     return this.authService.generateQrCode(req);
   }
 
+  /**
+   * Verifies the MFA setup code provided by the user.
+   *
+   * @param req - The HTTP context containing user information.
+   * @param code - The MFA setup code to verify.
+   * @returns The result of the MFA verification process.
+   */
   @Post('mfa/setup/verify')
-  async setupMfaSecond(@HttpContext() req: IHttpContext, @Body() code: string) {
-    return this.authService.verifyMfaCode(req, code);
+  async setupMfaSecond(
+    @HttpContext() req: IHttpContext,
+    @Body('code') code: string,
+  ) {
+    return this.authService.verifyMfaCode(req, { code });
   }
 
+  /**
+   * Verifies the MFA code during login.
+   *
+   * @param mfaRequest - The MFA request containing the code.
+   * @param req - The HTTP context containing user information.
+   * @returns The result of the MFA verification process.
+   */
   @Post('mfa/verify')
   async verifyMfa(
     @Body() mfaRequest: MfaDto,
@@ -78,22 +140,47 @@ export class AuthController {
     return this.authService.verifyMfa(mfaRequest, req);
   }
 
+  /**
+   * Disables multi-factor authentication (MFA) for the user.
+   *
+   * @param req - The HTTP context containing user information.
+   * @returns The result of the MFA disable process.
+   */
   @Auth()
   @Patch('mfa/disable')
   async disableMfa(@HttpContext() req: IHttpContext) {
     return this.authService.disableMfa(req);
   }
 
+  /**
+   * Initiates the password reset process for the user.
+   *
+   * @param forgotDto - The data required to reset the password.
+   * @returns The result of the password reset process.
+   */
   @Post('reset-password')
   async resetPassword(@Body() forgotDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotDto);
   }
 
+  /**
+   * Verifies the password reset token.
+   *
+   * @param context - The HTTP context containing user information.
+   * @returns The result of the password reset verification process.
+   */
   @Get('reset-password/verify/:token')
   async verifyResetPassword(@HttpContext() context: IHttpContext) {
     return this.authService.resetPassword(context);
   }
 
+  /**
+   * Changes the user's password.
+   *
+   * @param req - The HTTP context containing user information.
+   * @param changeDto - The data required to change the password.
+   * @returns The result of the password change process.
+   */
   @Patch('change-password')
   @Auth()
   async changePassword(
@@ -103,13 +190,26 @@ export class AuthController {
     return this.authService.changePassword(req, changeDto);
   }
 
+  /**
+   * Transfers the user's authentication session to a specified return URL.
+   *
+   * This method checks the origin of the request, validates the user, and sets
+   * the refresh token in a cookie. It then generates an HTML page to handle
+   * the transfer process.
+   *
+   * @param req - The HTTP request object.
+   * @param res - The HTTP response object.
+   * @param returnURL - The URL to redirect to after the transfer.
+   * @returns An HTML page for the transfer process or an error page if an error occurs.
+   * @throws UnauthorizedException if the origin is invalid or credentials are invalid.
+   */
   @Get('arp-transfer')
   async transferAuth(
     @Req() req: Request,
     @Res({ passthrough: false }) res: Response,
     @Query() returnURL: { returnUrl?: string },
   ) {
-    const origin = req.headers.origin;
+    const { origin } = req.headers;
 
     // Check if the origin is erzen.tk
     if (origin && !origin.includes('erzen.tk')) {
@@ -122,7 +222,7 @@ export class AuthController {
     }
 
     try {
-      const validUser = await this.authService.findUserSe(req);
+      const validUser = await this.authService.getUserSessionStatus(req);
 
       const refreshToken = req.cookies?.['refreshToken'];
       const nonce = randomBytes(16).toString('base64');

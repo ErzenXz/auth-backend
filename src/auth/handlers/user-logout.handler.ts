@@ -1,14 +1,24 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UserLogoutCommand } from '../commands/user-logout.command';
 
 @CommandHandler(UserLogoutCommand)
 export class UserLogoutHandler implements ICommandHandler<UserLogoutCommand> {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Handles the user logout process by revoking the refresh token.
+   *
+   * This method validates the provided refresh token, retrieves it from the database,
+   * and marks it as revoked to ensure the user is securely logged out. If the token is
+   * invalid or expired, an UnauthorizedException is thrown to prevent unauthorized access.
+   *
+   * @param {UserLogoutCommand} command - The command containing the refresh token for logout.
+   * @param {string} command.refreshToken - The refresh token to be revoked.
+   * @throws {UnauthorizedException} Throws an exception if the refresh token is invalid or expired.
+   * @returns {Promise<{ message: string, code: number }>} A promise that resolves to an object containing a success message and a code.
+   */
   async execute(command: UserLogoutCommand) {
     const { refreshToken } = command;
 

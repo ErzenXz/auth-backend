@@ -5,12 +5,21 @@ import { ConfigService } from '@nestjs/config';
 import { Readable } from 'stream';
 const crypto = require('crypto');
 
+/**
+ * A storage provider implementation for uploading files to AWS S3.
+ *
+ * This class utilizes the AWS SDK to manage file uploads to an S3 bucket.
+ * It provides methods for uploading files as streams and tracking upload progress,
+ * including estimated time of arrival (ETA) for the upload completion.
+ * The configuration for AWS credentials and bucket details is managed through
+ * a configuration service.
+ */
 @Injectable()
 export class S3StorageProvider implements StorageProvider {
-  private AWS_S3_BUCKET: string;
+  private readonly AWS_S3_BUCKET: string;
   private readonly s3: AWS.S3;
 
-  constructor(private configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {
     this.AWS_S3_BUCKET = configService.get<string>('S3_BUCKET');
     this.s3 = new AWS.S3({
       accessKeyId: configService.get<string>('S3_ACCESS_KEY'),
@@ -18,11 +27,26 @@ export class S3StorageProvider implements StorageProvider {
     });
   }
 
+  /**
+   * Uploads a file stream to the S3 bucket.
+   *
+   * @param {Express.Multer.File} file - The file object containing the file data to be uploaded.
+   * @returns {Readable} A readable stream that emits upload progress and completion events.
+   */
   uploadFileStream(file: Express.Multer.File): Readable {
     const { originalname, buffer, mimetype } = file;
     return this.s3Upload(buffer, this.AWS_S3_BUCKET, originalname, mimetype);
   }
 
+  /**
+   * Handles the S3 upload process and tracks progress.
+   *
+   * @param {Buffer} file - The file buffer to be uploaded.
+   * @param {string} bucket - The name of the S3 bucket.
+   * @param {string} name - The original name of the file.
+   * @param {string} mimetype - The MIME type of the file.
+   * @returns {Readable} A readable stream that emits upload progress and completion events.
+   */
   private s3Upload(
     file: Buffer,
     bucket: string,
@@ -48,7 +72,6 @@ export class S3StorageProvider implements StorageProvider {
     pass._read = () => {};
 
     let startTime = Date.now();
-    let lastLoaded = 0;
 
     managedUpload.on('httpUploadProgress', (progress) => {
       const currentTime = Date.now();
@@ -65,8 +88,6 @@ export class S3StorageProvider implements StorageProvider {
       };
 
       pass.push(JSON.stringify(uploadProgress));
-
-      lastLoaded = progress.loaded;
     });
 
     managedUpload
@@ -90,6 +111,12 @@ export class S3StorageProvider implements StorageProvider {
     return pass;
   }
 
+  /**
+   * Formats the estimated time of arrival (ETA) for the upload.
+   *
+   * @param {number} seconds - The number of seconds until completion.
+   * @returns {string} A formatted string representing the ETA in HH:MM:SS format.
+   */
   private formatETA(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);

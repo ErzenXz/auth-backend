@@ -207,16 +207,6 @@
       "post": {
         "operationId": "AuthController_setupMfaSecond",
         "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "string"
-              }
-            }
-          }
-        },
         "responses": {
           "201": {
             "description": ""

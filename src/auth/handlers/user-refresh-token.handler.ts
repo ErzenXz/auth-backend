@@ -1,7 +1,5 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { ChangeProfilePictureCommand } from '../commands/change-profile-picture.command';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserRefreshTokenCommand } from '../commands/user-refresh-token.command';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -11,11 +9,23 @@ export class UserRefreshTokenHandler
   implements ICommandHandler<UserRefreshTokenCommand>
 {
   constructor(
-    private prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
-    private jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
   ) {}
 
+  /**
+   * Executes the process of refreshing a user's access token using a valid refresh token.
+   *
+   * This method validates the provided refresh token, retrieves the associated user,
+   * updates the last used date of the refresh token, and generates a new JWT access token
+   * for the user. It throws an UnauthorizedException if the refresh token is invalid, expired,
+   * or if the user cannot be found.
+   *
+   * @param {UserRefreshTokenCommand} command - The command containing the refresh token for generating a new access token.
+   * @param {string} command.refreshToken - The refresh token to be validated and used for generating a new access token.
+   * @throws {UnauthorizedException} Throws an exception if the refresh token is invalid, expired, or if the user does not exist.
+   * @returns {Promise<{ accessToken: string }>} A promise that resolves to an object containing the newly generated access token.
+   */
   async execute(command: UserRefreshTokenCommand) {
     const { refreshToken } = command;
 

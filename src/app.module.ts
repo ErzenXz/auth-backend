@@ -11,8 +11,6 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { EmailModule } from './email/email.module';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { StorageModule } from './storage/storage.module';
 import { AllExceptionsFilter } from './exception.filters';
 import * as winston from 'winston';
@@ -21,10 +19,6 @@ import { winstonConfig } from './winston.config';
 import { PrivacyModule } from './privacy/privacy.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { CustomEventEmitterModule } from './services/event-emitter.module';
-import { MailerService } from '@nestjs-modules/mailer';
-import { LoadBalancerService } from './services/load-balancer.service';
-import { CommandControlService } from './services/command-control.service';
-import { CommandControlController } from './command-control.controller';
 
 @Module({
   imports: [
@@ -47,11 +41,9 @@ import { CommandControlController } from './command-control.controller';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    EmailModule,
     StorageModule,
     PrivacyModule,
     MessagingModule,
-    EmailModule,
     CustomEventEmitterModule,
   ],
   controllers: [AppController],

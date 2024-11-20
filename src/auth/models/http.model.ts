@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import { from } from 'rxjs';
 
 export interface HttpContext {
   req: Request;

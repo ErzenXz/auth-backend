@@ -17,10 +17,24 @@ Sentry.init({
   profilesSampleRate: 1.0,
 });
 
+/**
+ * Global exception filter for handling all exceptions in the application.
+ *
+ * This filter catches exceptions thrown in the application, logs them,
+ * and sends a structured JSON response to the client. It integrates with
+ * Sentry for error tracking and profiling, allowing for better monitoring
+ * of application errors.
+ */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  /**
+   * Catches and processes exceptions thrown in the application.
+   *
+   * @param exception - The exception that was thrown.
+   * @param host - The context of the request and response.
+   */
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();

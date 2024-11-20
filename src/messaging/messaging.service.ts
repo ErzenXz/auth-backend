@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EncryptionService } from './encryption.service';
 import { IHttpContext } from 'src/auth/models';
@@ -10,15 +10,32 @@ import { XCacheService } from 'src/cache/cache.service';
 import { UserSettings } from 'src/privacy/models/user-settings.model';
 import { DetailedUserInfo } from 'src/privacy/models/profile-user.model';
 
+/**
+ * Service for managing messaging functionalities, including sending and retrieving messages.
+ *
+ * This class provides methods to send encrypted messages, retrieve conversation threads,
+ * manage user subscriptions for push notifications, and handle user-related messaging operations.
+ * It utilizes Prisma for database interactions, an encryption service for securing message content,
+ * and an event emitter for real-time message notifications.
+ */
 @Injectable()
 export class MessagingService {
   constructor(
-    private prisma: PrismaService,
-    private encryptionService: EncryptionService,
-    private eventEmitter: EventEmitter2,
-    private cacheService: XCacheService,
+    private readonly prisma: PrismaService,
+    private readonly encryptionService: EncryptionService,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly cacheService: XCacheService,
   ) {}
 
+  /**
+   * Sends a message to a specified user after encrypting the content.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} receiverUsername - The username of the message recipient.
+   * @param {MessageDto} messageDto - The data transfer object containing the message content.
+   * @returns {Promise<any>} A promise that resolves to the created message object.
+   * @throws {Error} Throws an error if the receiver is not found.
+   */
   async sendMessage(
     context: IHttpContext,
     receiverUsername: string,
@@ -55,6 +72,12 @@ export class MessagingService {
     return message;
   }
 
+  /**
+   * Retrieves conversation threads for a specified user.
+   *
+   * @param {number} userId - The ID of the user whose conversation threads are to be retrieved.
+   * @returns {Promise<any[]>} A promise that resolves to an array of conversation threads.
+   */
   async getConversationThreads(userId: number) {
     const cacheKey = `conversationThreads:${userId}`;
     const cachedThreads = await this.cacheService.getCache(cacheKey);
@@ -129,6 +152,15 @@ export class MessagingService {
     return conversations;
   }
 
+  /**
+   * Retrieves messages for a specific conversation between two users.
+   *
+   * @param {number} userId - The ID of the requesting user.
+   * @param {number} conversationUserId - The ID of the user in the conversation.
+   * @param {number} pageSize - The number of messages to retrieve per page.
+   * @param {number} page - The page number to retrieve.
+   * @returns {Promise<any[]>} A promise that resolves to an array of messages for the conversation.
+   */
   async getMessagesForConversation(
     userId: number,
     conversationUserId: number,
@@ -187,6 +219,12 @@ export class MessagingService {
     }));
   }
 
+  /**
+   * Searches for users based on a query string.
+   *
+   * @param {string} query - The search query to find users.
+   * @returns {Promise<any[]>} A promise that resolves to an array of matching users.
+   */
   async searchUsers(query: string) {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) {
@@ -205,6 +243,13 @@ export class MessagingService {
     });
   }
 
+  /**
+   * Deletes a specific message by its ID.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {number} messageId - The ID of the message to be deleted.
+   * @returns {Promise<{ success?: boolean; error?: string }>} A promise that resolves to the result of the deletion operation.
+   */
   async deleteMessage(context: IHttpContext, messageId: number) {
     try {
       const message = await this.prisma.message.findUnique({
@@ -234,6 +279,13 @@ export class MessagingService {
     }
   }
 
+  /**
+   * Deletes a conversation with a specific user.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {number} userId - The ID of the user in the conversation to be deleted.
+   * @returns {Promise<{ success: boolean }>} A promise that resolves to the result of the deletion operation.
+   */
   async deleteConversation(context: IHttpContext, userId: number) {
     const messages = await this.prisma.message.findMany({
       where: {
@@ -276,6 +328,12 @@ export class MessagingService {
     return { success: true };
   }
 
+  /**
+   * Retrieves unread messages for the authenticated user.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @returns {Promise<any[]>} A promise that resolves to an array of unread messages.
+   */
   async getUnreadMessages(context: IHttpContext) {
     const unreadMessages = await this.prisma.message.findMany({
       where: {
@@ -303,6 +361,12 @@ export class MessagingService {
     }));
   }
 
+  /**
+   * Retrieves detailed user information based on the username.
+   *
+   * @param {string} username - The username of the user whose information is to be retrieved.
+   * @returns {Promise<DetailedUserInfo | null>} A promise that resolves to the user information or null if not found.
+   */
   async getUserInfo(username: string): Promise<DetailedUserInfo | null> {
     const user = await this.prisma.user.findFirst({
       where: { username },
@@ -338,6 +402,13 @@ export class MessagingService {
     };
   }
 
+  /**
+   * Saves a user's subscription for push notifications.
+   *
+   * @param {number} userId - The ID of the user subscribing to notifications.
+   * @param {any} subscription - The subscription object containing push notification details.
+   * @returns {Promise<void>} A promise that resolves when the subscription is saved.
+   */
   async saveSubscription(userId: number, subscription: any) {
     await this.prisma.pushSubscription.create({
       data: {
@@ -351,12 +422,24 @@ export class MessagingService {
     });
   }
 
+  /**
+   * Retrieves all push subscriptions for a specific user.
+   *
+   * @param {number} userId - The ID of the user whose subscriptions are to be retrieved.
+   * @returns {Promise<any[]>} A promise that resolves to an array of subscriptions.
+   */
   async getSubscriptions(userId: number) {
     return this.prisma.pushSubscription.findMany({
       where: { userId },
     });
   }
 
+  /**
+   * Finds a user and their subscription based on the username.
+   *
+   * @param {string} username - The username of the user to find.
+   * @returns {Promise<{ user: any; subscription: any }>} A promise that resolves to an object containing the user and their subscription.
+   */
   async findUserAndSubscriptionByUsername(username: string) {
     let user = await this.prisma.user.findFirst({
       where: { username },
