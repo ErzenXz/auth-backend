@@ -185,10 +185,7 @@ export class MessagingController {
    */
   @Get('userInfo/:username')
   @Auth()
-  async getUserInfo(
-    @Param('username') username: string,
-    @HttpContext() context: IHttpContext,
-  ) {
+  async getUserInfo(@Param('username') username: string) {
     return this.messagingService.getUserInfo(username);
   }
 

@@ -3,7 +3,7 @@ import * as AWS from 'aws-sdk';
 import { StorageProvider, UploadProgress } from '../storage-provider.interface';
 import { ConfigService } from '@nestjs/config';
 import { Readable } from 'stream';
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 /**
  * A storage provider implementation for uploading files to AWS S3.
@@ -71,7 +71,7 @@ export class S3StorageProvider implements StorageProvider {
     const pass = new Readable({ objectMode: true });
     pass._read = () => {};
 
-    let startTime = Date.now();
+    const startTime = Date.now();
 
     managedUpload.on('httpUploadProgress', (progress) => {
       const currentTime = Date.now();

@@ -41,6 +41,7 @@ export class MessagingGateway implements OnGatewayConnection {
       client.join(`user_${payload.sub}`);
       client.data.userId = payload.sub;
     } catch (err) {
+      console.info('Invalid token:', err.message);
       client.disconnect();
     }
   }

@@ -22,7 +22,7 @@ import { PrivacyService } from 'src/privacy/privacy.service';
 import { Request } from 'express';
 import { ArpResponse } from './models/arp.model';
 import { ChangeIPLocationCommand } from './commands/update-ip-location.command';
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 /**
  * Service for handling authentication-related operations.

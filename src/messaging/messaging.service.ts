@@ -275,6 +275,7 @@ export class MessagingService {
 
       return { success: true };
     } catch (error) {
+      console.info('Error deleting message:', error);
       return { error: 'An unexpected error occurred. Please try again later.' };
     }
   }
@@ -443,11 +444,15 @@ export class MessagingService {
    * @returns {Promise<{ user: any; subscriptions: any }>} A promise that resolves to an object containing the user and their subscription.
    */
   async findUserAndSubscriptionsByUsername(username: string) {
-    let user = await this.prisma.user.findFirst({
+    const user = await this.prisma.user.findFirst({
       where: { username },
     });
 
-    let subscriptions = await this.prisma.pushSubscription.findMany({
+    if (!user) {
+      return { user: null, subscriptions: [] };
+    }
+
+    const subscriptions = await this.prisma.pushSubscription.findMany({
       where: { userId: user.id },
     });
 

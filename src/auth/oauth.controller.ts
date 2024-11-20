@@ -227,7 +227,6 @@ export class OAuthProviderController {
   async rotateClientSecret(
     @Body('client_id') clientId: string,
     @Body('current_secret') currentSecret: string,
-    @Req() req: Request & { user: any },
   ) {
     return this.oAuthProviderService.rotateClientSecret(
       clientId,
