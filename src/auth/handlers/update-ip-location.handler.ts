@@ -50,7 +50,7 @@ export class ChangeIPLocationHandler
       },
     });
 
-    if (ipLocation && ipLocation.countryCode) {
+    if (ipLocation?.countryCode) {
       return { message: 'IP location already saved' };
     }
 

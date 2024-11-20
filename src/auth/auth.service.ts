@@ -53,7 +53,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     mfaService: MfaService,
     private readonly eventEmitter: EventEmitter2,
-    private privacySettingsService: PrivacyService,
+    private readonly privacySettingsService: PrivacyService,
   ) {
     this.mfaService = mfaService;
   }
