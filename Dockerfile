@@ -6,9 +6,13 @@ FROM node:20.18.0-alpine3.19 AS build
 
 WORKDIR /app
 
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
 COPY package*.json ./
 
-RUN yarn install --ignore-scripts
+# Allow scripts to run for native module compilation
+RUN yarn install
 
 COPY . .
 
@@ -24,14 +28,13 @@ ENV NODE_ENV=production
 
 COPY --from=build /app ./
 
+# Install only production dependencies without running scripts
 RUN yarn install --production --ignore-scripts
 
-RUN yarn add bcrypt
-
-RUN yarn rebuild bcrypt
-
+# Create a non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
+# Change ownership to the non-root user
 RUN chown -R appuser:appgroup /app
 
 USER appuser
