@@ -39,6 +39,10 @@ export class RedisIoAdapter extends IoAdapter {
         password: process.env.SOCKET_ADMIN_PASSWORD,
       },
     });
+    server.cors = {
+      origin: ['https://admin.socket.io'],
+      credentials: true,
+    };
 
     return server;
   }
