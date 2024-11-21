@@ -2,17 +2,26 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ['main']
   pull_request:
-    branches: [ "main" ]
+    branches: ['main']
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag auth-erzen:$(date +%s)
+      - uses: actions/checkout@v4
+
+      - name: Build the Docker image
+        run: |
+          IMAGE_NAME=auth-erzen:${{ github.sha }}
+          docker build . --file Dockerfile --tag $IMAGE_NAME
+
+      - name: Test Docker image
+        run: |
+          IMAGE_NAME=auth-erzen:${{ github.sha }}
+          docker run -d --name test_container $IMAGE_NAME
+          sleep 20
+          docker logs test_container
+          docker stop test_container
+          docker rm test_container
