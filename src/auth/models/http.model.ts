@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 
 export interface HttpContext {
-  req: Request;
-  res: Response;
+  req: FastifyRequest;
+  res: FastifyReply;
   user?: any;
   ip: string;
   clientIp: {

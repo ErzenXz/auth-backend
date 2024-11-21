@@ -298,7 +298,7 @@ export class MessagingService {
     });
 
     if (messages.length === 0) {
-      return response.status(404).json({ message: 'Conversation not found' });
+      return response.status(404).send({ message: 'Conversation not found' });
     }
 
     // Add deletion records for the requesting user

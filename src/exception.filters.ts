@@ -69,7 +69,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       Sentry.captureException(exception);
     }
 
-    response.status(status).json({
+    response.status(status).send({
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,

@@ -285,7 +285,7 @@ export class AuthService {
     const mfaQrCodeImage =
       await this.mfaService.generateQrCodeImage(otpQrCodeLink);
 
-    context.res.setHeader('Content-Type', 'image/png');
+    context.res.header('Content-Type', 'image/png');
     context.res.send(mfaQrCodeImage);
   }
 
@@ -588,7 +588,7 @@ export class AuthService {
    * @throws BadRequestException if the token is invalid or expired.
    */
   async resetPassword(context: IHttpContext) {
-    const { token } = context.req.params;
+    const token = (context.req.params as { token: string }).token;
 
     const resetToken = await this.prisma.emailPasswordReset.findFirst({
       where: {

@@ -18,29 +18,37 @@
 import 'dotenv/config';
 import 'newrelic';
 import { NestFactory } from '@nestjs/core';
-import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import * as cookieParser from 'cookie-parser';
 import * as fs from 'fs';
 import { VersioningType } from '@nestjs/common';
-import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import * as compression from 'compression';
 import { RedisIoAdapter } from './messaging/adapters/redis-io.adapter';
 import { join } from 'path';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import helmet from 'helmet';
+import fastifyCookie from '@fastify/cookie';
+import { fastifyCompress } from '@fastify/compress';
 
 async function bootstrap() {
   // Use HTTPS
 
-  // const httpsOptions = {
-  //   key: fs.readFileSync('./src/cert/key.pem'),
-  //   cert: fs.readFileSync('./src/cert/cert.pem'),
-  //   http2: true,
-  // };
+  const httpsOptions = {
+    key: fs.readFileSync('./src/cert/key.pem'),
+    cert: fs.readFileSync('./src/cert/cert.pem'),
+    http2: true,
+  };
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({ https: httpsOptions }),
+  );
+
+  const fastifyAdapter = new FastifyAdapter();
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -87,22 +95,16 @@ async function bootstrap() {
   );
 
   // Serve static files from public directory
-  app.useStaticAssets(publicPath);
+  app.useStaticAssets({ root: publicPath });
   SwaggerModule.setup('api', app, document);
 
-  app.use(cookieParser());
+  await fastifyAdapter.register(fastifyCookie as any);
 
-  app.enableCors({
+  fastifyAdapter.register(require('@fastify/cors'), {
     origin: (requestOrigin, callback) => {
       if (!requestOrigin) {
         return callback(null, true);
       }
-
-      app.use((req, res, next) => {
-        res.header('Access-Control-Allow-Origin', requestOrigin);
-        next();
-      });
-
       callback(null, true);
     },
     credentials: true,
@@ -110,12 +112,7 @@ async function bootstrap() {
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
-  app.use(
-    compression({
-      brotli: true,
-      threshold: 1024,
-    }),
-  );
+  fastifyAdapter.register(fastifyCompress as any, { level: 9 });
 
   app.useWebSocketAdapter(new RedisIoAdapter(app));
 

@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 
 /**
  * Retrieves the client's IP address from the request object.
@@ -17,7 +17,7 @@ import { Request, Response } from 'express';
  * - `forwarded`: An array of IP addresses from the X-Forwarded-For header.
  * - `real`: The most reliable real IP address determined from the headers.
  */
-function getClientIp(req: Request) {
+function getClientIp(req: FastifyRequest) {
   const cloudflareIp = req.headers['cf-connecting-ip'] as string;
   const xForwardedFor = ((req.headers['x-forwarded-for'] as string) || '')
     .split(',')
@@ -25,7 +25,7 @@ function getClientIp(req: Request) {
   const xRealIp = req.headers['x-real-ip'] as string;
 
   return {
-    raw: req.ip || req.socket.remoteAddress || '',
+    raw: req.ip || req.ip || '',
     cloudflare: cloudflareIp || null,
     forwarded: xForwardedFor,
     real:
@@ -33,7 +33,6 @@ function getClientIp(req: Request) {
       xRealIp ||
       (xForwardedFor.length ? xForwardedFor[0] : null) ||
       req.ip ||
-      req.socket.remoteAddress ||
       'unknown',
   };
 }
@@ -53,27 +52,31 @@ function getClientIp(req: Request) {
  * - `ip`: The real IP address of the client.
  * - `clientIp`: An object containing various IP address details.
  */
-export const HttpContext = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext) => {
-    const req = ctx.switchToHttp().getRequest<Request>();
-    const res = ctx.switchToHttp().getResponse<Response>();
+export const HttpContext = createParamDecorator((ctx: ExecutionContext) => {
+  interface CustomParams {
+    token: string;
+  }
 
-    if (!req) {
-      console.error('Request object is missing in ExecutionContext');
-      throw new Error('Request object is undefined');
-    }
+  const req = ctx
+    .switchToHttp()
+    .getRequest<FastifyRequest & { params: CustomParams }>();
+  const res = ctx.switchToHttp().getResponse<FastifyReply>();
 
-    const clientIp = getClientIp(req);
+  if (!req) {
+    console.error('Request object is missing in ExecutionContext');
+    throw new Error('Request object is undefined');
+  }
 
-    return {
-      req,
-      res,
-      user: req.user || null,
-      ip: clientIp.real,
-      clientIp,
-    };
-  },
-);
+  const clientIp = getClientIp(req);
+
+  return {
+    req,
+    res,
+    user: (req as any).user || null,
+    ip: clientIp.real,
+    clientIp,
+  };
+});
 
 /**
  * A custom decorator that retrieves the client's IP address from the request object.
@@ -86,7 +89,7 @@ export const HttpContext = createParamDecorator(
  */
 export const GetClientIp = createParamDecorator(
   (data: unknown, ctx: ExecutionContext) => {
-    const req = ctx.switchToHttp().getRequest();
+    const req = ctx.switchToHttp().getRequest<FastifyRequest>();
     if (!req) {
       console.error('Request object is missing in ExecutionContext');
       throw new Error('Request object is undefined');
