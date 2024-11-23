@@ -41,12 +41,18 @@ export class MessagingService {
     receiverUsername: string,
     messageDto: MessageDto,
   ) {
+    if (context.user.username === receiverUsername) {
+      return response
+        .status(400)
+        .json({ message: 'You cannot send a message to yourself' });
+    }
+
     const receiver = await this.prisma.user.findFirst({
       where: { username: receiverUsername },
     });
 
     if (!receiver) {
-      throw new Error('Receiver not found');
+      return response.status(400).json({ message: 'Receiver not found' });
     }
 
     const encryptedMessage = this.encryptionService.encrypt(messageDto.content);
@@ -79,6 +85,10 @@ export class MessagingService {
    * @returns {Promise<any[]>} A promise that resolves to an array of conversation threads.
    */
   async getConversationThreads(userId: number) {
+    if (!userId) {
+      return response.status(400).json({ message: 'Invalid user ID' });
+    }
+
     const cacheKey = `conversationThreads:${userId}`;
     const cachedThreads = await this.cacheService.getCache(cacheKey);
 
@@ -252,16 +262,20 @@ export class MessagingService {
    */
   async deleteMessage(context: IHttpContext, messageId: number) {
     try {
+      if (!messageId) {
+        return response.status(400).json({ message: 'Invalid message ID' });
+      }
+
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
       });
 
       if (!message) {
-        return { error: 'Message not found' };
+        return response.status(404).json({ message: 'Message not found' });
       }
 
       if (message.senderId !== context.user.id) {
-        return { error: 'You are not authorized' };
+        return response.status(403).json({ message: 'You are not authorized' });
       }
 
       await this.prisma.messageRead.deleteMany({
@@ -288,6 +302,16 @@ export class MessagingService {
    * @returns {Promise<{ success: boolean }>} A promise that resolves to the result of the deletion operation.
    */
   async deleteConversation(context: IHttpContext, userId: number) {
+    if (context.user.id === userId) {
+      return response
+        .status(400)
+        .json({ message: 'You cannot delete a conversation with yourself' });
+    }
+
+    if (!userId) {
+      return response.status(400).json({ message: 'Invalid user ID' });
+    }
+
     const messages = await this.prisma.message.findMany({
       where: {
         OR: [
@@ -444,6 +468,10 @@ export class MessagingService {
    * @returns {Promise<{ user: any; subscriptions: any }>} A promise that resolves to an object containing the user and their subscription.
    */
   async findUserAndSubscriptionsByUsername(username: string) {
+    if (!username) {
+      return { user: null, subscriptions: [] };
+    }
+
     const user = await this.prisma.user.findFirst({
       where: { username },
     });

@@ -15,6 +15,7 @@ import {
   TokenRequest,
 } from './models/oauth.model';
 import { scopes } from './models/scopes.model';
+import { response } from 'express';
 
 /**
  * Service for managing OAuth client applications and handling authorization flows.
@@ -264,13 +265,19 @@ export class OAuthProviderService {
     clientId: string,
     grantedScopes: string[],
   ) {
+    if (!clientId || !grantedScopes) {
+      return response
+        .status(400)
+        .json({ message: 'Missing required parameters' });
+    }
+
     // Revoke existing consent
     const client = await this.prisma.oAuthClient.findUnique({
       where: { clientId },
     });
 
     if (!client) {
-      throw new NotFoundException('Client not found');
+      return response.status(404).json({ message: 'Client not found' });
     }
 
     await this.prisma.userConsent.updateMany({
@@ -304,12 +311,18 @@ export class OAuthProviderService {
    * @throws NotFoundException if the client application is not found.
    */
   async revokeAccess(userId: number, clientId: string) {
+    if (!clientId) {
+      return response
+        .status(400)
+        .json({ message: 'Missing required parameters' });
+    }
+
     const client = await this.prisma.oAuthClient.findUnique({
       where: { clientId },
     });
 
     if (!client) {
-      throw new NotFoundException('Client not found');
+      return response.status(404).json({ message: 'Client not found' });
     }
 
     // Revoke consent
@@ -351,6 +364,12 @@ export class OAuthProviderService {
     tokenRequest: TokenRequest,
     client: any,
   ) {
+    if (!tokenRequest.code) {
+      return response
+        .status(400)
+        .json({ message: 'Missing required parameters' });
+    }
+
     const authCode = await this.prisma.authorizationCode.findFirst({
       where: {
         code: tokenRequest.code,
@@ -366,7 +385,9 @@ export class OAuthProviderService {
     });
 
     if (!authCode) {
-      throw new UnauthorizedException('Invalid authorization code');
+      return response
+        .status(401)
+        .json({ message: 'Invalid authorization code' });
     }
 
     // Mark code as used
@@ -410,6 +431,12 @@ export class OAuthProviderService {
     tokenRequest: TokenRequest,
     client: any,
   ) {
+    if (!tokenRequest.refreshToken) {
+      return response
+        .status(400)
+        .json({ message: 'Missing required parameters' });
+    }
+
     const refreshTokenRecord = await this.prisma.oAuthToken.findFirst({
       where: {
         token: tokenRequest.refreshToken,
@@ -426,7 +453,7 @@ export class OAuthProviderService {
     });
 
     if (!refreshTokenRecord) {
-      throw new UnauthorizedException('Invalid refresh token');
+      return response.status(401).json({ message: 'Invalid refresh token' });
     }
 
     // Generate new tokens
@@ -526,9 +553,9 @@ export class OAuthProviderService {
     );
 
     if (invalidScopes.length > 0) {
-      throw new BadRequestException(
-        `Invalid scopes: ${invalidScopes.join(', ')}`,
-      );
+      return response
+        .status(400)
+        .json({ message: `Invalid scopes: ${invalidScopes.join(', ')}` });
     }
   }
 
@@ -544,6 +571,10 @@ export class OAuthProviderService {
     clientId: string,
     clientSecret: string,
   ) {
+    if (!clientId || !clientSecret) {
+      throw new UnauthorizedException('Missing client credentials');
+    }
+
     const client = await this.prisma.oAuthClient.findUnique({
       where: { clientId },
     });
@@ -569,6 +600,12 @@ export class OAuthProviderService {
    * @throws UnauthorizedException if the token is invalid or has been revoked.
    */
   async validateToken(token: string): Promise<any> {
+    if (!token) {
+      return response
+        .status(400)
+        .json({ message: 'Missing required parameters' });
+    }
+
     try {
       const decoded = this.jwtService.verify(token);
 
@@ -581,13 +618,12 @@ export class OAuthProviderService {
       });
 
       if (revokedToken) {
-        throw new UnauthorizedException('Token has been revoked');
+        return response.status(401).json({ message: 'Token has been revoked' });
       }
 
       return decoded;
     } catch (error) {
-      console.info('Token validation error:', error);
-      throw new UnauthorizedException('Invalid token');
+      return response.status(401).json({ message: 'Invalid token' });
     }
   }
 

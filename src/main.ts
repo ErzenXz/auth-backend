@@ -34,13 +34,15 @@ import { join } from 'path';
 async function bootstrap() {
   // Use HTTPS
 
-  // const httpsOptions = {
-  //   key: fs.readFileSync('./src/cert/key.pem'),
-  //   cert: fs.readFileSync('./src/cert/cert.pem'),
-  //   http2: true,
-  // };
+  const httpsOptions = {
+    key: fs.readFileSync('./src/cert/key.pem'),
+    cert: fs.readFileSync('./src/cert/cert.pem'),
+    http2: true,
+  };
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    httpsOptions,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
