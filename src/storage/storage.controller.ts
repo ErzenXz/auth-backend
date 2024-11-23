@@ -34,6 +34,14 @@ export class StorageController {
     @UploadedFile() file: Express.Multer.File,
     @Res() res: Response,
   ) {
+    if (!file) {
+      res.status(400).json({
+        error:
+          'File is required. Please provide a file in multipart/form-data format with field name "file"',
+      });
+      return;
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');

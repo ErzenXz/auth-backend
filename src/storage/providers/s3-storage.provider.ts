@@ -3,7 +3,7 @@ import * as AWS from 'aws-sdk';
 import { StorageProvider, UploadProgress } from '../storage-provider.interface';
 import { ConfigService } from '@nestjs/config';
 import { Readable } from 'stream';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 /**
  * A storage provider implementation for uploading files to AWS S3.
