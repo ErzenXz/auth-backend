@@ -57,7 +57,7 @@ export class MessagingController {
       for (const subscription of subscriptions.subscriptions) {
         if (subscription.endpoint) {
           await webPush.sendNotification(
-            subscription.endpoint,
+            subscription,
             JSON.stringify({
               title: 'New Message from ' + context.user.fullName,
               body: messageDto.content,

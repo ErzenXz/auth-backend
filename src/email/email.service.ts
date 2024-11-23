@@ -2,6 +2,8 @@ import { MailerService } from '@nestjs-modules/mailer';
 import { Injectable } from '@nestjs/common';
 import { Email } from './interfaces/request.interface';
 import { OnEvent } from '@nestjs/event-emitter';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 /**
  * Service for managing email communications within the application.
@@ -13,7 +15,10 @@ import { OnEvent } from '@nestjs/event-emitter';
  */
 @Injectable()
 export class EmailService {
-  constructor(private readonly mailerService: MailerService) {}
+  constructor(
+    @InjectQueue('email') private readonly emailQueue: Queue,
+    private readonly mailerService: MailerService,
+  ) {}
 
   /**
    * Sends a welcome email to a newly registered user.
@@ -29,14 +34,11 @@ export class EmailService {
 
     const subject = `Welcome to XENBit: ${name}`;
 
-    await this.mailerService.sendMail({
+    await this.emailQueue.add('sendEmail', {
       to: email,
       subject,
       template: './auth/welcome.hbs',
-      context: {
-        name,
-        email,
-      },
+      context: { name, email },
     });
   }
 
@@ -57,15 +59,11 @@ export class EmailService {
 
     const url = `https://api.erzen.xyz/v1/auth/reset-password/verify/${token}`;
 
-    await this.mailerService.sendMail({
+    await this.emailQueue.add('sendEmail', {
       to: email,
       subject,
       template: './auth/forgot.hbs',
-      context: {
-        name,
-        email,
-        token: url,
-      },
+      context: { name, email, token },
     });
   }
 
@@ -84,15 +82,11 @@ export class EmailService {
 
     const subject = `Forgot Password Request`;
 
-    await this.mailerService.sendMail({
+    await this.emailQueue.add('sendEmail', {
       to: email,
       subject,
       template: './auth/reset-password-email.hbs',
-      context: {
-        name,
-        email,
-        password,
-      },
+      context: { name, email, password },
     });
   }
 
@@ -106,10 +100,10 @@ export class EmailService {
   async send(data: Email, data2: string) {
     const { to, subject } = data;
 
-    await this.mailerService.sendMail({
+    await this.emailQueue.add('sendEmail', {
       to,
       subject,
-      template: './welcome',
+      template: './auth/welcome.hbs',
       context: {
         data2,
       },

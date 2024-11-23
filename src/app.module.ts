@@ -19,6 +19,7 @@ import { winstonConfig } from './winston.config';
 import { PrivacyModule } from './privacy/privacy.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { CustomEventEmitterModule } from './services/event-emitter.module';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [
@@ -40,6 +41,14 @@ import { CustomEventEmitterModule } from './services/event-emitter.module';
     ]),
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_URL,
+        port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+        username: process.env.REDIS_USER || 'default',
+        password: process.env.REDIS_PASSWORD,
+      },
     }),
     StorageModule,
     PrivacyModule,
