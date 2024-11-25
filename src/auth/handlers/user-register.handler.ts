@@ -70,7 +70,7 @@ export class UserRegisterHandler
     // Check if user already exists
     const existingUser = await this.prisma.user.findFirst({
       where: {
-        OR: [{ email }, { username }],
+        OR: [{ email: email.toLowerCase() }, { username }],
       },
     });
 
@@ -84,7 +84,7 @@ export class UserRegisterHandler
     // Create new user
     const user = await this.prisma.user.create({
       data: {
-        email,
+        email: email.toLowerCase(),
         password: hashedPassword,
         fullName: name,
         username,

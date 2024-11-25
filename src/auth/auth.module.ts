@@ -24,6 +24,13 @@ import { UserRefreshTokenHandler } from './handlers/user-refresh-token.handler';
 import { UserLogoutHandler } from './handlers/user-logout.handler';
 import { PrivacyService } from 'src/privacy/privacy.service';
 import { ChangeIPLocationHandler } from './handlers/update-ip-location.handler';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { GitHubStrategy } from './strategies/github.strategy';
+import { LinkedInStrategy } from './strategies/linkedin.strategy';
+import { DiscordStrategy } from './strategies/discord.strategy';
+import { FacebookStrategy } from './strategies/facebook.strategy';
+import { BullModule } from '@nestjs/bullmq';
+import { ExternalOAuthController } from './external.oauth.controller';
 
 const CommandHandlers = [
   ChangeFullNameHandler,
@@ -38,8 +45,19 @@ const CommandHandlers = [
 
 const QueryHandlers = [GetUserInfoHandler];
 
+const AuthStrategies = [
+  GoogleStrategy,
+  GitHubStrategy,
+  LinkedInStrategy,
+  DiscordStrategy,
+  FacebookStrategy,
+];
+
 @Module({
   imports: [
+    BullModule.registerQueue({
+      name: 'ip-location',
+    }),
     PrismaModule,
     CqrsModule,
     JwtModule.registerAsync({
@@ -53,7 +71,12 @@ const QueryHandlers = [GetUserInfoHandler];
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController, OAuthProviderController, UserController],
+  controllers: [
+    AuthController,
+    OAuthProviderController,
+    UserController,
+    ExternalOAuthController,
+  ],
   providers: [
     AuthService,
     JwtSecurity,
@@ -64,6 +87,7 @@ const QueryHandlers = [GetUserInfoHandler];
     PrivacyService,
     ...CommandHandlers,
     ...QueryHandlers,
+    ...AuthStrategies,
   ],
   exports: [AuthService],
 })

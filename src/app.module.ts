@@ -20,9 +20,13 @@ import { PrivacyModule } from './privacy/privacy.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { CustomEventEmitterModule } from './services/event-emitter.module';
 import { BullModule } from '@nestjs/bullmq';
+import { DevtoolsModule } from '@nestjs/devtools-integration';
 
 @Module({
   imports: [
+    DevtoolsModule.register({
+      http: process.env.NODE_ENV !== 'production',
+    }),
     WinstonModule.forRoot(winstonConfig),
     AuthModule,
     UserModule,

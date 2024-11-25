@@ -26,27 +26,41 @@ export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const token = await this.prisma.refreshToken.findFirst({
+    const tokenWithUser = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
         expires: { gte: new Date().toISOString() },
         revoked: null,
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+            email: true,
+            role: true,
+            lastLogin: true,
+            isTwoFactorEnabled: true,
+            isEmailVerified: true,
+            isExternal: true,
+            birthdate: true,
+            language: true,
+            timeZone: true,
+            profilePicture: true,
+            tokenVersion: true,
+          },
+        },
+      },
     });
 
-    if (!token) {
+    if (!tokenWithUser || !tokenWithUser.user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: token.userId },
-    });
+    const { user } = tokenWithUser;
 
-    if (user.tokenVersion !== token.tokenVersion) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    if (!user) {
+    if (user.tokenVersion !== tokenWithUser.tokenVersion) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
