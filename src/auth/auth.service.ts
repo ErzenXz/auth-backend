@@ -22,7 +22,10 @@ import { PrivacyService } from 'src/privacy/privacy.service';
 import { Request } from 'express';
 import { ArpResponse } from './models/arp.model';
 import { ChangeIPLocationCommand } from './commands/update-ip-location.command';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
+import { ExternalUser } from './models/external.user.model';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 /**
  * Service for handling authentication-related operations.
@@ -45,6 +48,7 @@ export class AuthService {
    * @param mfaService - The service for managing multi-factor authentication.
    * @param eventEmitter - The event emitter for handling events.
    * @param privacySettingsService - The service for managing privacy settings.
+   * @param IPLocationQueue - The Bull queue for IP location processing.
    */
   constructor(
     private readonly commandBus: CommandBus,
@@ -54,6 +58,7 @@ export class AuthService {
     mfaService: MfaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly privacySettingsService: PrivacyService,
+    @InjectQueue('ip-location') private readonly IPLocationQueue: Queue,
   ) {
     this.mfaService = mfaService;
   }
@@ -164,7 +169,17 @@ export class AuthService {
    */
   async info(context: IHttpContext) {
     const refreshToken = context.req.cookies['refreshToken'];
-    this.commandBus.execute(new ChangeIPLocationCommand(context));
+    const minimalContext = {
+      req: {
+        headers: {
+          'cf-connecting-ip': context.req.headers['cf-connecting-ip'],
+          'cf-ipcountry': context.req.headers['cf-ipcountry'],
+        },
+      },
+      ip: context.ip,
+    };
+
+    this.IPLocationQueue.add('update-ip-location', { context: minimalContext });
     return await this.queryBus.execute(new GetUserInfoQuery(refreshToken));
   }
 
@@ -273,6 +288,10 @@ export class AuthService {
       throw new BadRequestException('MFA is already enabled');
     }
 
+    if (user.isExternal) {
+      throw new BadRequestException('MFA is not available for external users');
+    }
+
     console.log('Generating QR code');
     const secret = this.mfaService.generateTotpSecret();
 
@@ -333,6 +352,10 @@ export class AuthService {
       throw new BadRequestException('Verification code is required');
     }
 
+    if (user.isExternal) {
+      throw new BadRequestException('MFA is not available for external users');
+    }
+
     console.log('Verifying code');
     const isValid = this.mfaService.verifyTotp(code, user.totpSecret);
 
@@ -386,6 +409,10 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.isExternal) {
+      throw new BadRequestException('MFA is not available for external users');
     }
 
     // Verify password
@@ -554,6 +581,12 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
 
+    if (user.isExternal) {
+      throw new BadRequestException(
+        'Password reset is not available for external users',
+      );
+    }
+
     const resetToken = this.jwtService.sign(
       { sub: user.id, use: 'resetPassword' },
       { expiresIn: '1h' },
@@ -608,6 +641,12 @@ export class AuthService {
 
     if (!user) {
       throw new BadRequestException('User not found');
+    }
+
+    if (user.isExternal) {
+      throw new BadRequestException(
+        'Password reset is not available for external users',
+      );
     }
 
     const randomSecurePassword = crypto.randomBytes(16).toString('hex');
@@ -666,6 +705,12 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.isExternal) {
+      throw new BadRequestException(
+        'Password change is not available for external users',
+      );
     }
 
     const passwordValid = await bcrypt.compare(oldPassword, user.password);
@@ -878,6 +923,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.isExternal) {
+      throw new BadRequestException('MFA is not available for external users');
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { isTwoFactorEnabled: false, totpSecret: null, backupCodes: null },
@@ -886,6 +935,226 @@ export class AuthService {
     return {
       message: 'MFA disabled successfully',
     };
+  }
+
+  /**
+   * Validates and processes an OAuth login by checking for an existing user or creating a new one.
+   *
+   * This method retrieves the user's email from the provided profile, checks if a user with that email exists in the database,
+   * and if not, creates a new user with the provided profile information and a hashed password.
+   *
+   * @param {any} profile - The OAuth profile object containing user information, including emails and displayName.
+   * @param {string} provider - The name of the OAuth provider (e.g., Google, Facebook).
+   * @returns {Promise<any>} A promise that resolves to the user object, either found or newly created.
+   */
+  async validateOAuthLogin(profile: any, provider: string) {
+    const email = profile.emails[0].value;
+    const externalUserId = profile.id;
+    let user = await this.prisma.user.findFirst({ where: { externalUserId } });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          fullName: profile.displayName,
+          externalUserId: profile.id,
+          externalProvider: provider,
+          password: await bcrypt.hash(
+            crypto.randomBytes(16).toString('hex'),
+            10,
+          ),
+          isExternal: true,
+        },
+      });
+    }
+
+    return user;
+  }
+
+  /**
+   * Handles user login via OAuth by either retrieving an existing user or creating a new one.
+   *
+   * This method checks if a user exists based on their external ID. If found, it updates the user's last login information,
+   * manages refresh tokens, and generates access and refresh tokens. If the user does not exist, it creates a new user,
+   * initializes their settings, and handles login events. Finally, it redirects the user with the generated access token.
+   *
+   * @param {ExternalUser} user - The external user object containing user information from the OAuth provider.
+   * @param {IHttpContext} context - The HTTP context containing request and response objects, including IP and headers.
+   * @returns {Promise<void>} A promise that resolves when the login process is complete and the user is redirected.
+   */
+  async loginWithOAuth(user: ExternalUser, context: IHttpContext) {
+    // Check if the user exists with the provided user.id and email
+    const existingUser = await this.prisma.user.findFirst({
+      where: { externalUserId: user.externalId },
+    });
+
+    if (existingUser) {
+      const currentRefreshTokenVersion = existingUser.tokenVersion;
+      let newRefreshToken = await this.generateSecureRefreshToken(existingUser);
+      let found = false;
+
+      // Check if any of the refresh tokens are still active
+      const refreshTokens = await this.prisma.refreshToken.findMany({
+        where: { userId: existingUser.id },
+      });
+
+      for (const token of refreshTokens) {
+        if (
+          currentRefreshTokenVersion === token.tokenVersion &&
+          token.expires.getTime() > Date.now() &&
+          context.ip === token.createdByIp &&
+          token.revoked === null
+        ) {
+          await this.prisma.refreshToken.update({
+            where: { id: token.id },
+            data: { lastUsed: new Date().toISOString() },
+          });
+
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        const refreshTokenObj = {
+          userId: existingUser.id,
+          token: newRefreshToken,
+          expires: new Date(
+            Date.now() + 90 * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          tokenVersion: existingUser.tokenVersion,
+          created: new Date().toISOString(),
+          createdByIp: context.ip,
+          userAgent: context.req.headers['user-agent'] || 'Unknown',
+          deviceName: 'Unknown',
+        };
+
+        await this.prisma.refreshToken.create({
+          data: refreshTokenObj,
+        });
+      }
+
+      // Update user's last login and connecting IP
+      await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          lastLogin: new Date().toISOString(),
+          connectingIp: context.ip,
+        },
+      });
+
+      const accessToken = this.jwtService.sign({
+        sub: existingUser.id,
+        email: existingUser.email,
+        role: existingUser.role,
+      });
+
+      this.saveCookie(context, 'refreshToken', newRefreshToken, {
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      });
+
+      return context.res.redirect(
+        `https://auth.erzen.xyz/external?accessToken=${accessToken}&status=success`,
+      );
+    } else {
+      let newRefreshToken = await this.generateSecureRefreshToken(existingUser);
+
+      // Create a new user with the provided user.id and email
+      await this.prisma.user.create({
+        data: {
+          email: user.externalProvider + '.' + user.externalId + '@erzen.xyz',
+          fullName: user.fullName,
+          externalUserId: user.externalId,
+          externalProvider: user.externalProvider,
+          password: await bcrypt.hash(
+            crypto.randomBytes(16).toString('hex'),
+            10,
+          ),
+          isExternal: true,
+          connectingIp: context.ip,
+          profilePicture: user.picture,
+          username: user.fullName.replace(/\s/g, '') + user.externalId,
+        },
+      });
+
+      // Retrieve the newly created user
+      const newUser = await this.prisma.user.findFirst({
+        where: { externalUserId: user.externalId },
+      });
+
+      const refreshTokenObj = {
+        userId: newUser.id,
+        token: newRefreshToken,
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        tokenVersion: newUser.tokenVersion,
+        created: new Date().toISOString(),
+        createdByIp: context.ip,
+        userAgent: context.req.headers['user-agent'] || 'Unknown',
+        deviceName: 'Unknown',
+      };
+
+      await this.prisma.refreshToken.create({
+        data: refreshTokenObj,
+      });
+
+      await this.prisma.userLogin.create({
+        data: {
+          userId: newUser.id,
+          ip: context.ip,
+          userAgent: context.req.headers['user-agent'] || 'Unknown',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      this.eventEmitter.emit('auth.register', {
+        name: user.fullName,
+        email: user.email,
+      });
+
+      await this.privacySettingsService.initializeDefaultSettings(newUser.id);
+
+      // If the user has never logged in before with this new IP, send a email using eventEmitter
+      const userLogins = await this.prisma.userLogin.findMany({
+        where: { userId: newUser.id },
+      });
+
+      if (!userLogins.map((login) => login.ip).includes(context.ip)) {
+        this.eventEmitter.emit('auth.new-ip-login', {
+          name: user.fullName,
+          email: user.email,
+          ip: context.ip,
+          userAgent: context.req.headers['user-agent'] || 'Unknown',
+        });
+      }
+
+      await this.prisma.userLogin.create({
+        data: {
+          userId: newUser.id,
+          ip: context.ip,
+          userAgent: context.req.headers['user-agent'] || 'Unknown',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      // Generate JWT token
+      const payload = {
+        sub: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+      };
+
+      const accessToken = this.jwtService.sign(payload);
+
+      // Generate refresh token
+
+      this.saveCookie(context, 'refreshToken', newRefreshToken, {
+        expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      });
+
+      return context.res.redirect(
+        `https://auth.erzen.xyz/external?accessToken=${accessToken}&status=success`,
+      );
+    }
   }
 
   /**

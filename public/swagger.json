@@ -674,6 +674,146 @@
         ]
       }
     },
+    "/v1/external/oauth/google": {
+      "get": {
+        "operationId": "ExternalOAuthController_googleAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/google/redirect": {
+      "get": {
+        "operationId": "ExternalOAuthController_googleAuthRedirect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/github": {
+      "get": {
+        "operationId": "ExternalOAuthController_githubAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/github/redirect": {
+      "get": {
+        "operationId": "ExternalOAuthController_githubAuthRedirect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/linkedin": {
+      "get": {
+        "operationId": "ExternalOAuthController_linkedinAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/linkedin/redirect": {
+      "get": {
+        "operationId": "ExternalOAuthController_linkedinAuthRedirect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/discord": {
+      "get": {
+        "operationId": "ExternalOAuthController_discordAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/discord/redirect": {
+      "get": {
+        "operationId": "ExternalOAuthController_discordAuthRedirect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/facebook": {
+      "get": {
+        "operationId": "ExternalOAuthController_facebookAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
+    "/v1/external/oauth/facebook/redirect": {
+      "get": {
+        "operationId": "ExternalOAuthController_facebookAuthRedirect",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "External OAuth"
+        ]
+      }
+    },
     "/v1/collection/create": {
       "post": {
         "operationId": "CollectionController_create",
@@ -1595,9 +1735,5 @@
     {
       "access-token": []
     }
-  ],
-  "externalDocs": {
-    "description": "XENAuth Documentation",
-    "url": "https://erzen.tk/docs/xenauth"
-  }
+  ]
 }
