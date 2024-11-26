@@ -1057,8 +1057,6 @@ export class AuthService {
         `https://auth.erzen.xyz/external?accessToken=${accessToken}&status=success`,
       );
     } else {
-      let newRefreshToken = await this.generateSecureRefreshToken(existingUser);
-
       // Create a new user with the provided user.id and email
       await this.prisma.user.create({
         data: {
@@ -1082,6 +1080,8 @@ export class AuthService {
         where: { externalUserId: user.externalId },
       });
 
+      let newRefreshToken = await this.generateSecureRefreshToken(newUser);
+
       const refreshTokenObj = {
         userId: newUser.id,
         token: newRefreshToken,
@@ -1093,7 +1093,7 @@ export class AuthService {
         deviceName: 'Unknown',
       };
 
-      await this.prisma.refreshToken.create({
+      this.prisma.refreshToken.create({
         data: refreshTokenObj,
       });
 
@@ -1111,7 +1111,7 @@ export class AuthService {
         email: user.email,
       });
 
-      await this.privacySettingsService.initializeDefaultSettings(newUser.id);
+      this.privacySettingsService.initializeDefaultSettings(newUser.id);
 
       // If the user has never logged in before with this new IP, send a email using eventEmitter
       const userLogins = await this.prisma.userLogin.findMany({
