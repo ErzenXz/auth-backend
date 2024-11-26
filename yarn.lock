@@ -2140,6 +2140,14 @@
     "@types/jsonwebtoken" "*"
     "@types/passport-strategy" "*"
 
+"@types/passport-linkedin-oauth2@^1.5.6":
+  version "1.5.6"
+  resolved "https://registry.yarnpkg.com/@types/passport-linkedin-oauth2/-/passport-linkedin-oauth2-1.5.6.tgz#79549b526f0f5f0dbd8116156e759de1fdb3cda5"
+  integrity sha512-LlIwa+GGK8KoUHDxxwO2+5uqB6YmIHysqdLwpn+YJsjfmqFdAH+4YjhXO7riYwfYcpEr/pI+dSEDlwF0Xt+qhg==
+  dependencies:
+    "@types/express" "*"
+    "@types/passport" "*"
+
 "@types/passport-local@^1.0.38":
   version "1.0.38"
   resolved "https://registry.npmjs.org/@types/passport-local/-/passport-local-1.0.38.tgz"
