@@ -24,23 +24,25 @@ import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import * as fs from 'fs';
+import * as compression from 'compression';
+import * as bodyParser from 'body-parser';
 import { VersioningType } from '@nestjs/common';
 import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import * as compression from 'compression';
 import { RedisIoAdapter } from './messaging/adapters/redis-io.adapter';
 import { join } from 'path';
 
 async function bootstrap() {
   // Use HTTPS
 
-  // const httpsOptions = {
-  //   key: fs.readFileSync('./src/cert/key.pem'),
-  //   cert: fs.readFileSync('./src/cert/cert.pem'),
-  //   http2: true,
-  // };
+  const httpsOptions = {
+    key: fs.readFileSync('./src/cert/key.pem'),
+    cert: fs.readFileSync('./src/cert/cert.pem'),
+  };
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    httpsOptions,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -68,6 +70,7 @@ async function bootstrap() {
     )
     .setTermsOfService('https://erzen.tk/terms')
     .setLicense('AGPL-3.0', 'https://www.gnu.org/licenses/agpl-3.0.en.html')
+    .setExternalDoc('XENAuth Documentation', 'https://erzen.tk/docs/xenauth')
     .build();
 
   app.enableVersioning({
@@ -75,6 +78,8 @@ async function bootstrap() {
   });
 
   app.use(helmet());
+
+  app.use('/payments/webhook', bodyParser.raw({ type: 'application/json' }));
 
   const document = SwaggerModule.createDocument(app, config);
   const publicPath = join(__dirname, '..', 'public');
