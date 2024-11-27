@@ -1,5 +1,9 @@
 import * as winston from 'winston';
 import * as SeqTransport from '@datalust/winston-seq';
+import { v4 as uuidv4 } from 'uuid';
+import { hostname } from 'os';
+
+const NODE_ID = `${hostname()}_${uuidv4().slice(0, 8)}`;
 
 // Define the interface for Winston log info
 interface WinstonLogInfo extends winston.Logform.TransformableInfo {
@@ -16,6 +20,10 @@ interface WinstonLogInfo extends winston.Logform.TransformableInfo {
  * error handling for the Seq transport and custom formatting for log messages.
  */
 export const winstonConfig = {
+  defaultMeta: {
+    nodeId: NODE_ID,
+    hostname: hostname(),
+  },
   transports: [
     /**
      * Transport for sending logs to a Seq server.
@@ -27,6 +35,8 @@ export const winstonConfig = {
     new SeqTransport.SeqTransport({
       serverUrl: process.env.SEQ_SERVER_URL,
       apiKey: process.env.SEQ_API_KEY,
+      handleExceptions: true,
+      handleRejections: true,
       level: 'info',
       onError: (e) => {
         console.info('Error sending logs to Seq:', e);
@@ -40,16 +50,30 @@ export const winstonConfig = {
      * to be human-readable, utilizing colorization and pretty printing for clarity.
      */
     new winston.transports.Console({
+      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      handleExceptions: true,
+      handleRejections: true,
       format: winston.format.combine(
+        winston.format.errors({ stack: true }),
         winston.format.timestamp(),
-        winston.format.prettyPrint(),
         winston.format.colorize(),
-        winston.format.simple(),
-        winston.format.printf((info: WinstonLogInfo) => {
-          const readableTimestamp = new Date(info.timestamp).toISOString();
-          return `${readableTimestamp} ${info.level}: ${info.message}`;
+        winston.format.printf((info) => {
+          let timestamp;
+          try {
+            timestamp =
+              info.timestamp instanceof Date
+                ? info.timestamp.toISOString()
+                : new Date(info.timestamp).toISOString();
+          } catch (e) {
+            timestamp = new Date().toISOString();
+          }
+          const context = info.context ? ` ${info.context}` : '';
+          const version = info.version ? ` (version: ${info.version})` : '';
+
+          return `${timestamp} ${info.level}:${context}${version}: ${info.message}`;
         }),
       ),
     }),
   ],
+  exitOnError: false,
 };
