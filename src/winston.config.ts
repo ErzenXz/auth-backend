@@ -58,15 +58,11 @@ export const winstonConfig = {
         winston.format.timestamp(),
         winston.format.colorize(),
         winston.format.printf((info) => {
-          let timestamp;
-          try {
-            timestamp =
-              info.timestamp instanceof Date
-                ? info.timestamp.toISOString()
-                : new Date(info.timestamp).toISOString();
-          } catch (e) {
-            timestamp = new Date().toISOString();
-          }
+          const timestamp =
+            typeof info.timestamp === 'string' ||
+            typeof info.timestamp === 'number'
+              ? new Date(info.timestamp).toISOString()
+              : new Date().toISOString();
           const context = info.context ? ` ${info.context}` : '';
           const version = info.version ? ` (version: ${info.version})` : '';
 
