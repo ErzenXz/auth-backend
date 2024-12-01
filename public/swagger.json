@@ -1416,6 +1416,235 @@
           "Messaging"
         ]
       }
+    },
+    "/intelligence/instructions": {
+      "get": {
+        "operationId": "IntelligenceController_listInstructions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/instruction/{id}": {
+      "delete": {
+        "operationId": "IntelligenceController_deleteInstruction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/instruction": {
+      "post": {
+        "operationId": "IntelligenceController_createInstruction",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInstructionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/process": {
+      "post": {
+        "operationId": "IntelligenceController_processPrompt",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/process/beta": {
+      "post": {
+        "operationId": "IntelligenceController_processPromptBeta",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat": {
+      "post": {
+        "operationId": "IntelligenceController_chat",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/userMemory": {
+      "get": {
+        "operationId": "IntelligenceController_listUserMemory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "delete": {
+        "operationId": "IntelligenceController_deleteUserMemory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/user-instruction": {
+      "post": {
+        "operationId": "IntelligenceController_createUserInstruction",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserInstructionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "get": {
+        "operationId": "IntelligenceController_getUserInstructions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/user-instruction/{id}": {
+      "put": {
+        "operationId": "IntelligenceController_updateUserInstruction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserInstructionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "delete": {
+        "operationId": "IntelligenceController_deleteUserInstruction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
     }
   },
   "info": {
@@ -1726,6 +1955,22 @@
         "properties": {}
       },
       "MessageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateInstructionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateChatDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateUserInstructionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateUserInstructionDto": {
         "type": "object",
         "properties": {}
       }
