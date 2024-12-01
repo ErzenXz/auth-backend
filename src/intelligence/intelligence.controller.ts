@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  Sse,
   Delete,
   Get,
   Param,
@@ -39,11 +38,10 @@ export class IntelligenceController {
   @Auth(Role.ADMIN, Role.SUPER_ADMIN)
   @Post('instruction')
   async createInstruction(@Body() createInstructionDto: CreateInstructionDto) {
-    const instruction = await this.intelligenceService.createInstruction(
+    return await this.intelligenceService.createInstruction(
       createInstructionDto.name,
       createInstructionDto.description,
     );
-    return instruction;
   }
 
   @Auth()
@@ -53,12 +51,11 @@ export class IntelligenceController {
     @Body('prompt') prompt: string,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    const result = await this.intelligenceService.processPrompt(
+    return await this.intelligenceService.processPrompt(
       instructionId,
       prompt,
       context,
     );
-    return result;
   }
 
   @Auth()
@@ -67,11 +64,7 @@ export class IntelligenceController {
     @Body('prompt') prompt: string,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    const result = await this.intelligenceService.processPromptBeta(
-      prompt,
-      context,
-    );
-    return result;
+    return await this.intelligenceService.processPromptBeta(prompt, context);
   }
 
   @Post('chat')
@@ -80,12 +73,11 @@ export class IntelligenceController {
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    const result = await this.intelligenceService.processChat(
+    return await this.intelligenceService.processChat(
       createChatDto.message,
       context,
       createChatDto.history,
     );
-    return result;
   }
 
   @Get('userMemory')

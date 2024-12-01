@@ -3,13 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AIResponse } from './models/intelligence.types';
-import { Observable, Subscriber } from 'rxjs';
 import { ChatMessageDto } from './dtos/create-chat.dto';
 import { IHttpContext } from 'src/auth/models';
 
 @Injectable()
 export class IntelligenceService {
-  private genAI: GoogleGenerativeAI;
+  private readonly genAI: GoogleGenerativeAI;
+  private readonly defaultModel;
+  private readonly advancedModel;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -17,6 +18,11 @@ export class IntelligenceService {
   ) {
     const apiKey = this.configService.get<string>('GOOGLE_API_KEY');
     this.genAI = new GoogleGenerativeAI(apiKey);
+
+    this.defaultModel = this.configService.get<string>('GOOGLE_AI_MODEL_NAME');
+    this.advancedModel = this.configService.get<string>(
+      'GOOGLE_AI_MODEL_NAME_ADVANCED',
+    );
   }
 
   async createInstruction(name: string, description?: string) {
@@ -44,7 +50,7 @@ export class IntelligenceService {
       });
 
       let model = this.genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: this.defaultModel,
       });
 
       // Agent 1: Clean and format input
@@ -91,9 +97,6 @@ export class IntelligenceService {
         Process the input and format according to these rules.
         `;
 
-      //   model = this.genAI.getGenerativeModel({
-      //     model: 'gemini-exp-1121',
-      //   });
       const workerResult = await model.generateContent(workerPrompt);
       let workerOutput = workerResult.response.text().trim();
 
@@ -126,9 +129,6 @@ export class IntelligenceService {
 
         Return the corrected output maintaining original format type.`;
 
-      //   model = this.genAI.getGenerativeModel({
-      //     model: 'gemini-1.5-flash-8b',
-      //   });
       const reviewerResult = await model.generateContent(reviewerPrompt);
       const finalOutput = reviewerResult.response
         .text()
@@ -178,7 +178,7 @@ export class IntelligenceService {
       }
 
       const model = this.genAI.getGenerativeModel({
-        model: 'gemini-exp-1121',
+        model: this.advancedModel,
       });
 
       const instructionSelectionPrompt = `
@@ -346,7 +346,7 @@ Example Matching:
     `;
 
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: this.defaultModel,
     });
 
     try {
