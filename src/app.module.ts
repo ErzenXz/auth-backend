@@ -21,6 +21,7 @@ import { MessagingModule } from './messaging/messaging.module';
 import { CustomEventEmitterModule } from './services/event-emitter.module';
 import { BullModule } from '@nestjs/bullmq';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
+import { IntelligenceModule } from './intelligence/intelligence.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { DevtoolsModule } from '@nestjs/devtools-integration';
     PrivacyModule,
     MessagingModule,
     CustomEventEmitterModule,
+    IntelligenceModule,
   ],
   controllers: [AppController],
   providers: [
