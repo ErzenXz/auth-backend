@@ -6,6 +6,7 @@ import {
   Get,
   Param,
   Put,
+  Res,
 } from '@nestjs/common';
 import { IntelligenceService } from './intelligence.service';
 import { CreateInstructionDto } from './dtos/create-instruction.dto';
@@ -17,6 +18,7 @@ import { Role } from 'src/auth/enums';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateUserInstructionDto } from './dtos/create-user-instruction.dto';
 import { UpdateUserInstructionDto } from './dtos/update-user-instruction.dto';
+import { Response } from 'express';
 
 @ApiTags('Intelligence')
 @Controller('intelligence')
@@ -41,6 +43,7 @@ export class IntelligenceController {
     return await this.intelligenceService.createInstruction(
       createInstructionDto.name,
       createInstructionDto.description,
+      createInstructionDto.schema,
     );
   }
 
@@ -51,7 +54,7 @@ export class IntelligenceController {
     @Body('prompt') prompt: string,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    return await this.intelligenceService.processPrompt(
+    return await this.intelligenceService.processInstruction(
       instructionId,
       prompt,
       context,
@@ -64,7 +67,10 @@ export class IntelligenceController {
     @Body('prompt') prompt: string,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    return await this.intelligenceService.processPromptBeta(prompt, context);
+    return await this.intelligenceService.processInstructionBeta(
+      prompt,
+      context,
+    );
   }
 
   @Post('chat')
@@ -73,6 +79,7 @@ export class IntelligenceController {
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
+    // Process the chat message
     return await this.intelligenceService.processChat(
       createChatDto.message,
       context,

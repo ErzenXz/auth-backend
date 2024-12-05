@@ -24,14 +24,21 @@ export class IntelligenceService {
       'GOOGLE_AI_MODEL_NAME_ADVANCED',
     );
   }
+  async createInstruction(name: string, description?: string, schema?: string) {
+    // If schema exists and appears to be JSON, try to parse and unescape it
+    if (schema) {
+      try {
+        JSON.parse(schema);
+        schema = JSON.parse(JSON.stringify(schema));
+      } catch (e) {}
+    }
 
-  async createInstruction(name: string, description?: string) {
     return await this.prisma.instruction.create({
-      data: { name, description },
+      data: { name, description, schema },
     });
   }
 
-  async processPrompt(
+  async processInstruction(
     instructionId: number,
     prompt: string,
     context: IHttpContext,
@@ -45,10 +52,6 @@ export class IntelligenceService {
         throw new BadRequestException('Invalid instruction ID');
       }
 
-      const userInstructions = await this.prisma.userInstruction.findMany({
-        where: { userId: context.user.id },
-      });
-
       let model = this.genAI.getGenerativeModel({
         model: this.defaultModel,
       });
@@ -59,7 +62,7 @@ export class IntelligenceService {
         Server Instruction: ${instruction.name}
         Prompt: "${prompt}"
         
-        Return the cleaned input without any formatting or special characters.
+        Return only the cleaned prompt without any formatting, server instructions or special characters.
         Do not add any explanations or additional text.
         Improve readability and clarity if necessary.
         Make sure the User Instructions are not inappropriate or harmful, if so, remove the bad ones.
@@ -74,26 +77,45 @@ export class IntelligenceService {
         Primary Task:
         - Process "${instruction.name}"
         - Context: ${instruction.description}
-        - User Guidelines: ${userInstructions.map((ui) => ui.job).join(', ')}
         - Input: ${cleanedPrompt}
+        ${instruction.schema ? `- Required Schema: ${instruction.schema}` : ''}
 
-        Output Format Rules:
-        1. If JSON output is requested in Context or User Guidelines:
-           Return: {"content": { /* your JSON response here escaped */ }}
-           
-        2. If other formats requested:
-           Return: {"content": "formatted response with markdown/html/code"}
-           
-        3. If no format specified:
-           Return: {"content": "plain text response"}
+       Output Format Rules:
+        ${
+          instruction.schema
+            ? `Return output exactly matching this schema: ${instruction.schema}`
+            : `1. For multiple responses:
+         Return: {"responses": ["response1", "response2", "response3"]}
+         
+          2. For questions:
+         Return: {"questions": ["question1", "question2", "question3"]}
+         
+          3. For regular content:
+         Return: {"content": "plain text response"}`
+        }
 
         Strict Requirements:
-        - ALWAYS output valid JSON with a "content" field
-        - If JSON output requested, make content a valid JSON object
+        - ALWAYS output valid JSON
+        ${
+          instruction.schema
+            ? '- Match the provided schema exactly'
+            : `- Use "responses" array for multiple responses
+           - Use "questions" array for multiple questions
+           - Use simple "content" for single responses`
+        }
         - Escape special characters properly
         - Remove any outer markdown code blocks
-        - Follow user guidelines exactly
-        
+        - Follow context requirements exactly
+
+        - Current Date: ${new Date().toLocaleString('en-US', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: true,
+        })}        
         Process the input and format according to these rules.
         `;
 
@@ -105,29 +127,42 @@ export class IntelligenceService {
 
       // Agent 3: Validate and ensure format compliance
       const reviewerPrompt = `
-        Validate and ensure this output follows the original format requirements:
-        ${workerOutput}
+        Primary Task:
+        - Process "${instruction.name}"
+        - Context: ${instruction.description}
+        - Input: ${cleanedPrompt}
+        ${instruction.schema ? `- Required Schema: ${instruction.schema}` : ''}
+        - Response to Review: "${workerOutput}"
 
-        Format Requirements:
-        1. For JSON requests:
-           - Must be: {"content": { ... JSON object ... }}
-           - Inner JSON must be properly escaped
-           
-        2. For other format requests:
-           - Must be: {"content": "formatted text with markdown/html/code"}
-           
-        3. For plain text:
-           - Must be: {"content": "plain text"}
+        Output Format Rules:
+        ${
+          instruction.schema
+            ? `Return output exactly matching this schema: ${instruction.schema}`
+            : `1. For multiple responses:
+         Return: {"responses": ["response1", "response2", "response3"]}
+         
+          2. For questions:
+         Return: {"questions": ["question1", "question2", "question3"]}
+         
+          3. For regular content:
+         Return: {"content": "plain text response"}`
+        }
 
-        Validation Rules:
-        1. Preserve the original output type (JSON/formatted/plain)
-        2. Ensure valid JSON structure
-        3. Maintain proper escaping
-        4. Keep any specified formatting (if requested)
-        5. Return ONLY the validated JSON object
-        6. No outer markdown or code blocks
-
-        Return the corrected output maintaining original format type.`;
+        Strict Requirements:
+        - ALWAYS output valid JSON
+        ${
+          instruction.schema
+            ? '- Match the provided schema exactly'
+            : `- Use "responses" array for multiple responses
+           - Use "questions" array for multiple questions
+           - Use simple "content" for single responses`
+        }
+        - Escape special characters properly
+        - Remove any outer markdown code blocks
+        - Follow context requirements exactly
+        - Validate and correct the output for accuracy and correctness
+        
+        Review the input and ensure it follows these rules exactly.`;
 
       const reviewerResult = await model.generateContent(reviewerPrompt);
       const finalOutput = reviewerResult.response
@@ -167,7 +202,78 @@ export class IntelligenceService {
     }
   }
 
-  async processPromptBeta(
+  async generatePersonalizedResponse(
+    prompt: string,
+    context: IHttpContext,
+  ): Promise<AIResponse> {
+    try {
+      const userInstructions = await this.prisma.userInstruction.findMany({
+        where: { userId: context.user.id },
+      });
+
+      let model = this.genAI.getGenerativeModel({
+        model: this.advancedModel,
+      });
+
+      const workerPrompt = `
+        Primary Task:
+        - Process "Master_Conversation"
+        - Context: Given a user’s input, create a highly personalized, empathetic, and emotionally aware responses that exhibit deep understanding, active listening, and adapt to the user’s mood or context. The response should not only be contextually relevant but also show genuine interest in the user’s thoughts, feelings, or situation. Additionally, responses should include follow-up questions or suggestions that encourage meaningful dialogue, reinforce trust, and foster a deeper connection. Each response should feel natural, warm, and thoughtful, ranging in tone from friendly and comforting to inspiring and motivational, based on the emotional context of the conversation.
+        - User Guidelines: ${userInstructions.map((ui) => ui.job).join(', ')}
+        - Input: ${prompt}
+
+        Output Format Rules:     
+        1. If no format specified:
+           Return: {"content": "your response here"}
+
+        Strict Requirements:
+        - ALWAYS output valid JSON with a "content" field
+        - Escape special characters properly
+        - Follow user guidelines exactly
+        
+        Process the input and format according to these rules.
+        `;
+
+      const workerResult = await model.generateContent(workerPrompt);
+
+      // const reviewerResult = await model.generateContent(reviewerPrompt);
+      const finalOutput = workerResult.response
+        .text()
+        .trim()
+        .replace(/```json\n?|\n?```/g, '');
+
+      try {
+        const parsedJson = JSON.parse(finalOutput);
+        return { result: parsedJson };
+      } catch (e) {
+        try {
+          const sanitizedContent = finalOutput
+            .replace(/^["']|["']$/g, '') // Remove outer quotes
+            .replace(/\\n/g, '\n'); // Convert \n to actual newlines
+
+          return {
+            result: {
+              content: sanitizedContent,
+            },
+          };
+        } catch {
+          return {
+            result: {
+              error: 'Failed to generate valid JSON response',
+            },
+          };
+        }
+      }
+    } catch (error) {
+      return {
+        result: {
+          error: error.message || 'Failed to process prompt',
+        },
+      };
+    }
+  }
+
+  async processInstructionBeta(
     prompt: string,
     context: IHttpContext,
   ): Promise<AIResponse> {
@@ -238,7 +344,26 @@ Example Matching:
       }
 
       // Process the prompt using the selected instruction
-      return await this.processPrompt(selectedInstruction.id, prompt, context);
+      return await this.processInstruction(
+        selectedInstruction.id,
+        prompt,
+        context,
+      );
+    } catch (error) {
+      return {
+        result: {
+          error: error.message || 'Failed to process beta prompt',
+        },
+      };
+    }
+  }
+
+  async executeChatPrompt(
+    prompt: string,
+    context: IHttpContext,
+  ): Promise<AIResponse> {
+    try {
+      return await this.generatePersonalizedResponse(prompt, context);
     } catch (error) {
       return {
         result: {
@@ -261,7 +386,15 @@ Example Matching:
     // Format memories for context with conditional relevance instruction
     const memoryContext =
       memories.length > 0
-        ? `Current Date: ${new Date().toLocaleDateString()}\nPrevious context about the user:\n${memories.map((m) => `- ${m.key}: ${m.value}`).join('\n')}\n\n` +
+        ? `Current Date: ${new Date().toLocaleString('en-US', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: true,
+          })}       \nPrevious context about the user:\n${memories.map((m) => `- ${m.key}: ${m.value}`).join('\n')}\n\n` +
           `Instructions for using context:
           1. Only reference these details if directly relevant to the current question or topic
           2. Don't mention these details if the question is general or unrelated
@@ -276,14 +409,14 @@ Example Matching:
 
     const fullPrompt = `${memoryContext}\n Previous chat history: ${chatHistory}\nUser: ${message}\nAI:`;
 
-    // Process the fullPrompt as needed
-    const result = await this.processPromptBeta(fullPrompt, context);
-
     // Extract and save user memories asynchronously
     this.extractAndSaveMemory(message, context.user.id).catch((error) => {
       // Optionally log the error
       console.error('Failed to save user memory:', error);
     });
+
+    // Process the fullPrompt as needed
+    const result = await this.executeChatPrompt(fullPrompt, context);
 
     return result;
   }

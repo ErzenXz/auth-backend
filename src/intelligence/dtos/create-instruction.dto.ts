@@ -8,4 +8,8 @@ export class CreateInstructionDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  schema?: string;
 }

@@ -13,7 +13,7 @@ import { XCacheService } from './cache.service';
             port: parseInt(process.env.REDIS_PORT, 10) || 6379,
             timeout: 10000,
           },
-          ttl: 60,
+          ttl: 600,
           username: process.env.REDIS_USER || 'default',
           password: process.env.REDIS_PASSWORD,
         });
