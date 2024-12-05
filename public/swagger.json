@@ -1645,6 +1645,66 @@
           "Intelligence"
         ]
       }
+    },
+    "/tts/convert": {
+      "get": {
+        "operationId": "TextToSpeechController_convert",
+        "parameters": [
+          {
+            "name": "text",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/browser/fetch": {
+      "get": {
+        "operationId": "BrowserController_fetchUrl",
+        "parameters": [
+          {
+            "name": "url",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/browser/search": {
+      "get": {
+        "operationId": "BrowserController_searchWeb",
+        "parameters": [
+          {
+            "name": "query",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
     }
   },
   "info": {
