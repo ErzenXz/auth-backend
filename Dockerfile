@@ -38,12 +38,11 @@ RUN yarn install --production --ignore-scripts && \
     addgroup -S appgroup && adduser -S appuser -G appgroup && \
     chown -R appuser:appgroup /app
 
+COPY script.sh /app/script.sh
+RUN chmod +x /app/script.sh
+
 USER appuser
 
 EXPOSE 3000
 
-COPY script.sh /app/script.sh
-RUN chmod +x /app/script.sh
-
-# Use the script as the entrypoint
 CMD ["/app/script.sh"]
