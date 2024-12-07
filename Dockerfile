@@ -22,6 +22,11 @@ RUN yarn prisma generate && yarn build
 
 FROM node:20.18.0-alpine3.19 AS production
 
+RUN apk add --no-cache bash curl && curl -1sLf \
+    'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.alpine.sh' | bash \
+    && apk add infisical
+
+
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -37,4 +42,8 @@ USER appuser
 
 EXPOSE 3000
 
-CMD ["node", "dist/main"]
+COPY script.sh /app/script.sh
+RUN chmod +x /app/script.sh
+
+# Use the script as the entrypoint
+CMD ["/app/script.sh"]
