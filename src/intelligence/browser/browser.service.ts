@@ -62,41 +62,39 @@ export class BrowserService {
       return JSON.parse(cachedResponse);
     }
 
-    try {
-      const urls = await this.performSearch(query);
-      let combinedText = '';
-      for (const url of urls) {
-        try {
-          const { data } = await axios.get(url, {
-            headers: {
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            },
-            timeout: 5000,
-          });
-          combinedText += this.extractText(data);
-          await new Promise((resolve) => setTimeout(resolve, 2));
-        } catch (urlError) {
-          continue;
-        }
+    const urls = await this.performSearch(query);
+
+    const fetchPromises = urls.map(async (url) => {
+      try {
+        const { data } = await axios.get(url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          },
+          timeout: 8777,
+        });
+        return this.extractText(data);
+      } catch (urlError) {
+        console.error('Failed to fetch URL:', urlError);
       }
-      if (!combinedText) {
-        throw new Error('No content could be fetched from any URL');
-      }
-      const aiResponse = await this.processWithAI(combinedText, query);
-      await this.cacheService.setCache(cacheKey, JSON.stringify(aiResponse));
-      return aiResponse;
-    } catch (error) {
-      throw new HttpException(
-        'Failed to search and process query: ' + error.message,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    });
+
+    const results = await Promise.all(fetchPromises);
+
+    const combinedText = results.join(' ');
+
+    if (!combinedText) {
+      return { result: { content: 'No results found' } };
     }
+
+    const aiResponse = await this.processWithAI(combinedText, query);
+    await this.cacheService.setCache(cacheKey, JSON.stringify(aiResponse));
+    return aiResponse;
   }
 
   private extractText(html: string): string {
     const $ = cheerio.load(html);
-    // Common selectors for main content areas
+
     const contentSelectors = [
       'article',
       'main',
@@ -104,26 +102,49 @@ export class BrowserService {
       '.main-content',
       '#content',
       '#main-content',
+      'section',
+      '.post-content',
+      '#post',
+      '.entry-content',
+      '.article-body',
+      '.post-body',
+      '.page-content',
+      '.container',
+      '.text-content',
     ];
 
     let content = '';
     for (const selector of contentSelectors) {
-      const element = $(selector);
-      if (element.length) {
-        // Remove script, style, and other non-content elements
-        element.find('script, style, nav, header, footer, aside').remove();
-        content = element.text();
-        break;
+      const elements = $(selector);
+      if (elements.length) {
+        elements.each((_, element) => {
+          $(element)
+            .find('script, style, nav, header, footer, aside, form, iframe')
+            .remove();
+          content += $(element).text() + ' ';
+          // Limit content size to enhance performance
+          if (content.length > 7000) {
+            return false; // Exit the loop early
+          }
+        });
+        if (content) break;
       }
     }
 
-    // Fallback to body if no content found
     if (!content) {
       content = $('body').text();
     }
 
-    // Clean up the text
-    return content.replace(/\s+/g, ' ').trim();
+    // Clean up the text by removing excessive whitespace
+    content = content.replace(/\s+/g, ' ').trim();
+
+    // Optionally truncate to a maximum length to prevent oversized inputs
+    const maxLength = 5000; // Adjust as needed based on AI model constraints
+    if (content.length > maxLength) {
+      content = content.substring(0, maxLength);
+    }
+
+    return content;
   }
 
   private async performSearch(query: string): Promise<string[]> {
@@ -139,7 +160,7 @@ export class BrowserService {
       const links: string[] = [];
 
       $('a.result__url').each((_, element) => {
-        if (links.length < 3) {
+        if (links.length < 5) {
           const href = $(element).attr('href');
           if (href) {
             const url = this.extractUrl(href);
@@ -169,31 +190,52 @@ export class BrowserService {
     query?: string,
   ): Promise<AIResponse> {
     const prompt = `
-You are an expert summarizer. Analyze the following HTML content that was scraped about ${query || 'the given topic'}. Provide a clear, professional, and confident summary as if explaining to someone unfamiliar with the subject. Focus on:
+  You are an expert AI search engine analyzing web content. For the query "${query || 'the given topic'}", provide a comprehensive response including:
 
-1. What is the main topic of the content?
-2. Who or what is the subject, and what do they do or represent?
-3. Key facts, findings, or highlights about the subject.
-4. Relevant context and background information.
-5. A succinct and definitive takeaway.
+  CONTENT ANALYSIS:
+  1. Primary Subject: Identify and explain the main topic/subject
+  2. Key Information: Extract and present essential facts, data, statistics
+  3. Context: Provide relevant background and current significance
+  4. Expert Analysis: Offer authoritative insights backed by the content
 
-RULES:
-1. DO NOT say "I think" or "I believe." Write as if you are an expert.
-2. DO NOT include personal opinions, speculation, or hypotheticals.
-3. DO NOT SAY the content appears to be html snippet or anything similar.
-4. Ensure the summary is well-written, straightforward, and authoritative, like a concise answer in a trusted encyclopedia or search engine. Avoid any vague or filler language.
-5. ENSURE the summary is accurate, relevant, and informative.
+  MULTIMEDIA ELEMENTS:
+  1. Images: Extract and include all relevant images in Markdown format: ![description](url)
+  2. Videos: Include relevant video links in Markdown format: [video title](url)
+  3. References: Include source links in Markdown format: [source name](url)
 
-HTML content to analyze:
-${text}
-`;
+  STRUCTURAL REQUIREMENTS:
+  1. Format the response in clear sections with headers
+  2. Use bullet points for key facts
+  3. Include a "Quick Facts" section at the top
+  4. End with a "Key Takeaways" section
+  5. Preserve all URLs and media found in the content
+
+  RULES:
+  1. Write in an authoritative, factual tone
+  2. Include only verified information from the content
+  3. Present information in a structured, easy-to-read format
+  4. Maintain academic-level accuracy and professionalism
+  5. Include all relevant multimedia elements found
+  6. Ensure proper Markdown formatting for all links and media
+  7. Focus on delivering comprehensive, search-engine quality results
+
+  Analyze this content:
+  ${text}
+  `;
 
     try {
-      let model = this.genAI.getGenerativeModel({
-        model: this.defaultModel,
+      const model = this.genAI.getGenerativeModel({
+        model: this.advancedModel, // Using advanced model for better results
       });
 
-      const aiResult = await model.generateContent(prompt);
+      const aiResult = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        },
+      });
+
       let result = aiResult.response.text().trim();
 
       return {
