@@ -487,7 +487,9 @@ model UserMemory {
 
   user User @relation(fields: [userId], references: [id])
 
-  @@unique([userId, key, value])
+  @@unique([userId, key])
+  @@index([userId, key])
+  @@index([userId])
 }
 
 model UserInstruction {

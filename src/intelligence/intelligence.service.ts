@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AIResponse } from './models/intelligence.types';
 import { ChatMessageDto } from './dtos/create-chat.dto';
 import { IHttpContext } from 'src/auth/models';
+import { BrowserService } from './browser/browser.service';
 
 @Injectable()
 export class IntelligenceService {
@@ -15,6 +16,7 @@ export class IntelligenceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly browserService: BrowserService,
   ) {
     const apiKey = this.configService.get<string>('GOOGLE_API_KEY');
     this.genAI = new GoogleGenerativeAI(apiKey);
@@ -204,6 +206,7 @@ export class IntelligenceService {
 
   async generatePersonalizedResponse(
     prompt: string,
+    externalContent: string,
     context: IHttpContext,
   ): Promise<AIResponse> {
     try {
@@ -218,20 +221,30 @@ export class IntelligenceService {
       const workerPrompt = `
         Primary Task:
         - Process "Master_Conversation"
-        - Context: Given a user’s input, create a highly personalized, empathetic, and emotionally aware responses that exhibit deep understanding, active listening, and adapt to the user’s mood or context. The response should not only be contextually relevant but also show genuine interest in the user’s thoughts, feelings, or situation. Additionally, responses should include follow-up questions or suggestions that encourage meaningful dialogue, reinforce trust, and foster a deeper connection. Each response should feel natural, warm, and thoughtful, ranging in tone from friendly and comforting to inspiring and motivational, based on the emotional context of the conversation.
-        - User Guidelines: ${userInstructions.map((ui) => ui.job).join(', ')}
+        - Context: Create personalized, empathetic responses with emotional intelligence that demonstrate deep understanding and active listening. Adapt tone based on user's mood and context. Include thoughtful follow-up questions and suggestions to encourage meaningful dialogue.
+
+        Response Guidelines:
+        - User Instructions: ${userInstructions.map((ui) => ui.job).join(', ')}
+        - Format all responses in Markdown
+        - When returning code snippets, use proper syntax highlighting in Markdown format using triple backticks
+        - Use proper markdown syntax for links, images, and videos
         - Input: ${prompt}
 
+        External Content Integration:
+        - Incorporate relevant search results from: ${externalContent || 'No external content available'}  ---------------- only if it adds value to the conversation and enhances user experience else ignore it.
+        - Only use external links/media if they add value
+        - Always convert external content to proper Markdown format
+        - Cite sources when using external information
+
         Output Format Rules:     
-        1. If no format specified:
-           Return: {"content": "your response here"}
+        Return structure: {"content": "markdown_formatted_response"}
 
         Strict Requirements:
-        - ALWAYS output valid JSON with a "content" field
-        - Escape special characters properly
-        - Follow user guidelines exactly
-        
-        Process the input and format according to these rules.
+        - Generate valid JSON with "content" field
+        - Ensure proper character escaping
+        - Use complete Markdown syntax (no placeholders)
+        - Balance original response with external content
+        - Maintain natural, conversational tone
         `;
 
       const workerResult = await model.generateContent(workerPrompt);
@@ -358,12 +371,84 @@ Example Matching:
     }
   }
 
+  private async determineIfBrowsingNeeded(
+    chatHistory: string,
+  ): Promise<string> {
+    const lastUserMessage = chatHistory
+      .split('\n')
+      .reverse()
+      .find((line) => line.startsWith('User:'));
+
+    if (!lastUserMessage) return 'no';
+
+    const messageContent = lastUserMessage.replace('User: ', '').trim();
+
+    const prompt = `
+      Analyze if the user message requires web search for accurate, up-to-date information.
+      
+      Return "no" if:
+      - It's casual conversation or greetings
+      - It's about personal opinions or preferences
+      - It's about hypothetical scenarios
+      - It's about basic knowledge that doesn't need verification
+      - It's a follow-up to previous conversation
+      - It's emotional or subjective content
+      
+      Return a specific search query if:
+      - It asks about current events or news
+      - It requests factual/technical information
+      - It asks about real-world data or statistics
+      - It mentions specific people, places, or events
+      - It asks "how to" or tutorial-type questions
+      - It requires verification of claims or facts
+      - It asks about latest trends or developments
+      
+      Context:
+      ${chatHistory}
+
+      User Message: "${messageContent}"
+
+      Rules:
+      1. Return ONLY "no" or a specific search query
+      2. Keep search queries concise and focused
+      3. Remove any personal or sensitive information from search queries
+      4. Consider conversation context when deciding
+      `;
+
+    const model = this.genAI.getGenerativeModel({
+      model: this.defaultModel,
+    });
+
+    const aiResult = await model.generateContent(prompt);
+    let response = aiResult.response.text().trim();
+    response = response.replace(/```json\s?|\s?```/g, '').trim();
+
+    // Validate response
+    if (response === 'no' || response.length > 0) {
+      return response;
+    }
+    return 'no';
+  }
+
   async executeChatPrompt(
     prompt: string,
     context: IHttpContext,
   ): Promise<AIResponse> {
     try {
-      return await this.generatePersonalizedResponse(prompt, context);
+      let externalContent = '';
+
+      let searchQuery = await this.determineIfBrowsingNeeded(prompt);
+      if (searchQuery !== 'no') {
+        externalContent = (
+          await this.browserService.searchAndProcess(searchQuery)
+        ).result.content;
+      }
+
+      return await this.generatePersonalizedResponse(
+        prompt,
+        externalContent,
+        context,
+      );
     } catch (error) {
       return {
         result: {
@@ -379,35 +464,31 @@ Example Matching:
     history?: ChatMessageDto[],
   ): Promise<AIResponse> {
     // Fetch user memories
-    const memories = await this.prisma.userMemory.findMany({
-      where: { userId: context.user.id },
-    });
+    const memory = await this.retrieveRelevantMemories(
+      message,
+      context.user.id,
+    );
 
-    // Format memories for context with conditional relevance instruction
-    const memoryContext =
-      memories.length > 0
-        ? `Current Date: ${new Date().toLocaleString('en-US', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            second: 'numeric',
-            hour12: true,
-          })}       \nPrevious context about the user:\n${memories.map((m) => `- ${m.key}: ${m.value}`).join('\n')}\n\n` +
-          `Instructions for using context:
-          1. Only reference these details if directly relevant to the current question or topic
-          2. Don't mention these details if the question is general or unrelated
-          3. Prioritize answering the immediate question first
-          4. Use context only to enhance or personalize relevant responses\n\n`
-        : '';
+    const chatHistory = this.formatChatHistory(history, message);
 
-    // Combine history with the new message
-    const chatHistory = history
-      ? history.map((h) => `${h.sender}: ${h.message}`).join('\n')
-      : '';
+    const fullPrompt = `General Info\nCurrent Date: ${new Date().toLocaleString(
+      'en-US',
+      {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: true,
+      },
+    )}
 
-    const fullPrompt = `${memoryContext}\n Previous chat history: ${chatHistory}\nUser: ${message}\nAI:`;
+          Current day of the week: ${new Date().toLocaleString('en-US', {
+            weekday: 'long',
+          })}
+          
+          \nUSER SAVED MEMORIES!  -- Only take what is relevant to the USER PROMPT! --  ASSUME Older memories are not as relevant as others except names, and important user info\n${memory}\n Previous chat history: ${chatHistory}\nUser: ${message}\nAI:`;
 
     // Extract and save user memories asynchronously
     this.extractAndSaveMemory(message, context.user.id).catch((error) => {
@@ -421,61 +502,92 @@ Example Matching:
     return result;
   }
 
+  private async retrieveRelevantMemories(message: string, userId: number) {
+    const memories = await this.prisma.userMemory.findMany({
+      where: { userId },
+    });
+    // Implement logic to filter memories based on relevance to the message
+    // For now, return all memories
+
+    return this.formatMemoryContext(memories);
+  }
+
+  private formatChatHistory(
+    history: ChatMessageDto[] | undefined,
+    message: string,
+  ): string {
+    if (history && history.length > 50) {
+      // Summarize the history if it's too long
+      history = history.slice(-50);
+    }
+    const formattedHistory = history
+      ? history.map((h) => `${h.sender}: ${h.message}`).join('\n')
+      : '';
+    return `${formattedHistory}\nUser: ${message}\nAI:`;
+  }
+
+  private getTimeAgo(date: Date): string {
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    let interval = Math.floor(seconds / 31536000);
+    if (interval >= 1) {
+      return interval === 1 ? '1 year ago' : `${interval} years ago`;
+    }
+    interval = Math.floor(seconds / 2592000);
+    if (interval >= 1) {
+      return interval === 1 ? '1 month ago' : `${interval} months ago`;
+    }
+    interval = Math.floor(seconds / 86400);
+    if (interval >= 1) {
+      return interval === 1 ? '1 day ago' : `${interval} days ago`;
+    }
+    interval = Math.floor(seconds / 3600);
+    if (interval >= 1) {
+      return interval === 1 ? '1 hour ago' : `${interval} hours ago`;
+    }
+    interval = Math.floor(seconds / 60);
+    if (interval >= 1) {
+      return interval === 1 ? '1 minute ago' : `${interval} minutes ago`;
+    }
+    return 'Just now';
+  }
+
+  private formatMemoryContext(memories: any[]): string {
+    if (!memories.length) return '';
+    return `User Memories:\n${memories
+      .map((m) => `- ${m.key}: ${m.value} ${this.getTimeAgo(m.createdAt)}`)
+      .join('\n')}\n`;
+  }
+
   private async extractAndSaveMemory(
     message: string,
     userId: number,
   ): Promise<void> {
+    const memories = await this.retrieveRelevantMemories(message, userId);
     const extractionPrompt = `
-      You are an expert at understanding human behavior and information extraction.
-      Analyze this message to extract meaningful personal information about the user.
-      Be precise and only extract explicitly stated information, focusing on:
-
-      1. INTERESTS:
-       - Direct likes ("I love/enjoy/like...")
-       - Hobbies and activities
-       - Entertainment preferences
-
-      2. PERSONAL DETAILS:
-       - Demographics (age, location, etc.)
-       - Professional info (job, education)
-       - Family/relationships
-
-      3. BEHAVIOR PATTERNS:
-       - Daily routines
-       - Habits
-       - Schedule patterns
-
-      4. EXPERTISE & SKILLS:
-       - Technical knowledge
-       - Professional skills
-       - Areas of experience
-
-      5. SENTIMENTS:
-       - Current mood/feelings
-       - Opinions
-       - Attitudes
-
-      6. ASPIRATIONS:
-       - Future plans
-       - Goals
-       - Desires
-
-      Message to analyze: "${message}"
-
-      Rules:
-      1. Only extract EXPLICITLY stated information
-      2. Do not make assumptions or inferences
-      3. Keep values under 50 characters
-      4. Use clear, specific keys
-      5. Avoid duplicates
-      6. Maintain factual accuracy
-
-      Return as JSON array of {key, value} pairs only:
-      [
-      {"key": "Likes_Gaming", "value": "Plays Minecraft daily"},
-      {"key": "Work_Status", "value": "Software Engineer at Tech Corp"},
-      {"key": "Goal_2024", "value": "Learn AI Development"}
+    You are an expert at extracting essential personal information from user messages. Analyze the following message and determine what information should be added or removed from user's memory.
+    
+    User Memories: ${memories}
+    Message: "${message}"
+    
+    Rules:
+    1. Only extract explicitly mentioned information
+    2. Do not infer or assume details
+    3. Limit each value to 50 characters
+    4. Use clear and specific keys
+    5. Indicate if any existing memories should be removed
+    6. Return both additions and removals
+    
+    Return the results as a JSON object with two arrays:
+    {
+      "add": [
+        {"key": "Profession", "value": "Software Engineer"}
+      ],
+      "remove": [
+        "OldProfession"
       ]
+    }
     `;
 
     const model = this.genAI.getGenerativeModel({
@@ -485,37 +597,46 @@ Example Matching:
     try {
       const aiResponse = await model.generateContent(extractionPrompt);
       let aiText = aiResponse.response.text().trim();
-
-      // Remove markdown code block indicators and any surrounding whitespace
       aiText = aiText.replace(/```json\s?|\s?```/g, '').trim();
 
-      // Ensure the response starts with [ and ends with ]
-      if (!aiText.startsWith('[')) {
-        aiText = aiText.substring(aiText.indexOf('['));
-      }
-      if (!aiText.endsWith(']')) {
-        aiText = aiText.substring(0, aiText.lastIndexOf(']') + 1);
+      let parsed;
+      try {
+        parsed = JSON.parse(aiText);
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', aiText);
+        parsed = { add: [], remove: [] };
       }
 
-      const extractedData: Array<{ key: string; value: string }> =
-        JSON.parse(aiText);
+      const { add = [], remove = [] } = parsed;
 
-      for (const item of extractedData) {
-        await this.prisma.userMemory.upsert({
+      const upsertOperations = add.map((item) =>
+        this.prisma.userMemory.upsert({
           where: {
-            userId_key_value: {
+            userId_key: {
               userId,
               key: item.key,
-              value: item.value,
             },
           },
-          update: {},
+          update: { value: item.value },
           create: {
             userId,
             key: item.key,
             value: item.value,
           },
+        }),
+      );
+
+      if (remove.length > 0) {
+        await this.prisma.userMemory.deleteMany({
+          where: {
+            userId,
+            key: { in: remove },
+          },
         });
+      }
+
+      if (upsertOperations.length > 0) {
+        await this.prisma.$transaction(upsertOperations);
       }
     } catch (error) {
       console.error('AI Memory Extraction Failed:', error);
