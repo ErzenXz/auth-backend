@@ -7,4 +7,4 @@ export INFISICAL_TOKEN=$(infisical login --domain=https://eu.infisical.com/api -
   --client-id=$INFISICAL_MACHINE_CLIENT_ID \
   --client-secret=$INFISICAL_MACHINE_CLIENT_SECRET \
   --plain --silent)
-exec infisical run --projectId $PROJECT_ID -- yarn start:prod
+exec infisical run --watch --domain=https://eu.infisical.com/api --projectId $PROJECT_ID -- yarn start:prod
