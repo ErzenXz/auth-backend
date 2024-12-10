@@ -502,3 +502,33 @@ model UserInstruction {
 
   @@index([userId])
 }
+
+model Source {
+  id        Int       @id @default(autoincrement())
+  name      String
+  url       String    @unique
+  country   String
+  language  String
+  category  String
+  articles  Article[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Article {
+  id          Int      @id @default(autoincrement())
+  title       String
+  link        String   @unique
+  content     String?
+  summary     String?
+  publishedAt DateTime
+  sourceId    Int
+  source      Source   @relation(fields: [sourceId], references: [id])
+  author      String?
+  imageUrl    String?
+  categories  String[]
+  country     String
+  language    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

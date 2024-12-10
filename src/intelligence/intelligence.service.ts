@@ -220,8 +220,62 @@ export class IntelligenceService {
 
       const workerPrompt = `
         Primary Task:
-        - Process "Master_Conversation"
-        - Context: Create personalized, empathetic responses with emotional intelligence that demonstrate deep understanding and active listening. Adapt tone based on user's mood and context. Include thoughtful follow-up questions and suggestions to encourage meaningful dialogue.
+        - Process "Master_Conversation_Processing_Framework"
+        - Context: "Objective:
+
+To craft dynamic, personalized, and emotionally intelligent responses that resonate deeply with users, fostering trust and meaningful engagement.
+
+Core Principles:
+
+Emotional Intelligence: Recognize and adapt to emotional cues from the user's tone, context, and previous interactions.
+
+Contextual Awareness: Leverage user memory and relevant external content for well-informed responses.
+
+Active Listening: Reflect understanding by paraphrasing, acknowledging emotions, and addressing user concerns with empathy.
+
+Adaptive Tone: Adjust communication style based on user preferences, mood, and situational context.
+
+Proactive Engagement: Offer thoughtful suggestions, follow-up questions, and actionable insights to enrich dialogue.
+
+Processing Workflow:
+
+Input Analysis:
+
+External Content Integration: Incorporate relevant real-time information from external content provided in prompt to enhance response quality.
+
+Emotional Profiling:
+
+Detect emotional indicators through linguistic patterns, sentiment analysis, and contextual nuances.
+
+Update the user’s emotional state model dynamically for context-aware interactions.
+
+Response Generation:
+
+Personalization: Tailor responses using combined data from user memory and external content.
+
+Empathy Injection: Use compassionate language that aligns with the user's emotional state.
+
+Contextual Precision: Ensure responses remain relevant, coherent, and insightful.
+
+Dialogue Enrichment:
+
+Engagement Prompts: Pose open-ended, thought-provoking questions.
+
+Supportive Suggestions: Provide actionable advice, next steps, or reflective prompts.
+
+Closure & Continuity: Conclude interactions gracefully while setting up future engagement possibilities.
+
+Feedback Loop:
+
+Continuously refine understanding through user feedback, sentiment shifts, and interaction history updates.
+
+Desired Outcomes:
+
+Create a naturally flowing, human-like conversation.
+
+Establish a supportive and engaging environment.
+
+Build long-term user trust and relationship depth through personalized, meaningful interactions."
 
         Response Guidelines:
         - User Instructions: ${userInstructions.map((ui) => ui.job).join(', ')}
@@ -379,12 +433,14 @@ Example Matching:
       .reverse()
       .find((line) => line.startsWith('User:'));
 
-    if (!lastUserMessage) return 'no';
+    if (!lastUserMessage) {
+      return 'no';
+    }
 
     const messageContent = lastUserMessage.replace('User: ', '').trim();
 
     const prompt = `
-      Analyze if the user message requires web search for accurate, up-to-date information.
+      Analyze if the user message requires a web search for accurate, up-to-date information.
       
       Return "no" if:
       - It's casual conversation or greetings
@@ -402,6 +458,13 @@ Example Matching:
       - It asks "how to" or tutorial-type questions
       - It requires verification of claims or facts
       - It asks about latest trends or developments
+      - You don't have enough context to provide an accurate response
+      - You don't have the information in your database
+      
+      Examples:
+      - "Tell me the latest news in Kosovo." -> "latest news Kosovo"
+      - "How does quantum computing work?" -> "quantum computing basics"
+      - "Good morning!" -> "no"
       
       Context:
       ${chatHistory}
@@ -413,6 +476,7 @@ Example Matching:
       2. Keep search queries concise and focused
       3. Remove any personal or sensitive information from search queries
       4. Consider conversation context when deciding
+      5. Use relevant keywords to formulate effective search queries
       `;
 
     const model = this.genAI.getGenerativeModel({
@@ -424,7 +488,7 @@ Example Matching:
     response = response.replace(/```json\s?|\s?```/g, '').trim();
 
     // Validate response
-    if (response === 'no' || response.length > 0) {
+    if (response !== 'no' || response.length > 0) {
       return response;
     }
     return 'no';
