@@ -99,52 +99,57 @@ export class BrowserService {
       'article',
       'main',
       '.content',
-      '.main-content',
       '#content',
-      '#main-content',
       'section',
       '.post-content',
-      '#post',
       '.entry-content',
       '.article-body',
-      '.post-body',
-      '.page-content',
-      '.container',
-      '.text-content',
     ];
 
     let content = '';
+    let mediaContent = [];
+
     for (const selector of contentSelectors) {
       const elements = $(selector);
       if (elements.length) {
         elements.each((_, element) => {
+          // Remove unwanted elements
+          $(element).find('script, style, nav, header, footer, form').remove();
+
+          // Extract images
           $(element)
-            .find('script, style, nav, header, footer, aside, form, iframe')
-            .remove();
-          content += $(element).text() + ' ';
-          // Limit content size to enhance performance
-          if (content.length > 7000) {
-            return false; // Exit the loop early
-          }
+            .find('img')
+            .each((_, img) => {
+              const src = $(img).attr('src');
+              const alt = $(img).attr('alt') || 'image';
+              if (src) mediaContent.push(`![${alt}](${src})`);
+            });
+
+          // Extract links
+          $(element)
+            .find('a')
+            .each((_, link) => {
+              const href = $(link).attr('href');
+              const text = $(link).text().trim();
+              if (href && text) mediaContent.push(`[${text}](${href})`);
+            });
+
+          // Extract text
+          const text = $(element).text().replace(/\s+/g, ' ').trim();
+          content += `${text} `;
+
+          if (content.length > 5000) return false;
         });
         if (content) break;
       }
     }
 
-    if (!content) {
-      content = $('body').text();
-    }
+    // Combine text and media content
+    const finalContent = [content.trim(), ...mediaContent.slice(0, 10)].join(
+      '\n',
+    );
 
-    // Clean up the text by removing excessive whitespace
-    content = content.replace(/\s+/g, ' ').trim();
-
-    // Optionally truncate to a maximum length to prevent oversized inputs
-    const maxLength = 5000; // Adjust as needed based on AI model constraints
-    if (content.length > maxLength) {
-      content = content.substring(0, maxLength);
-    }
-
-    return content;
+    return finalContent;
   }
 
   private async performSearch(query: string): Promise<string[]> {
@@ -160,7 +165,7 @@ export class BrowserService {
       const links: string[] = [];
 
       $('a.result__url').each((_, element) => {
-        if (links.length < 5) {
+        if (links.length < 7) {
           const href = $(element).attr('href');
           if (href) {
             const url = this.extractUrl(href);
@@ -172,12 +177,7 @@ export class BrowserService {
       });
 
       return links;
-    } catch (error) {
-      throw new HttpException(
-        'Search scraping failed',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    } catch (error) {}
   }
 
   private extractUrl(url: string): string | null {
@@ -218,6 +218,7 @@ export class BrowserService {
   5. Include all relevant multimedia elements found
   6. Ensure proper Markdown formatting for all links and media
   7. Focus on delivering comprehensive, search-engine quality results
+  8. Return a minimum of 300 words of content and a maximum of 2000 words
 
   Analyze this content:
   ${text}
@@ -225,7 +226,7 @@ export class BrowserService {
 
     try {
       const model = this.genAI.getGenerativeModel({
-        model: this.advancedModel, // Using advanced model for better results
+        model: this.advancedModel,
       });
 
       const aiResult = await model.generateContent({
@@ -243,11 +244,6 @@ export class BrowserService {
           content: result,
         },
       };
-    } catch (error) {
-      throw new HttpException(
-        'AI Processing Error',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    } catch (error) {}
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as os from 'os';
+import { CommandControlService } from './services/command-control/command-control.service';
 
 /**
  * Service for providing application-related functionalities.
@@ -16,8 +17,12 @@ export class AppService {
    *
    * @param eventEmitter - The event emitter instance used for managing events
    * within the application.
+   * @param commandControlService - The service used for managing command and control
    */
-  constructor(private readonly eventEmitter: EventEmitter2) {}
+  constructor(
+    private readonly eventEmitter: EventEmitter2,
+    private readonly commandControlService: CommandControlService,
+  ) {}
 
   /**
    * Retrieves infrastructure information about the system.
@@ -33,6 +38,7 @@ export class AppService {
     const events = this.eventEmitter.eventNames();
 
     return {
+      nodes: await this.commandControlService.getAllNodes(),
       system: {
         platform: os.platform(),
         cpus: os.cpus(),
