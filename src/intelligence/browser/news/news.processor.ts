@@ -19,7 +19,7 @@ export class NewsProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<any, any, string>): Promise<any> {
+  async process(): Promise<any> {
     const sources = await this.prisma.source.findMany();
 
     // Get the list of active nodes
@@ -53,36 +53,52 @@ export class NewsProcessor extends WorkerHost {
 
           await Promise.all(
             feed.items.map(async (item) => {
-              const existingArticle = await this.prisma.article.findUnique({
-                where: { link: item.link },
-              });
+              try {
+                if (!item.link) {
+                  console.warn('Skipping article: Missing link');
+                  return;
+                }
 
-              if (!existingArticle) {
-                await this.prisma.article.create({
-                  data: {
-                    title: item.title || 'No title',
-                    link: item.link,
-                    content: item.content,
-                    summary: item.contentSnippet,
-                    publishedAt: item.pubDate
-                      ? new Date(item.pubDate)
-                      : new Date(),
-                    sourceId: source.id,
-                    author: item.creator || item.author,
-                    imageUrl: item.enclosure?.url,
-                    categories: [],
-                    country: source.country,
-                    language: source.language,
-                  },
+                const existingArticle = await this.prisma.article.findUnique({
+                  where: { link: item.link },
                 });
-              }
+
+                if (!existingArticle) {
+                  const sanitizedData = {
+                    title: (item.title || '').slice(0, 255) || 'No title',
+                    link: item.link,
+                    content: item.content || '',
+                    summary: item.contentSnippet || '',
+                    publishedAt: (() => {
+                      try {
+                        const date = item.pubDate
+                          ? new Date(item.pubDate)
+                          : new Date();
+                        return !isNaN(date.getTime()) ? date : new Date();
+                      } catch {
+                        return new Date();
+                      }
+                    })(),
+                    sourceId: source.id,
+                    author: (item.creator || item.author || '').slice(0, 255),
+                    imageUrl: item.enclosure?.url || null,
+                    categories: Array.isArray(item.categories)
+                      ? item.categories.map((cat) =>
+                          typeof cat === 'object' && cat !== null
+                            ? String(cat)
+                            : cat,
+                        )
+                      : [],
+                    country: source.country || '',
+                    language: source.language || '',
+                  };
+
+                  await this.prisma.article.create({ data: sanitizedData });
+                }
+              } catch (error) {}
             }),
           );
-        } catch (error) {
-          console.info(
-            `Error processing source ${source.url}: ${error.message}`,
-          );
-        }
+        } catch (error) {}
       }),
     );
   }

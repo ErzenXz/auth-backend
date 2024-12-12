@@ -28,6 +28,10 @@ export class NewsService implements OnModuleInit {
     );
   }
 
+  async getSources() {
+    return this.prisma.source.findMany();
+  }
+
   async createSource(createSourceDto: CreateSourceDto) {
     return this.prisma.source.create({ data: createSourceDto });
   }
@@ -64,8 +68,8 @@ export class NewsService implements OnModuleInit {
     if (category) {
       where.source = { category };
     }
-    if (sourceId) {
-      where.sourceId = sourceId;
+    if (country) {
+      where.country = country;
     }
 
     const articles = await this.prisma.article.findMany({
@@ -87,6 +91,10 @@ export class NewsService implements OnModuleInit {
     };
   }
 
+  async getArticleById(id: number) {
+    return this.prisma.article.findUnique({ where: { id } });
+  }
+
   async searchArticles(searchDto: SearchArticlesDto) {
     const { query, fromDate, toDate } = searchDto;
     return this.prisma.article.findMany({
@@ -101,6 +109,7 @@ export class NewsService implements OnModuleInit {
         },
       },
       orderBy: { publishedAt: 'desc' },
+      take: 10,
     });
   }
 
@@ -120,6 +129,7 @@ export class NewsService implements OnModuleInit {
         ],
       },
       orderBy: { publishedAt: 'desc' },
+      take: 10,
     });
   }
 
@@ -127,6 +137,7 @@ export class NewsService implements OnModuleInit {
     const { sortOrder } = sortDto;
     return this.prisma.article.findMany({
       orderBy: { publishedAt: sortOrder || 'desc' },
+      take: 10,
     });
   }
 
