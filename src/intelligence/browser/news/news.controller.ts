@@ -18,6 +18,7 @@ import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FilterArticlesDto } from './dtos/filter-articles.dto';
 import { SearchArticlesDto } from './dtos/search-articles.dto';
 import { SortArticlesDto } from './dtos/sort-articles.dto';
+import { AdvancedSearchDto } from './dtos/advanced-search.dto';
 
 @Controller('news')
 export class NewsController {
@@ -51,6 +52,20 @@ export class NewsController {
     return this.newsService.getArticles(getArticlesDto);
   }
 
+  @Get('get-article/:id')
+  @ApiOperation({ summary: 'Get article by id' })
+  @ApiResponse({ status: 200, description: 'Article.' })
+  getArticle(@Param('id') id: string) {
+    return this.newsService.getArticleById(Number(id));
+  }
+
+  @Get('get-sources')
+  @ApiOperation({ summary: 'Get all sources' })
+  @ApiResponse({ status: 200, description: 'List of sources.' })
+  getSources() {
+    return this.newsService.getSources();
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search articles by query and date range' })
   @ApiResponse({ status: 200, description: 'Search results.' })
@@ -75,17 +90,7 @@ export class NewsController {
   @Get('advanced-search')
   @ApiOperation({ summary: 'Advanced search with multiple filters' })
   @ApiResponse({ status: 200, description: 'Advanced search results.' })
-  advancedSearch(
-    @Query() getArticlesDto: GetArticlesDto,
-    @Query() searchArticlesDto: SearchArticlesDto,
-    @Query() filterArticlesDto: FilterArticlesDto,
-    @Query() sortArticlesDto: SortArticlesDto,
-  ) {
-    return this.newsService.advancedSearch({
-      ...getArticlesDto,
-      ...searchArticlesDto,
-      ...filterArticlesDto,
-      ...sortArticlesDto,
-    });
+  advancedSearch(@Query() advancedSearchDto: AdvancedSearchDto) {
+    return this.newsService.advancedSearch(advancedSearchDto);
   }
 }
