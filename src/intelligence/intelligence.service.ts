@@ -206,6 +206,9 @@ export class IntelligenceService {
 
   async generatePersonalizedResponse(
     prompt: string,
+    chatHistory: string,
+    userMemories: string,
+    generalInfo: string,
     externalContent: string,
     context: IHttpContext,
   ): Promise<AIResponse> {
@@ -215,7 +218,7 @@ export class IntelligenceService {
       });
 
       let model = this.genAI.getGenerativeModel({
-        model: this.advancedModel,
+        model: this.defaultModel,
       });
 
       const workerPrompt = `
@@ -223,75 +226,68 @@ export class IntelligenceService {
         - Process "Master_Conversation_Processing_Framework"
         - Context: "Objective:
 
-To craft dynamic, personalized, and emotionally intelligent responses that resonate deeply with users, fostering trust and meaningful engagement.
+        To craft dynamic, personalized, and emotionally intelligent responses that resonate deeply with users, fostering trust and meaningful engagement.
 
-Core Principles:
+        Core Principles:
 
-Emotional Intelligence: Recognize and adapt to emotional cues from the user's tone, context, and previous interactions.
+        Emotional Intelligence: Recognize and adapt to emotional cues from the user's tone, context, and previous interactions.
 
-Contextual Awareness: Leverage user memory and relevant external content for well-informed responses.
+        Contextual Awareness: Leverage user memory and relevant external content for well-informed responses.
 
-Active Listening: Reflect understanding by paraphrasing, acknowledging emotions, and addressing user concerns with empathy.
+        Active Listening: Reflect understanding by acknowledging emotions and addressing user concerns with empathy.
 
-Adaptive Tone: Adjust communication style based on user preferences, mood, and situational context.
+        Adaptive Tone: Adjust communication style based on user preferences, mood, and situational context.
 
-Proactive Engagement: Offer thoughtful suggestions, follow-up questions, and actionable insights to enrich dialogue.
+        Proactive Engagement: Offer thoughtful suggestions, follow-up questions, and actionable insights to enrich dialogue.
 
-Processing Workflow:
+        Processing Workflow:
 
-Input Analysis:
+        Input Analysis:
 
-External Content Integration: Incorporate relevant real-time information from external content provided in prompt to enhance response quality.
+        - External Content Integration: Incorporate relevant real-time information from external content provided in the prompt to enhance response quality.
 
-Emotional Profiling:
+        Emotional Profiling:
 
-Detect emotional indicators through linguistic patterns, sentiment analysis, and contextual nuances.
+        - Detect emotional indicators through linguistic patterns, sentiment analysis, and contextual nuances.
+        - Update the user’s emotional state model dynamically for context-aware interactions.
 
-Update the user’s emotional state model dynamically for context-aware interactions.
+        Response Generation:
 
-Response Generation:
+        - Personalization: Tailor responses using combined data from user memory and external content.
+        - Empathy Injection: Use compassionate language that aligns with the user's emotional state.
+        - Contextual Precision: Ensure responses remain relevant, coherent, and insightful.
 
-Personalization: Tailor responses using combined data from user memory and external content.
+        Dialogue Enrichment:
 
-Empathy Injection: Use compassionate language that aligns with the user's emotional state.
+        - Engagement Prompts: Pose open-ended, thought-provoking questions.
+        - Supportive Suggestions: Provide actionable advice, next steps, or reflective prompts.
+        - Closure & Continuity: Conclude interactions gracefully while setting up future engagement possibilities.
 
-Contextual Precision: Ensure responses remain relevant, coherent, and insightful.
+        Feedback Loop:
 
-Dialogue Enrichment:
+        - Continuously refine understanding through user feedback, sentiment shifts, and interaction history updates.
 
-Engagement Prompts: Pose open-ended, thought-provoking questions.
+        Desired Outcomes:
 
-Supportive Suggestions: Provide actionable advice, next steps, or reflective prompts.
-
-Closure & Continuity: Conclude interactions gracefully while setting up future engagement possibilities.
-
-Feedback Loop:
-
-Continuously refine understanding through user feedback, sentiment shifts, and interaction history updates.
-
-Desired Outcomes:
-
-Create a naturally flowing, human-like conversation.
-
-Establish a supportive and engaging environment.
-
-Build long-term user trust and relationship depth through personalized, meaningful interactions."
+        - Create a naturally flowing, human-like conversation.
+        - Establish a supportive and engaging environment.
+        - Build long-term user trust and relationship depth through personalized, meaningful interactions."
 
         Response Guidelines:
-        - User Instructions: ${userInstructions.map((ui) => ui.job).join(', ')}
+        - User Instructions: \n ${userInstructions.map((ui) => ui.job).join(', ')}
         - Format all responses in Markdown
-        - When returning code snippets, use proper syntax highlighting in Markdown format using triple backticks
-        - Use proper markdown syntax for links, images, and videos
-        - Input: ${prompt}
+        - When returning code snippets, use proper syntax highlighting with triple backticks
+        - Use proper Markdown syntax for links, images, and videos
+        - Input: \${prompt}
 
         External Content Integration:
-        - Incorporate relevant search results from: ${externalContent || 'No external content available'}  ---------------- only if it adds value to the conversation and enhances user experience else ignore it.
+        - Incorporate relevant search results from: \n ${externalContent || 'No external content available'} only if it adds value to the conversation and enhances user experience; otherwise, ignore it.
         - Only use external links/media if they add value
         - Always convert external content to proper Markdown format
         - Cite sources when using external information
 
-        Output Format Rules:     
-        Return structure: {"content": "markdown_formatted_response"}
+        Output Format Rules:
+        - Return structure: {"content": "markdown_formatted_response"}
 
         Strict Requirements:
         - Generate valid JSON with "content" field
@@ -299,7 +295,24 @@ Build long-term user trust and relationship depth through personalized, meaningf
         - Use complete Markdown syntax (no placeholders)
         - Balance original response with external content
         - Maintain natural, conversational tone
-        `;
+        - Be friendly and act like an actual AI assistant
+        - Use user memory appropriately; do not overuse or force references
+        - Prioritize recent and important user information
+
+        Input Structure:
+        General Info:
+        \n ${generalInfo}
+
+        User Saved Memories (Use only what is relevant to the user prompt; older memories are less relevant except for names and important user info):
+        \n ${userMemories}
+
+        Previous chat history:
+        \n ${chatHistory}
+
+        User:
+        \n ${prompt}
+
+        AI:`;
 
       const workerResult = await model.generateContent(workerPrompt);
 
@@ -426,57 +439,76 @@ Example Matching:
   }
 
   private async determineIfBrowsingNeeded(
+    message: string,
     chatHistory: string,
   ): Promise<string> {
-    const lastUserMessage = chatHistory
-      .split('\n')
-      .reverse()
-      .find((line) => line.startsWith('User:'));
-
-    if (!lastUserMessage) {
+    if (!message || message.length < 10) {
       return 'no';
     }
 
-    const messageContent = lastUserMessage.replace('User: ', '').trim();
-
     const prompt = `
-      Analyze if the user message requires a web search for accurate, up-to-date information.
-      
-      Return "no" if:
-      - It's casual conversation or greetings
-      - It's about personal opinions or preferences
-      - It's about hypothetical scenarios
-      - It's about basic knowledge that doesn't need verification
-      - It's a follow-up to previous conversation
-      - It's emotional or subjective content
-      
-      Return a specific search query if:
-      - It asks about current events or news
-      - It requests factual/technical information
-      - It asks about real-world data or statistics
-      - It mentions specific people, places, or events
-      - It asks "how to" or tutorial-type questions
-      - It requires verification of claims or facts
-      - It asks about latest trends or developments
-      - You don't have enough context to provide an accurate response
-      - You don't have the information in your database
-      
-      Examples:
-      - "Tell me the latest news in Kosovo." -> "latest news Kosovo"
-      - "How does quantum computing work?" -> "quantum computing basics"
-      - "Good morning!" -> "no"
-      
-      Context:
-      ${chatHistory}
+        You are an expert at determining when a user's message requires a web search for accurate, up-to-date information. Analyze the user's message and the conversation context to decide whether a web search is necessary.
 
-      User Message: "${messageContent}"
+  **Instructions:**
 
-      Rules:
-      1. Return ONLY "no" or a specific search query
-      2. Keep search queries concise and focused
-      3. Remove any personal or sensitive information from search queries
-      4. Consider conversation context when deciding
-      5. Use relevant keywords to formulate effective search queries
+  - **Return "no"** if:
+    - It's casual conversation or greetings.
+    - It's about personal opinions or preferences.
+    - It's about hypothetical scenarios.
+    - It's about basic knowledge that doesn't need verification.
+    - It's emotional or subjective content.
+    - It's a follow-up that doesn't require additional information.
+
+  - **Return a specific search query** if:
+    - The user asks about current events or news.
+    - The user requests factual or technical information.
+    - The user asks about real-world data or statistics.
+    - The user mentions specific people, places, or events.
+    - The user asks "how to" or tutorial-type questions.
+    - The user requires verification of claims or facts.
+    - The user asks about the latest trends or developments.
+    - You don't have enough context to provide an accurate response.
+    - You don't have the information in your database.
+    - The user explicitly requests a search or confirms a previous offer to search.
+
+  **Consider Conversation Context:**
+
+  - Analyze the **chat history** to understand prior interactions.
+  - If the assistant previously asked, "Do you want me to search for that?" and the user responds with confirmations like "Yes, please," or "Go ahead," generate the appropriate search query based on the prior topic.
+  - Use information from previous messages to formulate an effective search query.
+
+  **Examples:**
+
+  - Assistant: "Do you want me to search for that topic?"
+  - User: "Yes, please."
+    - Result: Use the prior topic to create a search query.
+  - "Tell me the latest news in Kosovo." -> "latest news Kosovo"
+  - "How does quantum computing work?" -> "quantum computing basics"
+  - "Good morning!" -> "no"
+
+  **Context:**
+
+  \`\`\`
+  ${chatHistory}
+  \`\`\`
+
+  **User Message:** "${message}"
+
+  **Rules:**
+
+  1. **Return ONLY** "no" or a specific search query.
+  2. Keep search queries concise and focused.
+  3. Remove any personal or sensitive information from search queries.
+  4. Consider conversation context and chat history when deciding.
+  5. Use relevant keywords to formulate effective search queries.
+  6. Be adaptive and intelligent in interpreting the user's intent.
+
+  **Additional Notes:**
+
+  - Ensure that the search query accurately reflects the user's request.
+  - If the user's message is a confirmation like "Yes, do it," and the assistant previously offered to perform a search, proceed with the search using the relevant topic.
+  - Always prioritize the user's intent and provide the most helpful response based on the available information.
+
       `;
 
     const model = this.genAI.getGenerativeModel({
@@ -496,12 +528,18 @@ Example Matching:
 
   async executeChatPrompt(
     prompt: string,
+    chatHistory: string,
+    userMemories: string,
+    generalInfo: string,
     context: IHttpContext,
   ): Promise<AIResponse> {
     try {
       let externalContent = '';
 
-      let searchQuery = await this.determineIfBrowsingNeeded(prompt);
+      let searchQuery = await this.determineIfBrowsingNeeded(
+        prompt,
+        chatHistory,
+      );
       if (searchQuery !== 'no') {
         externalContent = (
           await this.browserService.searchAndProcess(searchQuery)
@@ -510,6 +548,9 @@ Example Matching:
 
       return await this.generatePersonalizedResponse(
         prompt,
+        chatHistory,
+        userMemories,
+        generalInfo,
         externalContent,
         context,
       );
@@ -535,24 +576,38 @@ Example Matching:
 
     const chatHistory = this.formatChatHistory(history, message);
 
-    const fullPrompt = `General Info\nCurrent Date: ${new Date().toLocaleString(
-      'en-US',
-      {
+    const generalInfo = `
+      General Information:
+      
+      Calendar Context:
+      - Current Date: ${new Date().toLocaleDateString('en-US', {
         day: 'numeric',
         month: 'long',
         year: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: true,
-      },
-    )}
-
-          Current day of the week: ${new Date().toLocaleString('en-US', {
-            weekday: 'long',
-          })}
-          
-          \nUSER SAVED MEMORIES!  -- Only take what is relevant to the USER PROMPT! --  ASSUME Older memories are not as relevant as others except names, and important user info\n${memory}\n Previous chat history: ${chatHistory}\nUser: ${message}\nAI:`;
+      })}
+      - Is Weekend: ${['Saturday', 'Sunday'].includes(new Date().toLocaleDateString('en-US', { weekday: 'long' }))}
+      - Time of Day: ${(() => {
+        const hour = new Date().getHours();
+        if (hour < 6) return 'Night';
+        if (hour < 12) return 'Morning';
+        if (hour < 17) return 'Afternoon';
+        if (hour < 22) return 'Evening';
+        return 'Night';
+      })()}
+      
+      Device Information:
+      - Platform: ${process.platform}
+      - Node Version: ${process.version}
+      - Memory Usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB
+      
+      System Status:
+      - Process Uptime: ${Math.floor(process.uptime())} seconds
+      - System Load: ${require('os')
+        .loadavg()
+        .map((load) => load.toFixed(2))
+        .join(', ')}
+      - Free Memory: ${Math.round(require('os').freemem() / 1024 / 1024)}MB
+    `;
 
     // Extract and save user memories asynchronously
     this.extractAndSaveMemory(message, context.user.id).catch((error) => {
@@ -560,10 +615,13 @@ Example Matching:
       console.error('Failed to save user memory:', error);
     });
 
-    // Process the fullPrompt as needed
-    const result = await this.executeChatPrompt(fullPrompt, context);
-
-    return result;
+    return await this.executeChatPrompt(
+      message,
+      chatHistory,
+      memory,
+      generalInfo,
+      context,
+    );
   }
 
   private async retrieveRelevantMemories(message: string, userId: number) {
@@ -630,20 +688,41 @@ Example Matching:
   ): Promise<void> {
     const memories = await this.retrieveRelevantMemories(message, userId);
     const extractionPrompt = `
-    You are an expert at extracting essential personal information from user messages. Analyze the following message and determine what information should be added or removed from user's memory.
-    
-    User Memories: ${memories}
-    Message: "${message}"
-    
-    Rules:
-    1. Only extract explicitly mentioned information
-    2. Do not infer or assume details
-    3. Limit each value to 50 characters
-    4. Use clear and specific keys
-    5. Indicate if any existing memories should be removed
-    6. Return both additions and removals
-    
-    Return the results as a JSON object with two arrays:
+    You are an intelligent assistant with advanced human-like memory capabilities. Your task is to extract essential personal information from user messages and manage the user's memory efficiently.
+
+    User Memories: \n ${memories}
+    Message to ANALYZE: "\ ${message}"
+
+    Instructions:
+
+    1. **Extraction**:
+       - Extract new information explicitly mentioned in the message.
+       - Use clear and specific keys for each piece of information.
+       - Limit each value to 50 characters.
+
+    2. **Memory Management**:
+       - **Add**:
+         - Include new, useful, and relevant information.
+         - Prioritize recent information over older entries.
+       - **Remove**:
+         - Identify and remove outdated or irrelevant memories.
+         - Remove information that the user indicates is no longer valid or has been updated.
+         - Do not remove core information like the user's name, age, or birthday unless explicitly changed by the user.
+
+    3. **Context Awareness**:
+       - Use timestamps or context to determine the relevance of information.
+       - Recognize when tasks are completed and remove related pending task memories.
+       - Avoid over-persisting short-term or time-sensitive information.
+
+    4. **Rules**:
+       - Only extract explicitly mentioned information; do not infer or assume details.
+       - Ensure keys are consistent and descriptive.
+       - Limit each value to 50 characters.
+
+    5. **Output Format**:
+       - Return the results as a JSON object with two arrays:
+
+    \`\`\`json
     {
       "add": [
         {"key": "Profession", "value": "Software Engineer"}
@@ -652,6 +731,19 @@ Example Matching:
         "OldProfession"
       ]
     }
+    \`\`\`
+
+    **Examples**:
+
+    - If the user mentions completing a project:
+      - **Add**: \`{"key": "RecentAchievements", "value": "Completed project X"}\`
+      - **Remove**: \`"PendingProjectX"\`
+
+    - If the user updates their status:
+      - **Add**: \`{"key": "CurrentStatus", "value": "API is now fast"}\`
+      - **Remove**: \`"WorkingToMakeAPIFaster"\`
+
+    Remember to act like a sophisticated AI assistant with human-like memory management, continually learning from the user and keeping their information accurate and up-to-date.
     `;
 
     const model = this.genAI.getGenerativeModel({

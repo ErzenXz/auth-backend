@@ -74,9 +74,7 @@ export class BrowserService {
           timeout: 8777,
         });
         return this.extractText(data);
-      } catch (urlError) {
-        console.error('Failed to fetch URL:', urlError);
-      }
+      } catch (urlError) {}
     });
 
     const results = await Promise.all(fetchPromises);
@@ -165,7 +163,7 @@ export class BrowserService {
       const links: string[] = [];
 
       $('a.result__url').each((_, element) => {
-        if (links.length < 7) {
+        if (links.length < 3) {
           const href = $(element).attr('href');
           if (href) {
             const url = this.extractUrl(href);
@@ -219,6 +217,7 @@ export class BrowserService {
   6. Ensure proper Markdown formatting for all links and media
   7. Focus on delivering comprehensive, search-engine quality results
   8. Return a minimum of 300 words of content and a maximum of 2000 words
+  9. Return in readable, grammatically correct in original language
 
   Analyze this content:
   ${text}
