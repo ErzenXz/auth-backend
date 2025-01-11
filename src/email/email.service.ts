@@ -57,13 +57,13 @@ export class EmailService {
 
     const subject = `Forgot Password Request`;
 
-    const url = `https://api.erzen.xyz/v1/auth/reset-password/verify/${token}`;
+    const url = `https://apis.erzen.tk/v1/auth/reset-password/verify/${token}`;
 
     await this.emailQueue.add('sendEmail', {
       to: email,
       subject,
       template: './auth/forgot.hbs',
-      context: { name, email, token },
+      context: { name, email, url },
     });
   }
 

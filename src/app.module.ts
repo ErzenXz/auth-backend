@@ -23,6 +23,10 @@ import { BullModule } from '@nestjs/bullmq';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { CommandControlModule } from './services/command-control/command-control.module';
+import { ChangeIPLocationHandler } from './auth/handlers/update-ip-location.handler';
+import { EmailModule } from './email/email.module';
+
+const CommandHandlers = [ChangeIPLocationHandler];
 
 @Module({
   imports: [
@@ -30,6 +34,7 @@ import { CommandControlModule } from './services/command-control/command-control
       http: process.env.NODE_ENV !== 'production',
     }),
     WinstonModule.forRoot(winstonConfig),
+    EmailModule,
     AuthModule,
     UserModule,
     CollectionModule,
@@ -75,6 +80,7 @@ import { CommandControlModule } from './services/command-control/command-control
       useClass: ThrottlerGuard,
     },
     winston.Logger,
+    ...CommandHandlers,
   ],
 })
 export class AppModule {

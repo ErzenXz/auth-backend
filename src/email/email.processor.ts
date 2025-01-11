@@ -29,7 +29,6 @@ export class EmailProcessor extends WorkerHost {
    */
   async process(job: Job<any>): Promise<void> {
     const { to, subject, template, context } = job.data;
-
     await this.mailerService.sendMail({
       to,
       subject,

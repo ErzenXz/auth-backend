@@ -10,11 +10,11 @@ export class FacebookStrategy extends PassportStrategy(
   Strategy,
   StrategiesEnum.Facebook,
 ) {
-  constructor(private authService: AuthService) {
+  constructor(private readonly authService: AuthService) {
     super({
       clientID: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-      callbackURL: 'https://apis.erzen.xyz/v1/external/oauth/facebook/redirect',
+      callbackURL: 'https://apis.erzen.tk/v1/external/oauth/facebook/redirect',
       profileFields: ['id', 'emails', 'name', 'photos'],
     });
   }
@@ -26,7 +26,7 @@ export class FacebookStrategy extends PassportStrategy(
     done: VerifyCallback,
   ): Promise<any> {
     try {
-      const { id, emails, name, photos } = profile;
+      const { id, name, photos } = profile;
       const user: ExternalUser = {
         externalId: id,
         externalProvider: StrategiesEnum.Facebook,

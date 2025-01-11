@@ -13,7 +13,7 @@ export class GitHubStrategy extends PassportStrategy(
     super({
       clientID: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: 'https://apis.erzen.xyz/v1/external/oauth/github/redirect',
+      callbackURL: 'https://apis.erzen.tk/v1/external/oauth/github/redirect',
       scope: ['user:email'],
     });
   }
