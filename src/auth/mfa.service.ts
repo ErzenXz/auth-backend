@@ -31,7 +31,7 @@ export class MfaService {
   generateQrCodeUri(username: string, secret: string): string {
     return (
       authenticator.keyuri(username, 'XENSystem', secret) +
-      '&image=https://auth.erzen.xyz/src/content/favicon.svg'
+      '&image=https://auth.erzen.tk/src/content/favicon.svg'
     );
   }
 

@@ -42,7 +42,7 @@ export class GoogleStrategy extends PassportStrategy(
       done(null, user);
     } catch (error) {
       response.redirect(
-        `https://auth.erzen.xyz/external?status=error?message=${error.message}`,
+        `https://auth.erzen.tk/external?status=error?message=${error.message}`,
       );
       done(error, false);
     }
