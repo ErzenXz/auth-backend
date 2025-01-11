@@ -37,7 +37,6 @@ async function bootstrap() {
   // const httpsOptions = {
   //   key: fs.readFileSync('./src/cert/key.pem'),
   //   cert: fs.readFileSync('./src/cert/cert.pem'),
-  //   http2: true,
   // };
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -49,6 +48,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
   const config = new DocumentBuilder()
     .setTitle('XENAuth API')
     .setDescription('The official XENAuth API documentation')
@@ -59,8 +59,8 @@ async function bootstrap() {
     )
     .addSecurityRequirements('access-token')
     .addServer('https://localhost:3000', 'LOCAL server')
-    .addServer('https://api.erzen.xyz', 'DEV server')
-    .addServer('https://apis.erzen.xyz', 'PRODUCTION server')
+    .addServer('https://api.erzen.tk', 'DEV server')
+    .addServer('https://apis.erzen.tk', 'PRODUCTION server')
     .setContact(
       'Erzen Krasniqi',
       'https://erzen.tk',

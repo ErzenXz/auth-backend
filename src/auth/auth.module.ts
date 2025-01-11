@@ -23,7 +23,6 @@ import { UserRegisterHandler } from './handlers/user-register.handler';
 import { UserRefreshTokenHandler } from './handlers/user-refresh-token.handler';
 import { UserLogoutHandler } from './handlers/user-logout.handler';
 import { PrivacyService } from 'src/privacy/privacy.service';
-import { ChangeIPLocationHandler } from './handlers/update-ip-location.handler';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GitHubStrategy } from './strategies/github.strategy';
 import { LinkedInStrategy } from './strategies/linkedin.strategy';
@@ -40,7 +39,6 @@ const CommandHandlers = [
   UserRegisterHandler,
   UserRefreshTokenHandler,
   UserLogoutHandler,
-  ChangeIPLocationHandler,
 ];
 
 const QueryHandlers = [GetUserInfoHandler];
@@ -53,13 +51,15 @@ const AuthStrategies = [
   FacebookStrategy,
 ];
 
+const Processors = [];
+
 @Module({
   imports: [
+    CqrsModule,
     BullModule.registerQueue({
       name: 'ip-location',
     }),
     PrismaModule,
-    CqrsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -88,6 +88,7 @@ const AuthStrategies = [
     ...CommandHandlers,
     ...QueryHandlers,
     ...AuthStrategies,
+    ...Processors,
   ],
   exports: [AuthService],
 })

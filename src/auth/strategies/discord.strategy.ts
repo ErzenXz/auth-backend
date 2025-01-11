@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-discord';
-import { AuthService } from '../auth.service';
 import { StrategiesEnum } from '../enums/security-strategies.enum';
 import { ExternalUser } from '../models/external.user.model';
 
@@ -14,7 +13,7 @@ export class DiscordStrategy extends PassportStrategy(
     super({
       clientID: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
-      callbackURL: 'https://apis.erzen.xyz/v1/external/oauth/discord/redirect',
+      callbackURL: 'https://apis.erzen.tk/v1/external/oauth/discord/redirect',
       scope: ['identify', 'email'],
     });
   }

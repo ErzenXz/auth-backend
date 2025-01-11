@@ -11,11 +11,11 @@ export class GoogleStrategy extends PassportStrategy(
   Strategy,
   StrategiesEnum.Google,
 ) {
-  constructor(private authService: AuthService) {
+  constructor(private readonly authService: AuthService) {
     super({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: 'https://apis.erzen.xyz/v1/external/oauth/google/redirect',
+      callbackURL: 'https://apis.erzen.tk/v1/external/oauth/google/redirect',
       scope: ['email', 'profile'],
     });
   }
