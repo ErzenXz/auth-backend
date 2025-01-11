@@ -1054,7 +1054,7 @@ export class AuthService {
       });
 
       return context.res.redirect(
-        `https://auth.erzen.xyz/external?accessToken=${accessToken}&status=success`,
+        `https://auth.erzen.tk/external?accessToken=${accessToken}&status=success`,
       );
     } else {
       // Create a new user with the provided user.id and email
@@ -1152,7 +1152,7 @@ export class AuthService {
       });
 
       return context.res.redirect(
-        `https://auth.erzen.xyz/external?accessToken=${accessToken}&status=success`,
+        `https://auth.erzen.tk/external?accessToken=${accessToken}&status=success`,
       );
     }
   }

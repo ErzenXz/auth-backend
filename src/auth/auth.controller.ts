@@ -246,7 +246,7 @@ export class AuthController {
             <title>TrustPort - ARP</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-                <link rel="icon" type="image/png" href="https://auth.erzen.xyz/src/content/favicon-48x48.png" sizes="48x48" />
+                <link rel="icon" type="image/png" href="https://auth.erzen.tk/src/content/favicon-48x48.png" sizes="48x48" />
 
             <style nonce="${nonce}">
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
@@ -401,7 +401,7 @@ export class AuthController {
         `default-src 'self'; script-src 'nonce-${nonce}' 'strict-dynamic'; style-src 'nonce-${nonce}'; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:;`,
       );
 
-      const authUrl = new URL('https://auth.erzen.xyz');
+      const authUrl = new URL('https://auth.erzen.tk');
 
       // Get the original returnUrl from the current request
       const currentReturnUrl = (req.query.returnUrl as string) || '';
