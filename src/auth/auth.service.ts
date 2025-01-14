@@ -21,7 +21,6 @@ import { UserLogoutCommand } from './commands/user-logout.command';
 import { PrivacyService } from 'src/privacy/privacy.service';
 import { Request } from 'express';
 import { ArpResponse } from './models/arp.model';
-import { ChangeIPLocationCommand } from './commands/update-ip-location.command';
 import * as crypto from 'crypto';
 import { ExternalUser } from './models/external.user.model';
 import { InjectQueue } from '@nestjs/bullmq';

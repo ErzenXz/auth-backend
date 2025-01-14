@@ -9,16 +9,16 @@ import { EmailProcessor } from './email.processor';
   imports: [
     MailerModule.forRoot({
       transport: {
-        host: 'smtp.resend.com',
-        port: Number('465'),
+        host: process.env.EMAIL_SMTP_HOST,
+        port: Number(process.env.EMAIL_SMTP_PORT),
         secure: true,
         auth: {
-          user: 'resend',
-          pass: 're_K7xUDADU_HaF1qcreJdh23T7bKMACHnS8',
+          user: process.env.EMAIL_SMTP_USER,
+          pass: process.env.EMAIL_SMTP_PASSWORD,
         },
       },
       defaults: {
-        from: '"XENSystem" <info@auth.erzen.xyz>',
+        from: process.env.EMAIL_SMTP_FROM,
       },
       template: {
         dir: join(__dirname, 'templates'),

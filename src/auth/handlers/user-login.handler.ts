@@ -78,7 +78,6 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
     }
 
     if (!found) {
-      console.log('Creating new refresh token');
       const refreshTokenObj = {
         userId: user.id,
         token: newRefreshToken,
@@ -115,6 +114,7 @@ export class UserLoginHandler implements ICommandHandler<UserLoginCommand> {
         email: user.email,
         ip,
         userAgent,
+        time: new Date().toISOString(),
       });
     }
 
