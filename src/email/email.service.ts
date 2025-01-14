@@ -1,9 +1,9 @@
-import { MailerService } from '@nestjs-modules/mailer';
 import { Injectable } from '@nestjs/common';
 import { Email } from './interfaces/request.interface';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 /**
  * Service for managing email communications within the application.
@@ -17,7 +17,7 @@ import { Queue } from 'bullmq';
 export class EmailService {
   constructor(
     @InjectQueue('email') private readonly emailQueue: Queue,
-    private readonly mailerService: MailerService,
+    private readonly prismaService: PrismaService,
   ) {}
 
   /**
@@ -88,6 +88,17 @@ export class EmailService {
       template: './auth/reset-password-email.hbs',
       context: { name, email, password },
     });
+
+    await this.prismaService.userEvents.create({
+      data: {
+        eventType: 'auth.forgot.reset',
+        userId: email,
+        data: JSON.stringify({
+          name,
+          email,
+        }),
+      },
+    });
   }
 
   /**
@@ -106,6 +117,108 @@ export class EmailService {
       template: './auth/welcome.hbs',
       context: {
         data2,
+      },
+    });
+  }
+
+  @OnEvent('auth.new-ip-login')
+  async handleNewIpLoginEvent(data: any) {
+    const { name, email, ip, userAgent, time } = data;
+
+    const ipLocation = await this.prismaService.ipLocation.findFirst({
+      where: { ip },
+    });
+
+    const loggedInLocation = `${ipLocation.city}, ${ipLocation.region}, ${ipLocation.country}`;
+
+    await this.emailQueue.add('sendEmail', {
+      to: email,
+      subject: 'New login from a new IP address',
+      template: './auth/new-login-location.hbs',
+      context: {
+        name,
+        email,
+        ip,
+        userAgent,
+        location: loggedInLocation,
+        time,
+      },
+    });
+
+    await this.prismaService.userEvents.create({
+      data: {
+        eventType: 'auth.new-ip-login',
+        userId: email,
+        data: JSON.stringify({
+          ip,
+          userAgent,
+          location: loggedInLocation,
+          time,
+        }),
+      },
+    });
+  }
+
+  @OnEvent('auth.register')
+  async handleNewUserEvent(data: any) {
+    const { name, email } = data;
+
+    await this.prismaService.userEvents.create({
+      data: {
+        eventType: 'auth.register',
+        userId: email,
+        data: JSON.stringify({
+          name,
+          email,
+        }),
+      },
+    });
+  }
+
+  @OnEvent('user.birthdate')
+  async handleUserBirthdateChangeEvent(data: any) {
+    const { id, to, from } = data;
+
+    await this.prismaService.userEvents.create({
+      data: {
+        eventType: 'user.birthdate',
+        userId: id,
+        data: JSON.stringify({
+          to,
+          from,
+        }),
+      },
+    });
+  }
+
+  @OnEvent('user.name')
+  async handleUserNameChangeEvent(data: any) {
+    const { id, to, from } = data;
+
+    await this.prismaService.userEvents.create({
+      data: {
+        eventType: 'user.name',
+        userId: id,
+        data: JSON.stringify({
+          to,
+          from,
+        }),
+      },
+    });
+  }
+
+  @OnEvent('user.photo')
+  async handleUserProfilePictureChangeEvent(data: any) {
+    const { id, to, from } = data;
+
+    await this.prismaService.userEvents.create({
+      data: {
+        eventType: 'user.photo',
+        userId: id,
+        data: JSON.stringify({
+          to,
+          from,
+        }),
       },
     });
   }
