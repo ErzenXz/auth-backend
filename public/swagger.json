@@ -2164,11 +2164,11 @@
       "description": "LOCAL server"
     },
     {
-      "url": "https://api.erzen.xyz",
+      "url": "https://api.erzen.tk",
       "description": "DEV server"
     },
     {
-      "url": "https://apis.erzen.xyz",
+      "url": "https://apis.erzen.tk",
       "description": "PRODUCTION server"
     }
   ],
