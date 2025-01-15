@@ -8,7 +8,7 @@ import { PhotoModule } from './photo/photo.module';
 import { VideoModule } from './video/video.module';
 import { LocationModule } from './location/location.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { seconds, ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { StorageModule } from './storage/storage.module';
@@ -25,6 +25,8 @@ import { IntelligenceModule } from './intelligence/intelligence.module';
 import { CommandControlModule } from './services/command-control/command-control.module';
 import { ChangeIPLocationHandler } from './auth/handlers/update-ip-location.handler';
 import { EmailModule } from './email/email.module';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import Redis from 'ioredis';
 
 const CommandHandlers = [ChangeIPLocationHandler];
 
@@ -43,13 +45,17 @@ const CommandHandlers = [ChangeIPLocationHandler];
     LocationModule,
     PrismaModule,
     CustomEventEmitterModule,
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 30,
-        blockDuration: 60,
-      },
-    ]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ limit: 45, ttl: seconds(60), blockDuration: seconds(60) }],
+      storage: new ThrottlerStorageRedisService(
+        new Redis({
+          host: process.env.REDIS_URL,
+          port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+          username: process.env.REDIS_USER || 'default',
+          password: process.env.REDIS_PASSWORD,
+        }),
+      ),
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

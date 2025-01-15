@@ -24,6 +24,15 @@ import Redis from 'ioredis';
 
         const eventEmitter = new EventEmitter2();
 
+        const globalEvents = [
+          'message.sent',
+          'auth.new-ip-login',
+          'auth.register',
+          'user.birthdate',
+          'user.name',
+          'user.photo',
+        ];
+
         let isFromRedis = false;
 
         // Publish events to Redis only if not from Redis
@@ -41,7 +50,7 @@ import Redis from 'ioredis';
         });
 
         subClient.on('ready', () => {
-          subClient.subscribe('message.sent');
+          subClient.subscribe(...globalEvents);
           console.info(
             '[Redis Subscriber] Successfully subscribed to all channels',
           );

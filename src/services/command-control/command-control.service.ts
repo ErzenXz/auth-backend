@@ -150,9 +150,17 @@ export class CommandControlService implements OnModuleInit, OnModuleDestroy {
 
   private async electLeader() {
     const nodes = await this.getAllNodes();
-    const leaderNode = nodes.sort((a, b) =>
+    if (nodes.length === 0) {
+      this.currentNode.isLeader = true;
+      await this.registerNode();
+      return;
+    }
+
+    const sortedNodes = [...nodes].sort((a, b) =>
       a.nodeId.localeCompare(b.nodeId),
-    )[0];
+    );
+    const leaderNode = sortedNodes[0];
+
     if (leaderNode.nodeId === this.currentNode.nodeId) {
       this.currentNode.isLeader = true;
       await this.registerNode();
@@ -216,12 +224,10 @@ export class CommandControlService implements OnModuleInit, OnModuleDestroy {
         // Implement stop logic
         this.logger.log(`Stop command received. Shutting down.`);
         process.exit(0);
-        break;
       case 'restart':
         // Implement restart logic
         this.logger.log(`Restart command received. Restarting.`);
         process.exit(0);
-        break;
       case 'status':
         // Implement status report
         this.logger.log(`Status command received.`);

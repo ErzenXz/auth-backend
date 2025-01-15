@@ -63,10 +63,14 @@ export const winstonConfig = {
             typeof info.timestamp === 'number'
               ? new Date(info.timestamp).toISOString()
               : new Date().toISOString();
-          const context = info.context ? ` ${info.context}` : '';
-          const version = info.version ? ` (version: ${info.version})` : '';
+          const context = info.context
+            ? ` ${JSON.stringify(info.context)}`
+            : '';
+          const version = info.version
+            ? ` (version: ${JSON.stringify(info.version)})`
+            : '';
 
-          return `${timestamp} ${info.level}:${context}${version}: ${info.message}`;
+          return `${timestamp} ${info.level}:${context}${version}: ${JSON.stringify(info.message)}`;
         }),
       ),
     }),
