@@ -1724,7 +1724,10 @@
           "201": {
             "description": ""
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/sources/{id}": {
@@ -1754,7 +1757,10 @@
           "200": {
             "description": ""
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       },
       "delete": {
         "operationId": "NewsController_deleteSource",
@@ -1772,7 +1778,10 @@
           "200": {
             "description": ""
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/get-articles": {
@@ -1841,7 +1850,10 @@
           "200": {
             "description": "List of articles."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/get-article/{id}": {
@@ -1862,7 +1874,10 @@
           "200": {
             "description": "Article."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/get-sources": {
@@ -1874,7 +1889,10 @@
           "200": {
             "description": "List of sources."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/search": {
@@ -1914,7 +1932,10 @@
           "200": {
             "description": "Search results."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/filter": {
@@ -1949,7 +1970,10 @@
           "200": {
             "description": "Filtered articles."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/sort": {
@@ -1972,7 +1996,10 @@
           "200": {
             "description": "Sorted articles."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/news/advanced-search": {
@@ -2100,7 +2127,10 @@
           "200": {
             "description": "Advanced search results."
           }
-        }
+        },
+        "tags": [
+          "News"
+        ]
       }
     },
     "/command-control/execute": {

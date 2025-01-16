@@ -22,12 +22,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import * as cookieParser from 'cookie-parser';
+import cookieParser from 'cookie-parser';
 import * as fs from 'fs';
 import { VersioningType } from '@nestjs/common';
 import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import * as compression from 'compression';
+import compression from 'compression';
 import { RedisIoAdapter } from './messaging/adapters/redis-io.adapter';
 import { join } from 'path';
 

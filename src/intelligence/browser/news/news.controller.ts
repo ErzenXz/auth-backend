@@ -14,12 +14,13 @@ import { GetArticlesDto } from './dtos/get-articles.dto';
 import { UpdateSourceDto } from './dtos/update-source.dto';
 import { Role } from 'src/auth/enums';
 import { Auth } from 'src/auth/decorators';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FilterArticlesDto } from './dtos/filter-articles.dto';
 import { SearchArticlesDto } from './dtos/search-articles.dto';
 import { SortArticlesDto } from './dtos/sort-articles.dto';
 import { AdvancedSearchDto } from './dtos/advanced-search.dto';
 
+@ApiTags('News')
 @Controller('news')
 export class NewsController {
   constructor(private readonly newsService: NewsService) {}

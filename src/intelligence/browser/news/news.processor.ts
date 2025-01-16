@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
-import * as Parser from 'rss-parser';
+import Parser from 'rss-parser';
 import { CommandControlService } from '../../../services/command-control/command-control.service';
 
 @Processor('news-queue')

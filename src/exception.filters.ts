@@ -63,7 +63,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `Error ${status} at ${request.method} ${request.url}: ${errorMessage} ${exception}`,
+        `Error ${status} at ${request.method} ${request.url}: ${errorMessage} ${JSON.stringify(exception)}`,
         (exception as Error).stack,
       );
       Sentry.captureException(exception);
