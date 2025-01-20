@@ -291,7 +291,6 @@ export class AuthService {
       throw new BadRequestException('MFA is not available for external users');
     }
 
-    console.log('Generating QR code');
     const secret = this.mfaService.generateTotpSecret();
 
     await this.prisma.user.update({

@@ -105,6 +105,7 @@ export class AuthController {
    * @param req - The HTTP context containing user information.
    * @returns The result of the MFA setup process.
    */
+  @Auth()
   @Post('mfa/setup')
   async setupMfa(@HttpContext() req: IHttpContext) {
     return this.authService.generateQrCode(req);
@@ -117,6 +118,7 @@ export class AuthController {
    * @param code - The MFA setup code to verify.
    * @returns The result of the MFA verification process.
    */
+  @Auth()
   @Post('mfa/setup/verify')
   async setupMfaSecond(
     @HttpContext() req: IHttpContext,
@@ -132,6 +134,7 @@ export class AuthController {
    * @param req - The HTTP context containing user information.
    * @returns The result of the MFA verification process.
    */
+  @Auth()
   @Post('mfa/verify')
   async verifyMfa(
     @Body() mfaRequest: MfaDto,
