@@ -5,7 +5,9 @@
     "DEEPSEEK",
     "dtos",
     "GPTO",
+    "Mixtral",
     "multifactor",
+    "Qwen",
     "SECUREPASSWORD"
   ],
   "sonarlint.connectedMode.project": {

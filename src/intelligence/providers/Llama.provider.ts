@@ -10,17 +10,18 @@ import {
 import OpenAI from 'openai';
 
 @Injectable()
-export class OpenAiProvider implements AIProviderBase {
+export class LlamaProvider implements AIProviderBase {
   private readonly openai: OpenAI;
   private readonly defaultModel: AIModels;
 
   constructor(private readonly configService: ConfigService) {
     this.openai = new OpenAI({
-      apiKey: this.configService.get<string>('OPENAI_API_KEY'),
+      baseURL: 'https://api.llama-api.com',
+      apiKey: this.configService.get<string>('LLAMA_API_KEY'),
     });
     this.defaultModel = this.configService.get<AIModels>(
-      'DEFAULT_OPENAI_MODEL',
-      AIModels.GPT35Turbo,
+      'DEFAULT_LLAMA_MODEL',
+      AIModels.LlamaV3270B,
     );
   }
 
@@ -110,7 +111,7 @@ export class OpenAiProvider implements AIProviderBase {
       };
     } catch (error) {
       console.log(error);
-      throw new Error(`OpenAI generateContentHistory failed: ${error.message}`);
+      throw new Error(`Llama generateContentHistory failed: ${error.message}`);
     }
   }
 
@@ -136,7 +137,7 @@ export class OpenAiProvider implements AIProviderBase {
       };
     } catch (error) {
       throw new Error(
-        `OpenAI generateContentStreamHistory failed: ${error.message}`,
+        `Llama generateContentStreamHistory failed: ${error.message}`,
       );
     }
   }

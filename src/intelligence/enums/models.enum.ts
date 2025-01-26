@@ -16,4 +16,16 @@ export enum AIModels {
   // Deepseek Models
   DeepseekV3 = 'deepseek-chat',
   DeepseekR1 = 'deepseek-reasoner',
+
+  // Llama Models
+  LlamaV3270B = 'llama3.3-70b',
+  LlamaV31400B = 'llama3.1-405b',
+  GemmaV2Big = 'gemma2-27b',
+  GemmaV2Small = 'gemma2-9b',
+  GemmaV1Big = 'gemma-7b',
+  GemmaV1Small = 'gemma-2b',
+  Qwen2 = 'Qwen2-72B',
+  NousResearch = 'Nous-Hermes-2-Mixtral-8x7B-DPO',
+  Mistral22B = 'mixtral-8x22b-instruct',
+  Qwen15Big = 'Qwen1.5-110B-Chat',
 }

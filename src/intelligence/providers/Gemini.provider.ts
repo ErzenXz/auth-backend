@@ -62,14 +62,13 @@ export class GoogleProvider implements AIProviderBase {
         ...options,
       });
       const result = await generativeModel.generateContentStream(prompt);
-      const response = await result.response;
 
       return {
         content: this.streamContent(result.stream),
         usage: {
-          promptTokens: response.usageMetadata?.promptTokenCount || 0,
-          completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: response.usageMetadata?.totalTokenCount || 0,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
         },
       };
     } catch (error) {
@@ -138,14 +137,13 @@ export class GoogleProvider implements AIProviderBase {
       });
 
       const result = await chat.sendMessageStream(prompt);
-      const response = await result.response;
 
       return {
         content: this.streamContent(result.stream),
         usage: {
-          promptTokens: response.usageMetadata?.promptTokenCount || 0,
-          completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: response.usageMetadata?.totalTokenCount || 0,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
         },
       };
     } catch (error) {
