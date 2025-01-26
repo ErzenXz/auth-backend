@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -17,7 +17,7 @@ export class GetAlbumPhotoDto {
    * correct type.
    */
   @ApiProperty({ description: 'The ID of the album which to get the photos' })
-  @IsInt()
+  @IsString()
   @IsNotEmpty()
-  albumId: number;
+  albumId: string;
 }

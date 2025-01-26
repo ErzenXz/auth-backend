@@ -145,7 +145,7 @@ export class OAuthProviderService {
    */
   async handleAuthorizationRequest(
     authRequest: AuthorizationRequest,
-    userId: number,
+    userId: string,
   ) {
     // Validate client and redirect URI
     const client = await this.validateClient(
@@ -211,7 +211,7 @@ export class OAuthProviderService {
    * @returns An object containing application details and requested scopes.
    */
   async getUserConsent(
-    userId: number,
+    userId: string,
     clientId: string,
     requestedScopes: string[],
   ) {
@@ -261,7 +261,7 @@ export class OAuthProviderService {
    * @throws NotFoundException if the client application is not found.
    */
   async grantConsent(
-    userId: number,
+    userId: string,
     clientId: string,
     grantedScopes: string[],
   ) {
@@ -310,7 +310,7 @@ export class OAuthProviderService {
    * @param clientId - The ID of the client application.
    * @throws NotFoundException if the client application is not found.
    */
-  async revokeAccess(userId: number, clientId: string) {
+  async revokeAccess(userId: string, clientId: string) {
     if (!clientId) {
       return response
         .status(400)

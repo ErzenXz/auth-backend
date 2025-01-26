@@ -1,5 +1,5 @@
 export interface DetailedUserInfo {
-  id: number;
+  id: string;
   username: string;
   fullName: string | null;
   email: string;

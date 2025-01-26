@@ -10,7 +10,7 @@
  */
 export class ChangeFullNameCommand {
   constructor(
-    public readonly userId: number,
+    public readonly userId: string,
     public readonly newName: string,
   ) {}
 }

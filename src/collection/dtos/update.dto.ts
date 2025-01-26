@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -27,7 +27,7 @@ export class UpdateAlbumDto {
    * decorators to ensure that it is not empty and is of the correct type.
    */
   @ApiProperty({ description: 'The ID of the album' })
-  @IsNumber()
+  @IsString()
   @IsNotEmpty()
-  id: number;
+  id: string;
 }

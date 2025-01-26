@@ -2,29 +2,16 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { ConfigService } from '@nestjs/config';
-import { AIResponse } from '../models/intelligence.types';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { XCacheService } from 'src/cache/cache.service';
+import { AiWrapperService } from '../providers/ai-wrapper.service';
+import { AIResponse } from '../models/ai-wrapper.types';
+import { AIModels } from '../enums/models.enum';
 
 @Injectable()
 export class BrowserService {
-  private genAI: GoogleGenerativeAI;
-  private defaultModel: string;
-  private advancedModel: string;
+  private readonly aiWrapperService: AiWrapperService;
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly cacheService: XCacheService,
-  ) {
-    const apiKey = this.configService.get<string>('GOOGLE_API_KEY');
-    this.genAI = new GoogleGenerativeAI(apiKey);
-
-    this.defaultModel = this.configService.get<string>('GOOGLE_AI_MODEL_NAME');
-    this.advancedModel = this.configService.get<string>(
-      'GOOGLE_AI_MODEL_NAME_ADVANCED',
-    );
-  }
+  constructor(private readonly cacheService: XCacheService) {}
 
   async fetchAndProcessUrl(url: string): Promise<AIResponse> {
     const cacheKey = `url:${url}`;
@@ -82,7 +69,7 @@ export class BrowserService {
     const combinedText = results.join(' ');
 
     if (!combinedText) {
-      return { result: { content: 'No results found' } };
+      return { content: 'No results found' };
     }
 
     const aiResponse = await this.processWithAI(combinedText, query);
@@ -179,7 +166,8 @@ export class BrowserService {
   }
 
   private extractUrl(url: string): string | null {
-    const match = url.match(/uddg=([^&]+)/);
+    const regex = /uddg=([^&]+)/;
+    const match = regex.exec(url);
     return match ? decodeURIComponent(match[1]) : null;
   }
 
@@ -224,25 +212,12 @@ export class BrowserService {
   `;
 
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: this.advancedModel,
-      });
-
-      const aiResult = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-        },
-      });
-
-      let result = aiResult.response.text().trim();
-
-      return {
-        result: {
-          content: result,
-        },
-      };
-    } catch (error) {}
+      return await this.aiWrapperService.generateContent(
+        AIModels.GeminiFast,
+        prompt,
+      );
+    } catch (error) {
+      return { content: 'Failed to process content' };
+    }
   }
 }

@@ -25,7 +25,7 @@ export class UpdatePhotoDto {
   @ApiProperty({ description: 'The unique identifier of the photo' })
   @IsInt()
   @IsNotEmpty()
-  id: number;
+  id: string;
 
   /**
    * The URL of the photo.

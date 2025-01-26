@@ -7,6 +7,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { AIModels } from '../enums/models.enum';
 
 export class ChatMessageDto {
   @IsString()
@@ -25,9 +26,10 @@ export class CreateChatDto {
   @IsString()
   message: string;
 
+  @IsString()
   @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ChatMessageDto)
-  history?: ChatMessageDto[];
+  chatId?: string;
+
+  @IsNotEmpty()
+  model: AIModels;
 }

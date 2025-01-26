@@ -23,10 +23,10 @@ export class GetMultipleAlbumPhotoDto {
    * @swagger @ApiProperty - Describes the property in the API documentation.
    */
   @ApiProperty({
-    type: [Number],
+    type: [String],
     description: 'Array of album IDs to get the photos from',
   })
   @IsArray()
   @IsNotEmpty()
-  albumIds: number[];
+  albumIds: string[];
 }

@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { AIModels } from '../enums/models.enum';
 
 export class CreateInstructionDto {
   @IsNotEmpty()
@@ -12,4 +13,8 @@ export class CreateInstructionDto {
   @IsOptional()
   @IsString()
   schema?: string;
+
+  @IsOptional()
+  @IsString()
+  model?: AIModels;
 }
