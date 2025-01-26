@@ -316,6 +316,56 @@ Example Matching:
     }));
   }
 
+  async chatGetThreadTitle(chatId: string) {
+    const thread = await this.prisma.aIThread.findFirst({
+      where: { id: chatId },
+      include: {
+        messages: {
+          take: 5,
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!thread) {
+      return 'Chat Thread';
+    }
+
+    if (thread.title) {
+      return thread.title;
+    }
+
+    // If no messages, return default title
+    if (!thread.messages?.length) {
+      return 'New Chat';
+    }
+
+    // Create prompt for AI to analyze messages
+    const prompt = `
+      Analyze these chat messages and generate a short, descriptive title (max 50 chars):
+      ${thread.messages.map((m) => `${m.role}: ${m.content}`).join('\n')}
+    `;
+
+    try {
+      const result = await this.aiWrapper.generateContent(
+        AIModels.GeminiFast,
+        prompt,
+      );
+
+      const title = result.content.trim().substring(0, 50);
+
+      // Update thread title in database
+      await this.prisma.aIThread.update({
+        where: { id: chatId },
+        data: { title },
+      });
+
+      return title;
+    } catch (error) {
+      return 'Chat Thread';
+    }
+  }
+
   async processChat(
     message: string,
     userId: string,
@@ -380,6 +430,8 @@ Example Matching:
         },
       ],
     });
+
+    await this.chatGetThreadTitle(chatId);
 
     return { result, chatId };
   }
@@ -463,18 +515,28 @@ Example Matching:
           role: 'model',
         },
       });
+      await this.chatGetThreadTitle(chatId);
     }.bind(this)();
 
     return streamWithSaving;
   }
 
-  async getChatThreads(userId: string) {
+  async getChatThreads(userId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
     return await this.prisma.aIThread.findMany({
       where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: skip,
     });
   }
-
-  async getChatThreadMessages(userId: string, chatId: string) {
+  async getChatThreadMessages(
+    userId: string,
+    chatId: string,
+    page = 1,
+    limit = 10,
+  ) {
     // First verify the chat belongs to this user
     const thread = await this.prisma.aIThread.findFirst({
       where: {
@@ -487,8 +549,13 @@ Example Matching:
       throw new BadRequestException('Chat thread not found or unauthorized');
     }
 
+    const skip = (page - 1) * limit;
+
     return await this.prisma.aIThreadMessage.findMany({
       where: { chatId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: skip,
     });
   }
 

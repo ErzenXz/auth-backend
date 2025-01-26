@@ -8,6 +8,7 @@ import {
   Put,
   Header,
   Res,
+  Query,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { IntelligenceService } from './intelligence.service';
@@ -183,28 +184,45 @@ export class IntelligenceController {
   }
 
   /**
-   * Get all user chat threads.
+   * Get all user chat threads with pagination.
    * @param {IHttpContext} context - The HTTP context containing user information.
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
    */
   @Get('chat/threads')
   @Auth()
-  async listChatThreads(@HttpContext() context: IHttpContext) {
-    return await this.intelligenceService.getChatThreads(context.user.id);
+  async listChatThreads(
+    @HttpContext() context: IHttpContext,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return await this.intelligenceService.getChatThreads(
+      context.user.id,
+      +page,
+      +limit,
+    );
   }
 
   /**
-   * Get all user chat thread messages.
+   * Get all user chat thread messages with pagination.
+   * @param {string} id - Thread ID
    * @param {IHttpContext} context - The HTTP context containing user information.
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
    */
   @Get('chat/thread/:id')
   @Auth()
   async listChatThreadMessages(
     @Param('id') id: string,
     @HttpContext() context: IHttpContext,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
   ) {
     return await this.intelligenceService.getChatThreadMessages(
       context.user.id,
       id,
+      +page,
+      +limit,
     );
   }
 
