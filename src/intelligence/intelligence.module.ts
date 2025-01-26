@@ -11,13 +11,19 @@ import { AiWrapperService } from './providers/ai-wrapper.service';
 import { GoogleProvider } from './providers/Gemini.provider';
 import { OpenAiProvider } from './providers/OpenAI.provider';
 import { DeepseekProvider } from './providers/Deepseek.provider';
+import { LlamaProvider } from './providers/Llama.provider';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
  * It imports the necessary modules and declares the controllers and providers.
  */
 
-const AIProviders = [GoogleProvider, OpenAiProvider, DeepseekProvider];
+const AIProviders = [
+  GoogleProvider,
+  OpenAiProvider,
+  DeepseekProvider,
+  LlamaProvider,
+];
 @Module({
   imports: [
     PrismaModule,
