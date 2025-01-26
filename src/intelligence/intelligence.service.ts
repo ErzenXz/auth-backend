@@ -342,7 +342,7 @@ Example Matching:
       message: msg.content,
     }));
 
-    this.prisma.aIThreadMessage.create({
+    await this.prisma.aIThreadMessage.create({
       data: {
         chatId: chatId,
         content: message,
@@ -368,17 +368,17 @@ Example Matching:
       ? model
       : AIModels.GeminiFast;
 
-    const result = await this.aiWrapper.generateContent(
+    const result = await this.aiWrapper.generateContentHistory(
       selectedModel,
       generatedPrompt,
-      // userChatHistory,
+      userChatHistory,
     );
 
-    this.prisma.aIThreadMessage.create({
+    await this.prisma.aIThreadMessage.create({
       data: {
         chatId: chatId,
         content: result.content,
-        role: 'assistant',
+        role: 'model',
       },
     });
 
@@ -461,7 +461,7 @@ Example Matching:
         data: {
           chatId,
           content: fullResponse,
-          role: 'assistant',
+          role: 'model',
         },
       });
     }.bind(this)();
@@ -696,11 +696,9 @@ Example Matching:
         - Cite sources when using external information
 
         Output Format Rules:
-        - Return structure: {"content": "markdown_formatted_response"}
+        - Return ALWAYS IN MARKDOWN
 
         Strict Requirements:
-        - Generate valid JSON with "content" field
-        - Ensure proper character escaping
         - Use complete Markdown syntax (no placeholders)
         - Balance original response with external content
         - Maintain natural, conversational tone
