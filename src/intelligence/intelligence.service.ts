@@ -696,11 +696,9 @@ Example Matching:
         - Cite sources when using external information
 
         Output Format Rules:
-        - Return structure: {"content": "markdown_formatted_response"}
+        - Return ALWAYS IN MARKDOWN
 
         Strict Requirements:
-        - Generate valid JSON with "content" field
-        - Ensure proper character escaping
         - Use complete Markdown syntax (no placeholders)
         - Balance original response with external content
         - Maintain natural, conversational tone
