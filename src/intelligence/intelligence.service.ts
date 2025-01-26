@@ -378,7 +378,7 @@ Example Matching:
       data: {
         chatId: chatId,
         content: result.content,
-        role: 'assistant',
+        role: 'model',
       },
     });
 
@@ -461,7 +461,7 @@ Example Matching:
         data: {
           chatId,
           content: fullResponse,
-          role: 'assistant',
+          role: 'model',
         },
       });
     }.bind(this)();
