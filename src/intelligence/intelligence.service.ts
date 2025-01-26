@@ -368,10 +368,10 @@ Example Matching:
       ? model
       : AIModels.GeminiFast;
 
-    const result = await this.aiWrapper.generateContent(
+    const result = await this.aiWrapper.generateContentHistory(
       selectedModel,
       generatedPrompt,
-      // userChatHistory,
+      userChatHistory,
     );
 
     this.prisma.aIThreadMessage.create({
