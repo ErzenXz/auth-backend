@@ -342,7 +342,7 @@ Example Matching:
       message: msg.content,
     }));
 
-    this.prisma.aIThreadMessage.create({
+    await this.prisma.aIThreadMessage.create({
       data: {
         chatId: chatId,
         content: message,
@@ -374,7 +374,7 @@ Example Matching:
       userChatHistory,
     );
 
-    this.prisma.aIThreadMessage.create({
+    await this.prisma.aIThreadMessage.create({
       data: {
         chatId: chatId,
         content: result.content,
