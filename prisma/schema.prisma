@@ -22,7 +22,7 @@ enum Role {
 }
 
 model User {
-  id                  Int       @id @default(autoincrement())
+  id                  String    @id @default(uuid())
   username            String?
   fullName            String?
   email               String    @unique
@@ -67,6 +67,8 @@ model User {
   PushSubscription   PushSubscription[]
   UserMemory         UserMemory[]
   UserInstruction    UserInstruction[]
+  AIThread           AIThread[]
+  Instruction        Instruction[]
 
   @@index([email])
   @@index([username])
@@ -76,9 +78,9 @@ model User {
 }
 
 model RefreshToken {
-  id               Int       @id @default(autoincrement())
+  id               String    @id @default(uuid())
   token            String
-  userId           Int
+  userId           String
   user             User      @relation(fields: [userId], references: [id])
   expires          DateTime
   tokenVersion     Int
@@ -102,12 +104,12 @@ model RefreshToken {
 }
 
 model Photo {
-  id        Int       @id @default(autoincrement())
+  id        String    @id @default(uuid())
   url       String
   caption   String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  userId    Int
+  userId    String
   user      User      @relation(fields: [userId], references: [id])
   albums    Album[]   @relation("AlbumPhotos")
   comments  Comment[]
@@ -118,11 +120,11 @@ model Photo {
 }
 
 model Video {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   url       String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    Int
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   albums    Album[]  @relation("AlbumVideos")
 
@@ -131,11 +133,11 @@ model Video {
 }
 
 model Album {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   title     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    Int
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   photos    Photo[]  @relation("AlbumPhotos")
   videos    Video[]  @relation("AlbumVideos")
@@ -145,13 +147,13 @@ model Album {
 }
 
 model Comment {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    Int
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
-  photoId   Int
+  photoId   String
   photo     Photo    @relation(fields: [photoId], references: [id])
 
   @@index([userId])
@@ -159,11 +161,11 @@ model Comment {
 }
 
 model Like {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   createdAt DateTime @default(now())
-  userId    Int
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
-  photoId   Int
+  photoId   String
   photo     Photo    @relation(fields: [photoId], references: [id])
 
   @@index([userId])
@@ -171,8 +173,8 @@ model Like {
 }
 
 model OAuthClient {
-  id                Int      @id @default(autoincrement())
-  userId            Int      @unique
+  id                String   @id @default(uuid())
+  userId            String   @unique
   user              User     @relation(fields: [userId], references: [id])
   clientId          String   @unique
   clientSecret      String
@@ -197,11 +199,11 @@ model OAuthClient {
 }
 
 model AuthorizationCode {
-  id          Int         @id @default(autoincrement())
+  id          String      @id @default(uuid())
   code        String      @unique
-  clientId    Int
+  clientId    String
   client      OAuthClient @relation(fields: [clientId], references: [id])
-  userId      Int
+  userId      String
   user        User        @relation(fields: [userId], references: [id])
   scope       String[]
   redirectUri String
@@ -219,12 +221,12 @@ model AuthorizationCode {
 }
 
 model OAuthToken {
-  id        Int         @id @default(autoincrement())
+  id        String      @id @default(uuid())
   token     String      @unique
   type      String // 'access_token' or 'refresh_token'
-  clientId  Int
+  clientId  String
   client    OAuthClient @relation(fields: [clientId], references: [id])
-  userId    Int
+  userId    String
   user      User        @relation(fields: [userId], references: [id])
   scope     String[]
   expiresAt DateTime
@@ -241,10 +243,10 @@ model OAuthToken {
 }
 
 model UserConsent {
-  id            Int         @id @default(autoincrement())
-  userId        Int
+  id            String      @id @default(uuid())
+  userId        String
   user          User        @relation(fields: [userId], references: [id])
-  clientId      Int
+  clientId      String
   client        OAuthClient @relation(fields: [clientId], references: [id])
   grantedScopes String[]
   revokedAt     DateTime?
@@ -258,7 +260,7 @@ model UserConsent {
 }
 
 model EmailPasswordReset {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   email     String
   token     String
   expiresAt DateTime
@@ -276,7 +278,7 @@ model EmailPasswordReset {
 }
 
 model EmailVerification {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   email     String
   token     String
   expiresAt DateTime
@@ -294,8 +296,8 @@ model EmailVerification {
 }
 
 model UserEvents {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(uuid())
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   eventType String
   data      String
@@ -307,8 +309,8 @@ model UserEvents {
 }
 
 model UserLogin {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(uuid())
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   ip        String
   userAgent String
@@ -320,8 +322,8 @@ model UserLogin {
 }
 
 model UserPrivaySettings {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(uuid())
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   settings  Json
   createdAt DateTime @default(now())
@@ -331,10 +333,10 @@ model UserPrivaySettings {
 }
 
 model Message {
-  id         Int      @id @default(autoincrement())
-  senderId   Int
+  id         String   @id @default(uuid())
+  senderId   String
   sender     User     @relation("Sender", fields: [senderId], references: [id])
-  receiverId Int
+  receiverId String
   receiver   User     @relation("Receiver", fields: [receiverId], references: [id])
   content    String
   timestamp  DateTime @default(now())
@@ -350,10 +352,10 @@ model Message {
 }
 
 model MessageRead {
-  id        Int      @id @default(autoincrement())
-  messageId Int
+  id        String   @id @default(uuid())
+  messageId String
   message   Message  @relation(fields: [messageId], references: [id])
-  userId    Int
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   readAt    DateTime @default(now())
 
@@ -365,10 +367,10 @@ model MessageRead {
 }
 
 model MessageDeletion {
-  id        Int     @id @default(autoincrement())
+  id        String  @id @default(uuid())
   message   Message @relation(fields: [messageId], references: [id])
-  messageId Int
-  userId    Int
+  messageId String
+  userId    String
   user      User    @relation(fields: [userId], references: [id])
 
   @@unique([messageId, userId])
@@ -378,7 +380,7 @@ model MessageDeletion {
 }
 
 model IpLocation {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   ip          String   @unique
   country     String
   countryCode String
@@ -399,8 +401,8 @@ model IpLocation {
 }
 
 model PushSubscription {
-  id       Int    @id @default(autoincrement())
-  userId   Int
+  id       String @id @default(uuid())
+  userId   String
   endpoint String
   keys     Json
   user     User   @relation(fields: [userId], references: [id])
@@ -409,7 +411,7 @@ model PushSubscription {
 }
 
 model Application {
-  id        Int       @id @default(autoincrement())
+  id        String    @id @default(uuid())
   name      String
   apiKey    String    @unique
   products  Product[]
@@ -421,13 +423,13 @@ model Application {
 }
 
 model Product {
-  id                Int         @id @default(autoincrement())
+  id                String      @id @default(uuid())
   name              String
   description       String?
   price             Float
   externalProductId String      @map("stripeProductId")
   externalPriceId   String
-  applicationId     Int
+  applicationId     String
   application       Application @relation(fields: [applicationId], references: [id])
   purchases         Purchase[]
   createdAt         DateTime    @default(now())
@@ -435,14 +437,14 @@ model Product {
 }
 
 model Plan {
-  id                Int            @id @default(autoincrement())
+  id                String         @id @default(uuid())
   name              String
   description       String?
   price             Float
   interval          Int
   externalProductId String
   externalPriceId   String
-  applicationId     Int
+  applicationId     String
   application       Application    @relation(fields: [applicationId], references: [id])
   subscriptions     Subscription[]
   createdAt         DateTime       @default(now())
@@ -450,17 +452,17 @@ model Plan {
 }
 
 model Purchase {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  productId   Int
+  id          String   @id @default(uuid())
+  userId      String
+  productId   String
   product     Product  @relation(fields: [productId], references: [id])
   purchasedAt DateTime @default(now())
 }
 
 model Subscription {
-  id                     Int       @id @default(autoincrement())
-  userId                 Int
-  planId                 Int
+  id                     String    @id @default(uuid())
+  userId                 String
+  planId                 String
   plan                   Plan      @relation(fields: [planId], references: [id])
   externalSubscriptionId String
   startDate              DateTime  @default(now())
@@ -470,17 +472,20 @@ model Subscription {
 }
 
 model Instruction {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   name        String
   description String?
   schema      Json?
+  model       String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model UserMemory {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(uuid())
+  userId    String
   key       String
   value     String
   createdAt DateTime @default(now())
@@ -493,8 +498,8 @@ model UserMemory {
 }
 
 model UserInstruction {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(uuid())
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   job       String
   createdAt DateTime @default(now())
@@ -504,7 +509,7 @@ model UserInstruction {
 }
 
 model Source {
-  id        Int       @id @default(autoincrement())
+  id        String    @id @default(uuid())
   name      String
   url       String    @unique
   country   String
@@ -516,13 +521,13 @@ model Source {
 }
 
 model Article {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   title       String
   link        String   @unique
   content     String?
   summary     String?
   publishedAt DateTime
-  sourceId    Int
+  sourceId    String
   source      Source   @relation(fields: [sourceId], references: [id])
   author      String?
   imageUrl    String?
@@ -531,4 +536,30 @@ model Article {
   language    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model AIThread {
+  id        String            @id @default(uuid())
+  title     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  userId    String?
+  user      User?             @relation(fields: [userId], references: [id])
+  messages  AIThreadMessage[] @relation("AIThreadMessage")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([title])
+}
+
+model AIThreadMessage {
+  id        String   @id @default(uuid())
+  content   String
+  role      String // 'user' or 'assistant'
+  chatId    String
+  chat      AIThread @relation("AIThreadMessage", fields: [chatId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([chatId])
+  @@index([createdAt])
 }

@@ -152,7 +152,7 @@ export class PhotoService {
     return this.prismaService.photo
       .update({
         where: {
-          id: Number(updateDto.id),
+          id: updateDto.id,
           userId: context.user.id,
         },
         data: {

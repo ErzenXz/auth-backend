@@ -1,5 +1,5 @@
 export class UserMessage {
-  receiverId: number;
-  senderId: number;
+  receiverId: string;
+  senderId: string;
   content: string;
 }

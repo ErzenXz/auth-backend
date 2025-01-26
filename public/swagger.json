@@ -1050,7 +1050,7 @@
             "in": "path",
             "description": "The unique identifier of the photo",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1074,7 +1074,7 @@
             "in": "path",
             "description": "The ID of the album which to get the photos",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1269,7 +1269,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1329,7 +1329,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1352,7 +1352,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1417,7 +1417,7 @@
         ]
       }
     },
-    "/intelligence/instructions": {
+    "/intelligence/dev/instructions": {
       "get": {
         "operationId": "IntelligenceController_listInstructions",
         "parameters": [],
@@ -1431,7 +1431,7 @@
         ]
       }
     },
-    "/intelligence/instruction/{id}": {
+    "/intelligence/dev/instruction/{id}": {
       "delete": {
         "operationId": "IntelligenceController_deleteInstruction",
         "parameters": [
@@ -1440,7 +1440,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1454,7 +1454,21 @@
         ]
       }
     },
-    "/intelligence/instruction": {
+    "/intelligence/dev/instructions/user": {
+      "get": {
+        "operationId": "IntelligenceController_listUserInstructions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/dev/instruction": {
       "post": {
         "operationId": "IntelligenceController_createInstruction",
         "parameters": [],
@@ -1478,7 +1492,7 @@
         ]
       }
     },
-    "/intelligence/process": {
+    "/intelligence/dev/instruction/process": {
       "post": {
         "operationId": "IntelligenceController_processPrompt",
         "parameters": [],
@@ -1492,7 +1506,7 @@
         ]
       }
     },
-    "/intelligence/process/beta": {
+    "/intelligence/dev/instruction/process/beta": {
       "post": {
         "operationId": "IntelligenceController_processPromptBeta",
         "parameters": [],
@@ -1530,7 +1544,68 @@
         ]
       }
     },
-    "/intelligence/userMemory": {
+    "/intelligence/chat/stream": {
+      "post": {
+        "operationId": "IntelligenceController_chatStream",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/threads": {
+      "get": {
+        "operationId": "IntelligenceController_listChatThreads",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{id}": {
+      "get": {
+        "operationId": "IntelligenceController_listChatThreadMessages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/memory": {
       "get": {
         "operationId": "IntelligenceController_listUserMemory",
         "parameters": [],
@@ -1556,7 +1631,7 @@
         ]
       }
     },
-    "/intelligence/user-instruction": {
+    "/intelligence/chat/instruction": {
       "post": {
         "operationId": "IntelligenceController_createUserInstruction",
         "parameters": [],
@@ -1592,7 +1667,7 @@
         ]
       }
     },
-    "/intelligence/user-instruction/{id}": {
+    "/intelligence/chat/instruction/{id}": {
       "put": {
         "operationId": "IntelligenceController_updateUserInstruction",
         "parameters": [
@@ -1601,7 +1676,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -1632,7 +1707,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -2376,7 +2451,7 @@
             "description": "The title of the album"
           },
           "id": {
-            "type": "number",
+            "type": "string",
             "description": "The ID of the album"
           }
         },
@@ -2389,7 +2464,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "string",
             "description": "The ID of the album to delete"
           }
         },
@@ -2431,7 +2506,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "string",
             "description": "The unique identifier of the photo"
           },
           "url": {
@@ -2452,7 +2527,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "number",
+            "type": "string",
             "description": "ID of the photo to be deleted"
           }
         },
@@ -2467,7 +2542,7 @@
             "description": "Array of album IDs to get the photos from",
             "type": "array",
             "items": {
-              "type": "number"
+              "type": "string"
             }
           }
         },

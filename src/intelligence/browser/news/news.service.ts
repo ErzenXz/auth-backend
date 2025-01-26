@@ -36,14 +36,14 @@ export class NewsService implements OnModuleInit {
     return this.prisma.source.create({ data: createSourceDto });
   }
 
-  async updateSource(id: number, updateSourceDto: UpdateSourceDto) {
+  async updateSource(id: string, updateSourceDto: UpdateSourceDto) {
     return this.prisma.source.update({
       where: { id },
       data: updateSourceDto,
     });
   }
 
-  async deleteSource(id: number) {
+  async deleteSource(id: string) {
     return this.prisma.source.delete({ where: { id } });
   }
 
@@ -91,7 +91,7 @@ export class NewsService implements OnModuleInit {
     };
   }
 
-  async getArticleById(id: number) {
+  async getArticleById(id: string) {
     return this.prisma.article.findUnique({ where: { id } });
   }
 

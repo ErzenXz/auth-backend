@@ -76,5 +76,5 @@ export class CreatePhotoDto {
   })
   @IsArray()
   @IsOptional()
-  albumIds?: number[];
+  albumIds?: string[];
 }

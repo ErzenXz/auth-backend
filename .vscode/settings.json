@@ -2,12 +2,15 @@
   "cSpell.words": [
     "birthdate",
     "cqrs",
+    "DEEPSEEK",
     "dtos",
+    "GPTO",
     "multifactor",
     "SECUREPASSWORD"
   ],
   "sonarlint.connectedMode.project": {
     "connectionId": "erzenxz",
     "projectKey": "ErzenXz_auth-backend"
-  }
+  },
+  "codeQL.githubDatabase.download": "never"
 }

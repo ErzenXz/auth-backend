@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -16,7 +16,7 @@ export class DeletePhotoDto {
    * decorators to ensure that it is not empty and is of the correct type.
    */
   @ApiProperty({ description: 'ID of the photo to be deleted' })
-  @IsInt()
+  @IsString()
   @IsNotEmpty()
-  id: number;
+  id: string;
 }

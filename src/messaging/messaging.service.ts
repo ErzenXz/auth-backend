@@ -84,7 +84,7 @@ export class MessagingService {
    * @param {number} userId - The ID of the user whose conversation threads are to be retrieved.
    * @returns {Promise<any[]>} A promise that resolves to an array of conversation threads.
    */
-  async getConversationThreads(userId: number) {
+  async getConversationThreads(userId: string) {
     if (!userId) {
       return response.status(400).json({ message: 'Invalid user ID' });
     }
@@ -119,7 +119,7 @@ export class MessagingService {
       },
     });
 
-    const conversationsMap = new Map<number, any>();
+    const conversationsMap = new Map<string, any>();
 
     for (const message of threads) {
       const otherUserId =
@@ -172,8 +172,8 @@ export class MessagingService {
    * @returns {Promise<any[]>} A promise that resolves to an array of messages for the conversation.
    */
   async getMessagesForConversation(
-    userId: number,
-    conversationUserId: number,
+    userId: string,
+    conversationUserId: string,
     pageSize: number,
     page: number,
   ) {
@@ -260,7 +260,7 @@ export class MessagingService {
    * @param {number} messageId - The ID of the message to be deleted.
    * @returns {Promise<{ success?: boolean; error?: string }>} A promise that resolves to the result of the deletion operation.
    */
-  async deleteMessage(context: IHttpContext, messageId: number) {
+  async deleteMessage(context: IHttpContext, messageId: string) {
     try {
       if (!messageId) {
         return response.status(400).json({ message: 'Invalid message ID' });
@@ -301,7 +301,7 @@ export class MessagingService {
    * @param {number} userId - The ID of the user in the conversation to be deleted.
    * @returns {Promise<{ success: boolean }>} A promise that resolves to the result of the deletion operation.
    */
-  async deleteConversation(context: IHttpContext, userId: number) {
+  async deleteConversation(context: IHttpContext, userId: string) {
     if (context.user.id === userId) {
       return response
         .status(400)
@@ -436,7 +436,7 @@ export class MessagingService {
    * @param {any} subscription - The subscription object containing push notification details.
    * @returns {Promise<void>} A promise that resolves when the subscription is saved.
    */
-  async saveSubscription(userId: number, subscription: any) {
+  async saveSubscription(userId: string, subscription: any) {
     await this.prisma.pushSubscription.create({
       data: {
         userId: userId,
@@ -455,7 +455,7 @@ export class MessagingService {
    * @param {number} userId - The ID of the user whose subscriptions are to be retrieved.
    * @returns {Promise<any[]>} A promise that resolves to an array of subscriptions.
    */
-  async getSubscriptions(userId: number) {
+  async getSubscriptions(userId: string) {
     return this.prisma.pushSubscription.findMany({
       where: { userId },
     });
@@ -495,7 +495,7 @@ export class MessagingService {
    * @returns {Promise<void>} A promise that resolves when the subscription is deleted.
    */
 
-  async deleteSubscription(userId: number, endpoint: string) {
+  async deleteSubscription(userId: string, endpoint: string) {
     await this.prisma.pushSubscription.deleteMany({
       where: {
         userId,

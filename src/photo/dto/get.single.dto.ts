@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -17,7 +17,7 @@ export class GetSinglePhotoDto {
    * correct type.
    */
   @ApiProperty({ description: 'The unique identifier of the photo' })
-  @IsInt()
+  @IsString()
   @IsNotEmpty()
-  id: number;
+  id: string;
 }

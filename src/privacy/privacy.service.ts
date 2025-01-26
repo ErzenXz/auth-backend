@@ -22,7 +22,7 @@ export class PrivacyService {
    * @returns {Promise<any>} A promise that resolves to the user's privacy settings.
    * @throws {NotFoundException} Throws an exception if the user is not found.
    */
-  async initializeDefaultSettings(userId: number) {
+  async initializeDefaultSettings(userId: string) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -56,7 +56,7 @@ export class PrivacyService {
    * @returns {Promise<any>} A promise that resolves to the user object if found.
    * @throws {NotFoundException} Throws an exception if the user is not found.
    */
-  private async validateUser(userId: number) {
+  private async validateUser(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -73,7 +73,7 @@ export class PrivacyService {
    * @returns {Promise<any>} A promise that resolves to the user's privacy settings.
    * @throws {NotFoundException} Throws an exception if the privacy settings are not found.
    */
-  async getPrivacySettings(userId: number) {
+  async getPrivacySettings(userId: string) {
     const settings = await this.prisma.userPrivaySettings.findFirst({
       where: { userId: userId },
     });
@@ -94,7 +94,7 @@ export class PrivacyService {
    * @throws {Error} Throws an error if privacy settings already exist for the user.
    * @throws {NotFoundException} Throws an exception if the user is not found.
    */
-  async createPrivacySettings(userId: number, settings: any) {
+  async createPrivacySettings(userId: string, settings: any) {
     await this.validateUser(userId);
 
     // Check if settings already exist
@@ -132,7 +132,7 @@ export class PrivacyService {
    * @returns {Promise<any>} A promise that resolves to the updated privacy settings.
    * @throws {NotFoundException} Throws an exception if the user or existing settings are not found.
    */
-  async updatePrivacySettings(userId: number, newSettings: any) {
+  async updatePrivacySettings(userId: string, newSettings: any) {
     await this.validateUser(userId);
 
     // Get existing settings
@@ -176,7 +176,7 @@ export class PrivacyService {
    * @returns {Promise<any>} A promise that resolves to the result of the deletion operation.
    * @throws {NotFoundException} Throws an exception if the user or settings are not found.
    */
-  async deletePrivacySettings(userId: number) {
+  async deletePrivacySettings(userId: string) {
     await this.validateUser(userId);
 
     const settings = await this.prisma.userPrivaySettings.findFirst({

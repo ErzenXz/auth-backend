@@ -37,13 +37,13 @@ export class NewsController {
     @Param('id') id: string,
     @Body() updateSourceDto: UpdateSourceDto,
   ) {
-    return this.newsService.updateSource(Number(id), updateSourceDto);
+    return this.newsService.updateSource(id, updateSourceDto);
   }
 
   @Delete('sources/:id')
   @Auth(Role.ADMIN, Role.SUPER_ADMIN)
   async deleteSource(@Param('id') id: string) {
-    return this.newsService.deleteSource(Number(id));
+    return this.newsService.deleteSource(id);
   }
 
   @Get('get-articles')
@@ -57,7 +57,7 @@ export class NewsController {
   @ApiOperation({ summary: 'Get article by id' })
   @ApiResponse({ status: 200, description: 'Article.' })
   getArticle(@Param('id') id: string) {
-    return this.newsService.getArticleById(Number(id));
+    return this.newsService.getArticleById(id);
   }
 
   @Get('get-sources')

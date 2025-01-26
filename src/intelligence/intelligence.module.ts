@@ -7,7 +7,17 @@ import { TextToSpeechModule } from './speech/speech.module';
 import { BrowserModule } from './browser/browser.module';
 import { BrowserService } from './browser/browser.service';
 import { XCacheModule } from 'src/cache/cache.module';
+import { AiWrapperService } from './providers/ai-wrapper.service';
+import { GoogleProvider } from './providers/Gemini.provider';
+import { OpenAiProvider } from './providers/OpenAI.provider';
+import { DeepseekProvider } from './providers/Deepseek.provider';
 
+/**
+ * IntelligenceModule is the main module for the intelligence feature.
+ * It imports the necessary modules and declares the controllers and providers.
+ */
+
+const AIProviders = [GoogleProvider, OpenAiProvider, DeepseekProvider];
 @Module({
   imports: [
     PrismaModule,
@@ -17,6 +27,11 @@ import { XCacheModule } from 'src/cache/cache.module';
     XCacheModule,
   ],
   controllers: [IntelligenceController],
-  providers: [IntelligenceService, BrowserService],
+  providers: [
+    IntelligenceService,
+    BrowserService,
+    AiWrapperService,
+    ...AIProviders,
+  ],
 })
 export class IntelligenceModule {}

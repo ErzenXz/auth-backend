@@ -101,7 +101,7 @@ export class MessagingController {
   @Auth()
   async getMessages(
     @HttpContext() context: IHttpContext,
-    @Param('conversationUserId') conversationUserId: number,
+    @Param('conversationUserId') conversationUserId: string,
     @Query('pageSize') pageSize = 20,
     @Query('page') page = 1,
   ) {
@@ -111,7 +111,7 @@ export class MessagingController {
 
     return this.messagingService.getMessagesForConversation(
       context.user.id,
-      +conversationUserId,
+      conversationUserId,
       +pageSize,
       +page,
     );
@@ -152,7 +152,7 @@ export class MessagingController {
   @Auth()
   async deleteMessage(
     @HttpContext() context: IHttpContext,
-    @Param('messageId') messageId: number,
+    @Param('messageId') messageId: string,
   ) {
     return this.messagingService.deleteMessage(context, messageId);
   }
@@ -168,7 +168,7 @@ export class MessagingController {
   @Auth()
   async deleteConversation(
     @HttpContext() context: IHttpContext,
-    @Param('conversationUserId') conversationUserId: number,
+    @Param('conversationUserId') conversationUserId: string,
   ) {
     return this.messagingService.deleteConversation(
       context,

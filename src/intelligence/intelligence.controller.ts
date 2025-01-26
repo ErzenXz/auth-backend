@@ -6,10 +6,12 @@ import {
   Get,
   Param,
   Put,
+  Header,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { IntelligenceService } from './intelligence.service';
 import { CreateInstructionDto } from './dtos/create-instruction.dto';
-import { AIResponse } from './models/intelligence.types';
 import { CreateChatDto } from './dtos/create-chat.dto';
 import { Auth, HttpContext } from 'src/auth/decorators';
 import { IHttpContext } from 'src/auth/models';
@@ -17,6 +19,7 @@ import { Role } from 'src/auth/enums';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateUserInstructionDto } from './dtos/create-user-instruction.dto';
 import { UpdateUserInstructionDto } from './dtos/update-user-instruction.dto';
+import { AIResponse } from './models/ai-wrapper.types';
 
 /**
  * IntelligenceController handles operations related to intelligence instructions and user memory.
@@ -32,7 +35,7 @@ export class IntelligenceController {
    * @returns {Promise<Instruction[]>} A promise that resolves to an array of instructions.
    */
   @Auth(Role.ADMIN, Role.SUPER_ADMIN)
-  @Get('instructions')
+  @Get('dev/instructions')
   async listInstructions() {
     return await this.intelligenceService.listInstructions();
   }
@@ -43,9 +46,20 @@ export class IntelligenceController {
    * @returns {Promise<void>} A promise that resolves when the instruction is deleted.
    */
   @Auth(Role.ADMIN, Role.SUPER_ADMIN)
-  @Delete('instruction/:id')
-  async deleteInstruction(@Param('id') id: number) {
-    return await this.intelligenceService.deleteInstruction(id);
+  @Delete('dev/instruction/:id')
+  async deleteInstruction(@Param('id') id: string) {
+    return await this.intelligenceService.deleteDevInstruction(id);
+  }
+
+  /**
+   * Retrieves all instructions created by the user.
+   * @param {number} IHttpContext - The HTTP context containing user information.
+   * @returns {Promise<Instruction>} A promise that resolves to the instruction.
+   */
+  @Auth()
+  @Get('dev/instructions/user')
+  async listUserInstructions(@HttpContext() context: IHttpContext) {
+    return await this.intelligenceService.listDevInstructions(context.user.id);
   }
 
   /**
@@ -53,13 +67,18 @@ export class IntelligenceController {
    * @param {CreateInstructionDto} createInstructionDto - The data transfer object containing instruction details.
    * @returns {Promise<Instruction>} A promise that resolves to the created instruction.
    */
-  @Auth(Role.ADMIN, Role.SUPER_ADMIN)
-  @Post('instruction')
-  async createInstruction(@Body() createInstructionDto: CreateInstructionDto) {
-    return await this.intelligenceService.createInstruction(
+  @Auth()
+  @Post('dev/instruction')
+  async createInstruction(
+    @HttpContext() context: IHttpContext,
+    @Body() createInstructionDto: CreateInstructionDto,
+  ) {
+    return await this.intelligenceService.createDevInstruction(
       createInstructionDto.name,
+      context.user.id,
       createInstructionDto.description,
       createInstructionDto.schema,
+      createInstructionDto.model,
     );
   }
 
@@ -71,13 +90,13 @@ export class IntelligenceController {
    * @returns {Promise<AIResponse>} A promise that resolves to the AI response.
    */
   @Auth()
-  @Post('process')
+  @Post('dev/instruction/process')
   async processPrompt(
-    @Body('instructionId') instructionId: number,
+    @Body('instructionId') instructionId: string,
     @Body('prompt') prompt: string,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    return await this.intelligenceService.processInstruction(
+    return await this.intelligenceService.processDevInstruction(
       instructionId,
       prompt,
       context,
@@ -91,12 +110,12 @@ export class IntelligenceController {
    * @returns {Promise<AIResponse>} A promise that resolves to the AI response.
    */
   @Auth()
-  @Post('process/beta')
+  @Post('dev/instruction/process/beta')
   async processPromptBeta(
     @Body('prompt') prompt: string,
     @HttpContext() context: IHttpContext,
   ): Promise<AIResponse> {
-    return await this.intelligenceService.processInstructionBeta(
+    return await this.intelligenceService.processDevInstructionBeta(
       prompt,
       context,
     );
@@ -113,12 +132,79 @@ export class IntelligenceController {
   async chat(
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
-  ): Promise<AIResponse> {
+  ): Promise<any> {
     // Process the chat message
     return await this.intelligenceService.processChat(
       createChatDto.message,
-      context,
-      createChatDto.history,
+      context.user.id,
+      createChatDto.chatId,
+      createChatDto.model,
+    );
+  }
+
+  /**
+   * Processes a chat message with streaming response.
+   * @param {CreateChatDto} createChatDto - The chat message details.
+   * @param {IHttpContext} context - HTTP context with user info.
+   * @param {Response} res - Express response object.
+   * @returns {Promise<void>}
+   */
+  @Post('chat/stream')
+  @Auth()
+  @Header('Content-Type', 'text/event-stream')
+  @Header('Cache-Control', 'no-cache')
+  @Header('Connection', 'keep-alive')
+  async chatStream(
+    @Body() createChatDto: CreateChatDto,
+    @HttpContext() context: IHttpContext,
+    @Res() res: Response,
+  ) {
+    try {
+      const stream = await this.intelligenceService.processChatStream(
+        createChatDto.message,
+        context.user.id,
+        createChatDto.chatId,
+        createChatDto.model,
+      );
+
+      // Write each chunk to the response
+      for await (const chunk of stream) {
+        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+      }
+
+      // End the response
+      res.end();
+    } catch (error) {
+      res
+        .status(500)
+        .write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.end();
+    }
+  }
+
+  /**
+   * Get all user chat threads.
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   */
+  @Get('chat/threads')
+  @Auth()
+  async listChatThreads(@HttpContext() context: IHttpContext) {
+    return await this.intelligenceService.getChatThreads(context.user.id);
+  }
+
+  /**
+   * Get all user chat thread messages.
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   */
+  @Get('chat/thread/:id')
+  @Auth()
+  async listChatThreadMessages(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.getChatThreadMessages(
+      context.user.id,
+      id,
     );
   }
 
@@ -127,10 +213,10 @@ export class IntelligenceController {
    * @param {IHttpContext} context - The HTTP context containing user information.
    * @returns {Promise<UserMemory[]>} A promise that resolves to an array of user memory items.
    */
-  @Get('userMemory')
+  @Get('chat/memory')
   @Auth()
   async listUserMemory(@HttpContext() context: IHttpContext) {
-    return await this.intelligenceService.listUserMemory(context.user.id);
+    return await this.intelligenceService.getChatMemory(context.user.id);
   }
 
   /**
@@ -138,10 +224,10 @@ export class IntelligenceController {
    * @param {IHttpContext} context - The HTTP context containing user information.
    * @returns {Promise<void>} A promise that resolves when the user's memory is deleted.
    */
-  @Delete('userMemory')
+  @Delete('chat/memory')
   @Auth()
   async deleteUserMemory(@HttpContext() context: IHttpContext) {
-    return await this.intelligenceService.deleteMemory(context.user.id);
+    return await this.intelligenceService.deleteChatMemory(context.user.id);
   }
 
   /**
@@ -151,12 +237,12 @@ export class IntelligenceController {
    * @returns {Promise<UserInstruction>} A promise that resolves to the created user instruction.
    */
   @Auth()
-  @Post('user-instruction')
+  @Post('chat/instruction')
   async createUserInstruction(
     @Body() createUserInstructionDto: CreateUserInstructionDto,
     @HttpContext() context: IHttpContext,
   ) {
-    return this.intelligenceService.createUserInstruction(
+    return this.intelligenceService.createChatUserInstruction(
       context.user.id,
       createUserInstructionDto.job,
     );
@@ -168,9 +254,9 @@ export class IntelligenceController {
    * @returns {Promise<UserInstruction[]>} A promise that resolves to an array of user instructions.
    */
   @Auth()
-  @Get('user-instruction')
+  @Get('chat/instruction')
   async getUserInstructions(@HttpContext() context: IHttpContext) {
-    return this.intelligenceService.getUserInstructions(context.user.id);
+    return this.intelligenceService.getChatUserInstructions(context.user.id);
   }
 
   /**
@@ -181,13 +267,13 @@ export class IntelligenceController {
    * @returns {Promise<UserInstruction>} A promise that resolves to the updated user instruction.
    */
   @Auth()
-  @Put('user-instruction/:id')
+  @Put('chat/instruction/:id')
   async updateUserInstruction(
-    @Param('id') id: number,
+    @Param('id') id: string,
     @Body() updateUserInstructionDto: UpdateUserInstructionDto,
     @HttpContext() context: IHttpContext,
   ) {
-    return this.intelligenceService.updateUserInstruction(
+    return this.intelligenceService.updateChatUserInstruction(
       context.user.id,
       id,
       updateUserInstructionDto.job,
@@ -201,11 +287,14 @@ export class IntelligenceController {
    * @returns {Promise<void>} A promise that resolves when the user instruction is deleted.
    */
   @Auth()
-  @Delete('user-instruction/:id')
+  @Delete('chat/instruction/:id')
   async deleteUserInstruction(
-    @Param('id') id: number,
+    @Param('id') id: string,
     @HttpContext() context: IHttpContext,
   ) {
-    return this.intelligenceService.deleteUserInstruction(context.user.id, id);
+    return this.intelligenceService.deleteChatUserInstruction(
+      context.user.id,
+      id,
+    );
   }
 }

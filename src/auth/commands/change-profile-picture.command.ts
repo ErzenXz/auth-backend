@@ -10,7 +10,7 @@
  */
 export class ChangeProfilePictureCommand {
   constructor(
-    public readonly userId: number,
+    public readonly userId: string,
     public readonly newPhoto: string,
   ) {}
 }

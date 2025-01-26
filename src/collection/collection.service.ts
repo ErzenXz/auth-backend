@@ -91,7 +91,7 @@ export class CollectionService {
     return this.prismaService.album
       .update({
         where: {
-          id: Number(updateDto.id),
+          id: updateDto.id,
           userId: context.user.id,
         },
         data: {
@@ -121,7 +121,7 @@ export class CollectionService {
     return this.prismaService.album
       .delete({
         where: {
-          id: Number(albumId),
+          id: albumId,
           userId: context.user.id,
         },
       })
