@@ -16,12 +16,12 @@ export class LlamaProvider implements AIProviderBase {
 
   constructor(private readonly configService: ConfigService) {
     this.openai = new OpenAI({
-      baseURL: 'https://api.llama-api.com',
+      baseURL: 'https://api.fireworks.ai/inference/v1',
       apiKey: this.configService.get<string>('LLAMA_API_KEY'),
     });
     this.defaultModel = this.configService.get<AIModels>(
       'DEFAULT_LLAMA_MODEL',
-      AIModels.LlamaV3270B,
+      AIModels.LlamaV3_3_70B,
     );
   }
 
