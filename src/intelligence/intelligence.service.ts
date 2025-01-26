@@ -606,7 +606,6 @@ Example Matching:
     );
 
     let response = aiResult.content.trim();
-    response = response.replace(/```json\s?|\s?```/g, '').trim();
 
     // Validate response
     if (response !== 'no' || response.length > 0) {
