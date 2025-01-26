@@ -34,16 +34,16 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        tools: [
-          {
-            googleSearchRetrieval: {
-              dynamicRetrievalConfig: {
-                mode: DynamicRetrievalMode.MODE_DYNAMIC,
-                dynamicThreshold: 0.7,
-              },
-            },
-          },
-        ],
+        // tools: [
+        //   {
+        //     googleSearchRetrieval: {
+        //       dynamicRetrievalConfig: {
+        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
+        //         dynamicThreshold: 0.7,
+        //       },
+        //     },
+        //   },
+        // ],
         ...options,
       });
       const result = await generativeModel.generateContent(prompt);
@@ -72,16 +72,16 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        tools: [
-          {
-            googleSearchRetrieval: {
-              dynamicRetrievalConfig: {
-                mode: DynamicRetrievalMode.MODE_DYNAMIC,
-                dynamicThreshold: 0.7,
-              },
-            },
-          },
-        ],
+        // tools: [
+        //   {
+        //     googleSearchRetrieval: {
+        //       dynamicRetrievalConfig: {
+        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
+        //         dynamicThreshold: 0.7,
+        //       },
+        //     },
+        //   },
+        // ],
         ...options,
       });
       const result = await generativeModel.generateContentStream(prompt);
@@ -118,16 +118,16 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        tools: [
-          {
-            googleSearchRetrieval: {
-              dynamicRetrievalConfig: {
-                mode: DynamicRetrievalMode.MODE_DYNAMIC,
-                dynamicThreshold: 0.7,
-              },
-            },
-          },
-        ],
+        // tools: [
+        //   {
+        //     googleSearchRetrieval: {
+        //       dynamicRetrievalConfig: {
+        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
+        //         dynamicThreshold: 0.7,
+        //       },
+        //     },
+        //   },
+        // ],
         ...options,
       });
 
@@ -162,16 +162,16 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        tools: [
-          {
-            googleSearchRetrieval: {
-              dynamicRetrievalConfig: {
-                mode: DynamicRetrievalMode.MODE_DYNAMIC,
-                dynamicThreshold: 0.7,
-              },
-            },
-          },
-        ],
+        // tools: [
+        //   {
+        //     googleSearchRetrieval: {
+        //       dynamicRetrievalConfig: {
+        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
+        //         dynamicThreshold: 0.7,
+        //       },
+        //     },
+        //   },
+        // ],
         ...options,
       });
 
