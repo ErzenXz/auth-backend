@@ -78,7 +78,7 @@ export class LlamaProvider implements AIProviderBase {
     history: ChatHistory[],
   ): { role: string; content: string }[] {
     return history.map((entry) => ({
-      role: entry.role,
+      role: entry.role === 'user' ? 'user' : 'assistant',
       content: entry.message,
     }));
   }
