@@ -53,7 +53,7 @@ export class IntelligenceService {
   ): Promise<AIResponse> {
     try {
       const instruction = await this.prisma.instruction.findUnique({
-        where: { id: instructionId },
+        where: { id: instructionId, userId: context.user.id },
       });
 
       if (!instruction) {
@@ -342,8 +342,14 @@ Example Matching:
 
     // Create prompt for AI to analyze messages
     const prompt = `
-      Analyze these chat messages and generate a short, descriptive title (max 50 chars):
+      Analyze these chat messages and generate a single, descriptive title (max 50 chars):
       ${thread.messages.map((m) => `${m.role}: ${m.content}`).join('\n')}
+
+      Output requirements:
+      - Return a single title string
+      - Maximum 50 characters
+      - No options or alternatives
+      - No explanations or additional text
     `;
 
     try {
@@ -397,6 +403,10 @@ Example Matching:
     const searchData = await this.chatGetSearchData(message);
     const userInstructions = await this.chatGetUserInstructions(userId);
 
+    this.extractAndSaveMemory(message, userId, userMemories).catch((error) => {
+      console.error('Failed to save user memory:', error);
+    });
+
     const generatedPrompt = this.createUserChattingPrompt(
       message,
       userMemories,
@@ -416,17 +426,20 @@ Example Matching:
       userChatHistory,
     );
 
+    const createdAtUtc = new Date();
     await this.prisma.aIThreadMessage.createMany({
       data: [
         {
           chatId: chatId,
           content: message,
           role: 'user',
+          createdAt: createdAtUtc,
         },
         {
           chatId: chatId,
           content: result.content,
           role: 'model',
+          createdAt: new Date(createdAtUtc.getTime() + 1000),
         },
       ],
     });
@@ -468,6 +481,10 @@ Example Matching:
     const generalInfo = this.chatGetGeneralInfo();
     const searchData = await this.chatGetSearchData(message);
     const userInstructions = await this.chatGetUserInstructions(userId);
+
+    this.extractAndSaveMemory(message, userId, userMemories).catch((error) => {
+      console.error('Failed to save user memory:', error);
+    });
 
     // Generate prompt
     const generatedPrompt = this.createUserChattingPrompt(
@@ -572,11 +589,6 @@ Example Matching:
       .map((m) => `- ${m.key}: ${m.value} ${this.getTimeAgo(m.createdAt)}`)
       .join('\n')}\n`;
 
-    this.extractAndSaveMemory(prompt, userId, formattedMemories).catch(
-      (error) => {
-        console.error('Failed to save user memory:', error);
-      },
-    );
     return formattedMemories;
   }
 
@@ -852,7 +864,7 @@ Create meaningful, supportive conversations that feel genuinely human and helpfu
     You are an intelligent assistant with advanced human-like memory capabilities. Your task is to extract essential personal information from user messages and manage the user's memory efficiently.
 
     User Memories: \n ${memories}
-    Message to ANALYZE: "\ ${message}"
+    Message to ANALYZE: "${message}"
 
     Instructions:
 

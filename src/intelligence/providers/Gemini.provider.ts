@@ -34,16 +34,6 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        // tools: [
-        //   {
-        //     googleSearchRetrieval: {
-        //       dynamicRetrievalConfig: {
-        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
-        //         dynamicThreshold: 0.7,
-        //       },
-        //     },
-        //   },
-        // ],
         ...options,
       });
       const result = await generativeModel.generateContent(prompt);
@@ -72,16 +62,6 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        // tools: [
-        //   {
-        //     googleSearchRetrieval: {
-        //       dynamicRetrievalConfig: {
-        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
-        //         dynamicThreshold: 0.7,
-        //       },
-        //     },
-        //   },
-        // ],
         ...options,
       });
       const result = await generativeModel.generateContentStream(prompt);
@@ -103,8 +83,13 @@ export class GoogleProvider implements AIProviderBase {
     role: string;
     parts: { text: string }[];
   }> {
-    return history.map((entry) => ({
-      role: entry.role,
+    return history.map((entry, index) => ({
+      role:
+        index === 0 && entry.role !== 'user'
+          ? 'user'
+          : entry.role === 'user'
+            ? 'user'
+            : 'model',
       parts: [{ text: entry.message }],
     }));
   }
@@ -118,16 +103,6 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        // tools: [
-        //   {
-        //     googleSearchRetrieval: {
-        //       dynamicRetrievalConfig: {
-        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
-        //         dynamicThreshold: 0.7,
-        //       },
-        //     },
-        //   },
-        // ],
         ...options,
       });
 
@@ -162,16 +137,6 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
-        // tools: [
-        //   {
-        //     googleSearchRetrieval: {
-        //       dynamicRetrievalConfig: {
-        //         mode: DynamicRetrievalMode.MODE_DYNAMIC,
-        //         dynamicThreshold: 0.7,
-        //       },
-        //     },
-        //   },
-        // ],
         ...options,
       });
 
