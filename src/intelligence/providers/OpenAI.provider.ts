@@ -146,6 +146,7 @@ export class OpenAiProvider implements AIProviderBase {
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
       yield chunk.choices[0]?.delta?.content || '';
+      await new Promise((r) => setImmediate(r)); // Flush each chunk immediately
     }
   }
 }

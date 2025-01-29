@@ -516,9 +516,11 @@ Example Matching:
       },
     });
 
-    // Store assistant response incrementally
+    // First yield the chatId in a special format
     let fullResponse = '';
     const streamWithSaving = async function* () {
+      yield `__CHATID__${chatId}__`;
+
       for await (const chunk of streamResponse.content) {
         fullResponse += chunk;
         yield chunk;
