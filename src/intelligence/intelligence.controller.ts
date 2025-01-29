@@ -160,6 +160,7 @@ export class IntelligenceController {
     @HttpContext() context: IHttpContext,
     @Res() res: Response,
   ) {
+    res.flushHeaders();
     try {
       const stream = await this.intelligenceService.processChatStream(
         createChatDto.message,
@@ -171,6 +172,7 @@ export class IntelligenceController {
       // Write each chunk to the response
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        res.flush();
       }
 
       // End the response

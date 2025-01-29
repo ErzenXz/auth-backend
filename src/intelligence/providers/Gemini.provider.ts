@@ -163,6 +163,7 @@ export class GoogleProvider implements AIProviderBase {
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
       yield chunk.text();
+      await new Promise((r) => setImmediate(r)); // Flush each chunk immediately
     }
   }
 }
