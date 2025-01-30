@@ -160,6 +160,9 @@ export class IntelligenceController {
     @HttpContext() context: IHttpContext,
     @Res() res: Response,
   ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
     try {
       const stream = await this.intelligenceService.processChatStream(
