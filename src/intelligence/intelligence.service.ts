@@ -455,33 +455,40 @@ Example Matching:
     chatId?: string,
     model?: AIModels,
   ): Promise<AsyncIterable<string>> {
-    // Create a new chat thread if no chatId is provided
-    if (!chatId) {
-      const newThread = await this.prisma.aIThread.create({
-        data: {
-          userId,
-        },
-      });
-      chatId = newThread.id;
-    }
-
-    // Get chat history
-    const userChatHistory: ChatHistory[] = (
-      await this.prisma.aIThreadMessage.findMany({
+    // Create chat thread if needed and fetch initial data in parallel
+    const [
+      threadData,
+      userChatHistory,
+      userMemories,
+      searchData,
+      userInstructions,
+    ] = await Promise.all([
+      // Create or get chat thread
+      chatId ? null : this.prisma.aIThread.create({ data: { userId } }),
+      // Get chat history
+      this.prisma.aIThreadMessage.findMany({
         where: { chatId },
         orderBy: { createdAt: 'asc' },
-      })
-    ).map((msg) => ({
+      }),
+      // Get user memories
+      this.chatGetUserMemories(message, userId),
+      // Get search data
+      this.chatGetSearchData(message),
+      // Get user instructions
+      this.chatGetUserInstructions(userId),
+    ]);
+
+    // Use created chatId or existing one
+    chatId = chatId || threadData?.id;
+
+    // Process chat history
+    const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
       role: msg.role,
       message: msg.content,
     }));
 
-    // Get context data
-    const userMemories = await this.chatGetUserMemories(message, userId);
+    // Get general info and start memory extraction in parallel
     const generalInfo = this.chatGetGeneralInfo();
-    const searchData = await this.chatGetSearchData(message);
-    const userInstructions = await this.chatGetUserInstructions(userId);
-
     this.extractAndSaveMemory(message, userId, userMemories).catch((error) => {
       console.error('Failed to save user memory:', error);
     });
@@ -500,23 +507,22 @@ Example Matching:
       ? model
       : AIModels.GeminiFast;
 
-    // Get streaming response
-    const streamResponse = await this.aiWrapper.generateContentStreamHistory(
-      selectedModel,
-      generatedPrompt,
-      userChatHistory,
-    );
+    // Save user message and get stream response in parallel
+    const [streamResponse] = await Promise.all([
+      this.aiWrapper.generateContentStreamHistory(
+        selectedModel,
+        generatedPrompt,
+        formattedHistory,
+      ),
+      this.prisma.aIThreadMessage.create({
+        data: {
+          chatId,
+          content: message,
+          role: 'user',
+        },
+      }),
+    ]);
 
-    // Store user message first
-    await this.prisma.aIThreadMessage.create({
-      data: {
-        chatId,
-        content: message,
-        role: 'user',
-      },
-    });
-
-    // First yield the chatId in a special format
     let fullResponse = '';
     const streamWithSaving = async function* () {
       yield `__CHATID__${chatId}__`;
@@ -526,15 +532,17 @@ Example Matching:
         yield chunk;
       }
 
-      // Save complete response after stream ends
-      await this.prisma.aIThreadMessage.create({
-        data: {
-          chatId,
-          content: fullResponse,
-          role: 'model',
-        },
-      });
-      await this.chatGetThreadTitle(chatId);
+      // Save response and update title in parallel
+      await Promise.all([
+        this.prisma.aIThreadMessage.create({
+          data: {
+            chatId,
+            content: fullResponse,
+            role: 'model',
+          },
+        }),
+        this.chatGetThreadTitle(chatId),
+      ]);
     }.bind(this)();
 
     return streamWithSaving;
