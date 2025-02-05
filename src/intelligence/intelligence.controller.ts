@@ -21,6 +21,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { CreateUserInstructionDto } from './dtos/create-user-instruction.dto';
 import { UpdateUserInstructionDto } from './dtos/update-user-instruction.dto';
 import { AIResponse } from './models/ai-wrapper.types';
+import { ProcessUserInstructionDto } from './dtos/process-user-instruction.dto';
+import { ProcessBetaUserInstructionDto } from './dtos/process-beta-user-instruction.dto';
+import { CreateApplicationDto } from './dtos/create-application.dto';
 
 /**
  * IntelligenceController handles operations related to intelligence instructions and user memory.
@@ -63,6 +66,99 @@ export class IntelligenceController {
     return await this.intelligenceService.listDevInstructions(context.user.id);
   }
 
+  @Auth()
+  @Post('dev/applications')
+  async createApplication(
+    @Body() bodyRequest: CreateApplicationDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.createApplication(
+      bodyRequest,
+      context.user.id,
+    );
+  }
+
+  @Auth()
+  @Get('dev/applications')
+  async listApplications(@HttpContext() context: IHttpContext) {
+    return await this.intelligenceService.listApplications(context.user.id);
+  }
+
+  @Auth()
+  @Get('dev/application/:id')
+  async getApplication(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.getApplication(id, context.user.id);
+  }
+
+  @Auth()
+  @Put('dev/application/:id')
+  async updateApplication(
+    @Param('id') id: string,
+    @Body() bodyRequest: any,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.updateApplication(
+      id,
+      bodyRequest,
+      context.user.id,
+    );
+  }
+
+  @Auth()
+  @Delete('dev/application/:id')
+  async deleteApplication(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.deleteApplication(
+      id,
+      context.user.id,
+    );
+  }
+
+  @Auth()
+  @Get('dev/applications/billing')
+  async getBillingInfo(@HttpContext() context: IHttpContext) {
+    return await this.intelligenceService.getBillingInfo(context.user.id);
+  }
+
+  @Get('dev/intelligence/models')
+  async listModels() {
+    return await this.intelligenceService.listModels();
+  }
+
+  @Get('dev/intelligence/models/:id')
+  async getModel(@Param('id') id: string) {
+    return await this.intelligenceService.getModel(id);
+  }
+
+  @Auth(Role.ADMIN, Role.SUPER_ADMIN)
+  @Post('dev/intelligence/models')
+  async createModel(@Body() bodyRequest: any) {
+    return await this.intelligenceService.createModel(bodyRequest);
+  }
+
+  @Auth(Role.ADMIN, Role.SUPER_ADMIN)
+  @Post('dev/intelligence/models/bulk-add')
+  async bulkAddModels() {
+    return await this.intelligenceService.bulkAddModels();
+  }
+
+  @Auth(Role.ADMIN, Role.SUPER_ADMIN)
+  @Put('dev/intelligence/models/:id')
+  async updateModel(@Param('id') id: string, @Body() bodyRequest: any) {
+    return await this.intelligenceService.updateModel(id, bodyRequest);
+  }
+
+  @Auth(Role.ADMIN, Role.SUPER_ADMIN)
+  @Delete('dev/intelligence/models/:id')
+  async deleteModel(@Param('id') id: string) {
+    return await this.intelligenceService.deleteModel(id);
+  }
+
   /**
    * Creates a new instruction.
    * @param {CreateInstructionDto} createInstructionDto - The data transfer object containing instruction details.
@@ -90,17 +186,15 @@ export class IntelligenceController {
    * @param {IHttpContext} context - The HTTP context containing user information.
    * @returns {Promise<AIResponse>} A promise that resolves to the AI response.
    */
-  @Auth()
   @Post('dev/instruction/process')
   async processPrompt(
-    @Body('instructionId') instructionId: string,
-    @Body('prompt') prompt: string,
-    @HttpContext() context: IHttpContext,
+    @Body() bodyRequest: ProcessUserInstructionDto,
   ): Promise<AIResponse> {
+    const { instructionId, prompt, apiKey } = bodyRequest;
     return await this.intelligenceService.processDevInstruction(
       instructionId,
       prompt,
-      context,
+      apiKey,
     );
   }
 
@@ -110,15 +204,14 @@ export class IntelligenceController {
    * @param {IHttpContext} context - The HTTP context containing user information.
    * @returns {Promise<AIResponse>} A promise that resolves to the AI response.
    */
-  @Auth()
   @Post('dev/instruction/process/beta')
   async processPromptBeta(
-    @Body('prompt') prompt: string,
-    @HttpContext() context: IHttpContext,
+    @Body() bodyReq: ProcessBetaUserInstructionDto,
   ): Promise<AIResponse> {
+    const { prompt, apiKey } = bodyReq;
     return await this.intelligenceService.processDevInstructionBeta(
       prompt,
-      context,
+      apiKey,
     );
   }
 
@@ -186,6 +279,19 @@ export class IntelligenceController {
         .write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
       res.end();
     }
+  }
+
+  @Post('chat/reasoning')
+  @Auth()
+  async reasoning(
+    @Body() createChatDto: CreateChatDto,
+    @HttpContext() context: IHttpContext,
+  ): Promise<any> {
+    return await this.intelligenceService.processChainOfThought(
+      createChatDto.message,
+      context.user.id,
+      createChatDto.model,
+    );
   }
 
   /**

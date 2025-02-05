@@ -81,11 +81,15 @@ export class AuthController {
    * Refreshes the user's authentication session.
    *
    * @param req - The HTTP context containing user information.
+   * @param refreshToken - Optional refresh token to use instead of the one in cookies
    * @returns The result of the refresh process.
    */
   @Post('refresh')
-  async refresh(@HttpContext() req: IHttpContext) {
-    return this.authService.refresh(req);
+  async refresh(
+    @HttpContext() req: IHttpContext,
+    @Body('refreshToken') refreshToken?: string,
+  ) {
+    return this.authService.refresh(req, refreshToken);
   }
 
   /**

@@ -1468,6 +1468,226 @@
         ]
       }
     },
+    "/intelligence/dev/applications": {
+      "post": {
+        "operationId": "IntelligenceController_createApplication",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApplicationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "get": {
+        "operationId": "IntelligenceController_listApplications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/dev/application/{id}": {
+      "get": {
+        "operationId": "IntelligenceController_getApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "put": {
+        "operationId": "IntelligenceController_updateApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "delete": {
+        "operationId": "IntelligenceController_deleteApplication",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/dev/applications/billing": {
+      "get": {
+        "operationId": "IntelligenceController_getBillingInfo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/dev/intelligence/models": {
+      "get": {
+        "operationId": "IntelligenceController_listModels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "post": {
+        "operationId": "IntelligenceController_createModel",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/dev/intelligence/models/{id}": {
+      "get": {
+        "operationId": "IntelligenceController_getModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "put": {
+        "operationId": "IntelligenceController_updateModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      },
+      "delete": {
+        "operationId": "IntelligenceController_deleteModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/dev/intelligence/models/bulk-add": {
+      "post": {
+        "operationId": "IntelligenceController_bulkAddModels",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
     "/intelligence/dev/instruction": {
       "post": {
         "operationId": "IntelligenceController_createInstruction",
@@ -1496,6 +1716,16 @@
       "post": {
         "operationId": "IntelligenceController_processPrompt",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessUserInstructionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1510,6 +1740,16 @@
       "post": {
         "operationId": "IntelligenceController_processPromptBeta",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessBetaUserInstructionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -1547,6 +1787,30 @@
     "/intelligence/chat/stream": {
       "post": {
         "operationId": "IntelligenceController_chatStream",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/reasoning": {
+      "post": {
+        "operationId": "IntelligenceController_reasoning",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -2558,7 +2822,19 @@
         "type": "object",
         "properties": {}
       },
+      "CreateApplicationDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateInstructionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ProcessUserInstructionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ProcessBetaUserInstructionDto": {
         "type": "object",
         "properties": {}
       },
