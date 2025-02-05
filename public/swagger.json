@@ -1832,6 +1832,30 @@
         ]
       }
     },
+    "/intelligence/chat/reasoning/stream": {
+      "get": {
+        "operationId": "IntelligenceController_streamReasoning",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
     "/intelligence/chat/threads": {
       "get": {
         "operationId": "IntelligenceController_listChatThreads",

@@ -9,6 +9,7 @@ import {
   Header,
   Res,
   Query,
+  Sse,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { IntelligenceService } from './intelligence.service';
@@ -24,6 +25,7 @@ import { AIResponse } from './models/ai-wrapper.types';
 import { ProcessUserInstructionDto } from './dtos/process-user-instruction.dto';
 import { ProcessBetaUserInstructionDto } from './dtos/process-beta-user-instruction.dto';
 import { CreateApplicationDto } from './dtos/create-application.dto';
+import { Observable } from 'rxjs';
 
 /**
  * IntelligenceController handles operations related to intelligence instructions and user memory.
@@ -233,6 +235,7 @@ export class IntelligenceController {
       context.user.id,
       createChatDto.chatId,
       createChatDto.model,
+      createChatDto.reasoning,
     );
   }
 
@@ -263,6 +266,7 @@ export class IntelligenceController {
         context.user.id,
         createChatDto.chatId,
         createChatDto.model,
+        createChatDto.reasoning,
       );
 
       // Write each chunk to the response
@@ -292,6 +296,32 @@ export class IntelligenceController {
       context.user.id,
       createChatDto.model,
     );
+  }
+
+  @Sse('chat/reasoning/stream')
+  @Auth()
+  async streamReasoning(
+    @Body() createChatDto: CreateChatDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    const stream = this.intelligenceService.streamChainOfThought(
+      createChatDto.message,
+      context.user.id,
+      createChatDto.model,
+    );
+
+    return new Observable((subscriber) => {
+      (async () => {
+        try {
+          for await (const event of stream) {
+            subscriber.next({ data: JSON.stringify(event) });
+          }
+          subscriber.complete();
+        } catch (error) {
+          subscriber.error({ error: error.message });
+        }
+      })();
+    });
   }
 
   /**
