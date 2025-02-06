@@ -465,7 +465,9 @@ Example Matching:
   // Add these methods to IntelligenceService
 
   async listModels() {
-    return await this.prisma.aIModelPricing.findMany();
+    return await this.prisma.aIModelPricing.findMany({
+      where: { active: true },
+    });
   }
 
   async getModel(id: string) {
@@ -500,12 +502,45 @@ Example Matching:
       quantity: 1000000,
       type: 'both',
       description: `${key} model from enum`,
+      active: true,
     }));
 
-    return await this.prisma.aIModelPricing.createMany({
-      data: models,
-      skipDuplicates: true,
-    });
+    const newModelsToCreate = [];
+    for (const modelItem of models) {
+      // Find existing models with the same 'name'
+      const existing = await this.prisma.aIModelPricing.findMany({
+        where: { name: modelItem.name },
+      });
+
+      // If a record with the same name and identical model already exists, skip creating a new one.
+      if (existing.some((rec) => rec.model === modelItem.model)) {
+        continue;
+      }
+
+      // If there are records with the same name but with a different model value,
+      // update them to set active to false.
+      if (existing.length > 0) {
+        await this.prisma.aIModelPricing.updateMany({
+          where: {
+            name: modelItem.name,
+            model: { not: modelItem.model },
+          },
+          data: { active: false },
+        });
+      }
+
+      // Queue the new model for creation.
+      newModelsToCreate.push(modelItem);
+    }
+
+    if (newModelsToCreate.length > 0) {
+      await this.prisma.aIModelPricing.createMany({
+        data: newModelsToCreate,
+        skipDuplicates: true,
+      });
+    }
+
+    return { message: 'Bulk update models executed successfully.' };
   }
 
   async updateModel(id: string, body: any) {
@@ -518,13 +553,15 @@ Example Matching:
         type: body.type,
         model: body.model,
         description: body.description,
+        active: body.active,
       },
     });
   }
 
   async deleteModel(id: string) {
-    return await this.prisma.aIModelPricing.delete({
+    return await this.prisma.aIModelPricing.update({
       where: { id },
+      data: { active: false },
     });
   }
 
@@ -787,13 +824,16 @@ Example Matching:
             case 'thinking':
               fullReasoning += chunk.content;
               yield `__THINKING__${JSON.stringify(chunk)}`;
+              await new Promise((r) => setImmediate(r));
               break;
             case 'answer':
               finalAnswer = chunk.content;
               yield `__ANSWER__${JSON.stringify(chunk)}`;
+              await new Promise((r) => setImmediate(r));
               break;
             case 'complete':
               thinkingContent = `${fullReasoning}\n${finalAnswer}`;
+              await new Promise((r) => setImmediate(r));
               break;
           }
         }
@@ -827,6 +867,7 @@ Example Matching:
       for await (const chunk of streamResponse.content) {
         fullResponse += chunk;
         yield chunk;
+        await new Promise((r) => setImmediate(r));
       }
 
       // Save final response
@@ -923,62 +964,38 @@ Example Matching:
     }
 
     const prompt = `
-        You are an expert at determining when a user's message requires a web search for accurate, up-to-date information. Analyze the user's message and the conversation context to decide whether a web search is necessary.
+ You are an expert at determining when a user's message requires a web search. Your job is to decide whether to respond with "no" or a concise search query based on the user's intent and conversation context.
 
-  **Instructions:**
+**When to return "no":**
+- The message is a casual greeting or small talk.
+- It expresses personal opinions, emotions, or preferences.
+- It discusses hypothetical scenarios or general knowledge that doesn't require up-to-date verification.
+- It is a follow-up message that doesn’t add new search-related information.
 
-  - **Return "no"** if:
-    - It's casual conversation or greetings.
-    - It's about personal opinions or preferences.
-    - It's about hypothetical scenarios.
-    - It's about basic knowledge that doesn't need verification.
-    - It's emotional or subjective content.
-    - It's a follow-up that doesn't require additional information.
+**When to return a search query:**
+- The user asks about current events, news, or real-world data.
+- The user requests factual, technical, or tutorial information.
+- The message includes specific names, places, or events.
+- The query needs verification or is explicitly asking for a search.
+- There is insufficient context or available data in the database.
+- The user confirms a previous offer to search (e.g., “Yes, please” after "Do you want me to search for that?").
 
-  - **Return a specific search query** if:
-    - The user asks about current events or news.
-    - The user requests factual or technical information.
-    - The user asks about real-world data or statistics.
-    - The user mentions specific people, places, or events.
-    - The user asks "how to" or tutorial-type questions.
-    - The user requires verification of claims or facts.
-    - The user asks about the latest trends or developments.
-    - You don't have enough context to provide an accurate response.
-    - You don't have the information in your database.
-    - The user explicitly requests a search or confirms a previous offer to search.
+**Guidelines:**
+1. **Output ONLY** "no" or a single, focused search query.
+2. Keep the search query concise and composed of relevant keywords.
+3. Remove any personal or sensitive details from the query.
+4. Always consider the conversation context and chat history.
+5. Ensure the query accurately reflects the user’s intent.
 
-  **Consider Conversation Context:**
+**Examples:**
+- User: "Tell me the latest news in Kosovo."  
+  → Response: "latest news Kosovo"
+- User: "How does quantum computing work?"  
+  → Response: "quantum computing basics"
+- User: "Good morning!"  
+  → Response: "no"
 
-  - Analyze the **chat history** to understand prior interactions.
-  - If the assistant previously asked, "Do you want me to search for that?" and the user responds with confirmations like "Yes, please," or "Go ahead," generate the appropriate search query based on the prior topic.
-  - Use information from previous messages to formulate an effective search query.
-
-  **Examples:**
-
-  - Assistant: "Do you want me to search for that topic?"
-  - User: "Yes, please."
-    - Result: Use the prior topic to create a search query.
-  - "Tell me the latest news in Kosovo." -> "latest news Kosovo"
-  - "How does quantum computing work?" -> "quantum computing basics"
-  - "Good morning!" -> "no"
-
-  **User Message:** "${message}"
-
-  **Rules:**
-
-  1. **Return ONLY** "no" or a specific search query.
-  2. Keep search queries concise and focused.
-  3. Remove any personal or sensitive information from search queries.
-  4. Consider conversation context and chat history when deciding.
-  5. Use relevant keywords to formulate effective search queries.
-  6. Be adaptive and intelligent in interpreting the user's intent.
-
-  **Additional Notes:**
-
-  - Ensure that the search query accurately reflects the user's request.
-  - If the user's message is a confirmation like "Yes, do it," and the assistant previously offered to perform a search, proceed with the search using the relevant topic.
-  - Always prioritize the user's intent and provide the most helpful response based on the available information.
-
+**User Message:** "${message}"
       `;
 
     const aiResult = await this.aiWrapper.generateContent(
@@ -989,7 +1006,7 @@ Example Matching:
     let response = aiResult.content.trim();
 
     // Validate response
-    if (response !== 'no' || response.length > 0) {
+    if (response !== 'no' && response.length > 0) {
       const searchResult = await this.browserService.searchAndProcess(response);
       return searchResult.content;
     }

@@ -9,9 +9,10 @@ import { AIModels } from '../enums/models.enum';
 
 @Injectable()
 export class BrowserService {
-  private readonly aiWrapperService: AiWrapperService;
-
-  constructor(private readonly cacheService: XCacheService) {}
+  constructor(
+    private readonly cacheService: XCacheService,
+    private readonly aiWrapperService: AiWrapperService,
+  ) {}
 
   async fetchAndProcessUrl(url: string): Promise<AIResponse> {
     const cacheKey = `url:${url}`;
@@ -176,39 +177,43 @@ export class BrowserService {
     query?: string,
   ): Promise<AIResponse> {
     const prompt = `
-  You are an expert AI search engine analyzing web content. For the query "${query || 'the given topic'}", provide a comprehensive response including:
+  You are an expert AI search engine tasked with analyzing and summarizing web content for the query "${query || 'the given topic'}". Your response must be clear, structured, and comprehensive, following the guidelines below:
 
-  CONTENT ANALYSIS:
-  1. Primary Subject: Identify and explain the main topic/subject
-  2. Key Information: Extract and present essential facts, data, statistics
-  3. Context: Provide relevant background and current significance
-  4. Expert Analysis: Offer authoritative insights backed by the content
+------------------------------
+**1. Quick Facts:**  
+   - Provide a brief overview with the most essential data and statistics related to the topic.
 
-  MULTIMEDIA ELEMENTS:
-  1. Images: Extract and include all relevant images in Markdown format: ![description](url)
-  2. Videos: Include relevant video links in Markdown format: [video title](url)
-  3. References: Include source links in Markdown format: [source name](url)
+**2. Content Analysis:**  
+   - **Primary Subject:** Identify and explain the main topic or subject of the content.  
+   - **Key Information:** Extract and list essential facts, data, and statistics using bullet points.  
+   - **Context:** Offer relevant background information and explain the current significance of the topic.  
+   - **Expert Analysis:** Present authoritative insights and interpretations based on the content.
 
-  STRUCTURAL REQUIREMENTS:
-  1. Format the response in clear sections with headers
-  2. Use bullet points for key facts
-  3. Include a "Quick Facts" section at the top
-  4. End with a "Key Takeaways" section
-  5. Preserve all URLs and media found in the content
+**3. Multimedia Elements:**  
+   - **Images:** Identify all relevant images and include them in Markdown format as:  
+     ![description](url)  
+   - **Videos:** Include any pertinent videos using Markdown format as:  
+     [video title](url)
+   - **References:** Provide source links in Markdown format as:  
+     [source name](url)
 
-  RULES:
-  1. Write in an authoritative, factual tone
-  2. Include only verified information from the content
-  3. Present information in a structured, easy-to-read format
-  4. Maintain academic-level accuracy and professionalism
-  5. Include all relevant multimedia elements found
-  6. Ensure proper Markdown formatting for all links and media
-  7. Focus on delivering comprehensive, search-engine quality results
-  8. Return a minimum of 300 words of content and a maximum of 2000 words
-  9. Return in readable, grammatically correct in original language
+**4. Structural and Formatting Requirements:**  
+   - Organize the response into clear, labeled sections with headers.  
+   - Use bullet points to highlight key facts and information.  
+   - Conclude with a "Key Takeaways" section that summarizes the main insights.  
+   - Preserve and correctly format all URLs and multimedia elements.  
+   - Ensure proper Markdown formatting throughout the response.
 
-  Analyze this content:
-  ${text}
+**5. Content Specifications:**  
+   - Write in an authoritative, factual, and academic tone.  
+   - Only include verified information derived from the provided content.  
+   - Ensure the response is grammatically correct and easy to read.  
+   - The response should be a minimum of 300 words and a maximum of 2000 words.
+
+------------------------------
+**Analyze this content:**  
+${text}
+
   `;
 
     try {
@@ -217,6 +222,7 @@ export class BrowserService {
         prompt,
       );
     } catch (error) {
+      console.error(error);
       return { content: 'Failed to process content' };
     }
   }
