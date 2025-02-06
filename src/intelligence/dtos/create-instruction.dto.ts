@@ -14,7 +14,7 @@ export class CreateInstructionDto {
   @IsString()
   schema?: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  model?: AIModels;
+  model: AIModels;
 }

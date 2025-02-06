@@ -1,12 +1,5 @@
 // CreateChatDto.ts
-import {
-  IsNotEmpty,
-  IsString,
-  IsOptional,
-  IsArray,
-  ValidateNested,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
 import { AIModels } from '../enums/models.enum';
 
 export class ChatMessageDto {
@@ -32,4 +25,8 @@ export class CreateChatDto {
 
   @IsNotEmpty()
   model: AIModels;
+
+  @IsOptional()
+  @IsBoolean()
+  reasoning?: boolean = false;
 }

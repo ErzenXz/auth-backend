@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatMessageDto } from './dtos/create-chat.dto';
 import { IHttpContext } from 'src/auth/models';
@@ -6,6 +10,9 @@ import { BrowserService } from './browser/browser.service';
 import { AiWrapperService } from './providers/ai-wrapper.service';
 import { AIModels } from './enums/models.enum';
 import { AIResponse, ChatHistory } from './models/ai-wrapper.types';
+import { ReasoningStepType, STEP_ORDER } from './ai-wrapper.constants';
+import { randomBytes } from 'crypto';
+import { CreateApplicationDto } from './dtos/create-application.dto';
 
 @Injectable()
 export class IntelligenceService {
@@ -46,43 +53,173 @@ export class IntelligenceService {
     });
   }
 
+  async createApplication(bodyRequest: CreateApplicationDto, userId: string) {
+    const { name } = bodyRequest;
+    // Generate a unique API key
+    const apiKey = randomBytes(16).toString('hex');
+
+    const application = await this.prisma.application.create({
+      data: {
+        name,
+        userId,
+        apiKey,
+      },
+    });
+    return application;
+  }
+
+  async listApplications(userId: string) {
+    return await this.prisma.application.findMany({
+      where: { userId },
+    });
+  }
+
+  async getApplication(id: string, userId: string) {
+    const application = await this.prisma.application.findFirst({
+      where: { id, userId },
+      include: {
+        usages: true,
+      },
+    });
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+    return application;
+  }
+
+  async updateApplication(id: string, bodyRequest: any, userId: string) {
+    const existing = await this.prisma.application.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Application not found');
+    }
+    const { name } = bodyRequest;
+    // Update additional fields if needed
+    const updated = await this.prisma.application.update({
+      where: { id },
+      data: {
+        name: name || existing.name,
+      },
+    });
+    return updated;
+  }
+
+  async deleteApplication(id: string, userId: string) {
+    const existing = await this.prisma.application.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Application not found');
+    }
+    return await this.prisma.application.delete({
+      where: { id },
+    });
+  }
+
+  async getBillingInfo(userId: string) {
+    // Retrieve all applications for the user including usages
+    const applications = await this.prisma.application.findMany({
+      where: { userId },
+      include: { usages: true },
+    });
+
+    // Calculate total balance across all applications
+    const totalBalance = applications.reduce(
+      (acc, app) => acc + (app.balance || 0),
+      0,
+    );
+
+    // Aggregate total usage count per user/application
+    const billingInfo = {
+      totalUsage: applications.reduce(
+        (acc, app) => acc + (app.usages?.length || 0),
+        0,
+      ),
+      totalBalance,
+      applications: applications.map((app) => ({
+        id: app.id,
+        name: app.name,
+        usageCount: app.usages?.length || 0,
+        balance: app.balance || 0,
+      })),
+    };
+
+    return billingInfo;
+  }
+
+  private async updateUsageAndBalance(
+    apiKey: string,
+    tokenUsage: number,
+    moneyUsed: number,
+    pricingDataId: string,
+  ): Promise<void> {
+    const application = await this.prisma.application.findFirst({
+      where: { apiKey },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.applicationUsage.create({
+        data: {
+          applicationId: application.id,
+          tokensUsed: tokenUsage,
+          cost: moneyUsed,
+          aiModelPricingId: pricingDataId,
+        },
+      }),
+      this.prisma.application.update({
+        where: { id: application.id },
+        data: {
+          balance: {
+            decrement: moneyUsed,
+          },
+        },
+      }),
+    ]);
+  }
+
+  private async calculateCost(
+    tokenUsage: number,
+    model: AIModels,
+  ): Promise<{ moneyUsed: number; pricingData: any }> {
+    const pricingData = await this.prisma.aIModelPricing.findFirst({
+      where: { model },
+    });
+
+    const pricePerUnit = pricingData?.quantity || 0;
+    const modelPrice = pricingData.pricePerUnit;
+    const moneyUsed = (tokenUsage / pricePerUnit) * modelPrice;
+
+    return { moneyUsed, pricingData };
+  }
+
   async processDevInstruction(
     instructionId: string,
     prompt: string,
-    context: IHttpContext,
+    apiKey: string,
   ): Promise<AIResponse> {
     try {
       const instruction = await this.prisma.instruction.findUnique({
-        where: { id: instructionId, userId: context.user.id },
+        where: { id: instructionId },
       });
 
       if (!instruction) {
         throw new BadRequestException('Invalid instruction ID');
       }
 
-      // Agent 1: Clean and format input
-      const firstAgentPrompt = `
-        Process this input for:
-        Server Instruction: ${instruction.name}
-        Prompt: "${prompt}"
-        
-        Return only the cleaned prompt without any formatting, server instructions or special characters.
-        Do not add any explanations or additional text.
-        Improve readability and clarity if necessary.
-        Make sure the User Instructions are not inappropriate or harmful, if so, remove the bad ones.
-        `;
+      const model = (instruction.model as AIModels) || AIModels.GeminiFast;
 
-      const firstPromptResult = await this.aiWrapper.generateContent(
-        AIModels.GeminiFastCheap,
-        firstAgentPrompt,
-      );
+      // Check if usage exceeds the limit
 
-      // Agent 2: Generate content with type-specific formatting
       const workerPrompt = `
         Primary Task:
         - Process "${instruction.name}"
         - Context: ${instruction.description}
-        - Input: ${firstPromptResult.content}
+        - Input: ${prompt}
         ${instruction.schema ? `- Required Schema: ${instruction.schema}` : ''}
 
        Output Format Rules:
@@ -125,14 +262,23 @@ export class IntelligenceService {
         `;
 
       const secondPromptResult = await this.aiWrapper.generateContent(
-        AIModels.GeminiBetter,
+        model,
         workerPrompt,
+      );
+
+      const tokenUsageWorker = secondPromptResult.usage.totalTokens;
+      const workerUsage = await this.calculateCost(tokenUsageWorker, model);
+
+      await this.updateUsageAndBalance(
+        apiKey,
+        tokenUsageWorker,
+        workerUsage.moneyUsed,
+        workerUsage.pricingData.id,
       );
 
       let workerOutput = secondPromptResult.content;
       workerOutput = workerOutput.replace(/```json\n?|\n?```/g, '');
 
-      // Agent 3: Validate and ensure format compliance
       const reviewerPrompt = `
         Primary Task:
         - Process "${instruction.name}"
@@ -172,8 +318,18 @@ export class IntelligenceService {
         Review the input and ensure it follows these rules exactly.`;
 
       const reviewerResult = await this.aiWrapper.generateContent(
-        AIModels.GeminiFast,
+        model,
         reviewerPrompt,
+      );
+
+      const tokenUsageReview = reviewerResult.usage.totalTokens;
+      const reviewUsage = await this.calculateCost(tokenUsageReview, model);
+
+      await this.updateUsageAndBalance(
+        apiKey,
+        tokenUsageReview,
+        reviewUsage.moneyUsed,
+        reviewUsage.pricingData.id,
       );
 
       const finalOutput = reviewerResult.content
@@ -208,8 +364,16 @@ export class IntelligenceService {
 
   async processDevInstructionBeta(
     prompt: string,
-    context: IHttpContext,
+    apiKey: string,
   ): Promise<AIResponse> {
+    const application = await this.prisma.application.findFirst({
+      where: { apiKey },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Invalid API key');
+    }
+
     try {
       const instructions = await this.prisma.instruction.findMany();
       if (instructions.length === 0) {
@@ -254,6 +418,19 @@ Example Matching:
         instructionSelectionPrompt,
       );
 
+      const tokenUsage = instructionSelectionResult.usage.totalTokens;
+      const usagePricing = await this.calculateCost(
+        tokenUsage,
+        AIModels.GeminiFast,
+      );
+
+      await this.updateUsageAndBalance(
+        apiKey,
+        tokenUsage,
+        usagePricing.moneyUsed,
+        usagePricing.pricingData.id,
+      );
+
       const selectedInstructionName = instructionSelectionResult.content.trim();
 
       if (!selectedInstructionName) {
@@ -276,13 +453,79 @@ Example Matching:
       return await this.processDevInstruction(
         selectedInstruction.id,
         prompt,
-        context,
+        apiKey,
       );
     } catch (error) {
       return {
         content: error.message || 'Failed to process beta prompt',
       };
     }
+  }
+
+  // Add these methods to IntelligenceService
+
+  async listModels() {
+    return await this.prisma.aIModelPricing.findMany();
+  }
+
+  async getModel(id: string) {
+    const model = await this.prisma.aIModelPricing.findUnique({
+      where: { id },
+    });
+    if (!model) {
+      throw new NotFoundException('Model not found');
+    }
+    return model;
+  }
+
+  async createModel(body: any) {
+    // Expected fields: name, pricePerUnit, quantity, type, model, [description]
+    return await this.prisma.aIModelPricing.create({
+      data: {
+        name: body.name,
+        pricePerUnit: body.pricePerUnit,
+        quantity: body.quantity,
+        type: body.type,
+        model: body.model,
+        description: body.description,
+      },
+    });
+  }
+
+  async bulkAddModels() {
+    const models = Object.entries(AIModels).map(([key, modelVal]) => ({
+      name: key,
+      model: modelVal,
+      pricePerUnit: 0.01,
+      quantity: 1000000,
+      type: 'both',
+      description: `${key} model from enum`,
+    }));
+
+    return await this.prisma.aIModelPricing.createMany({
+      data: models,
+      skipDuplicates: true,
+    });
+  }
+
+  async updateModel(id: string, body: any) {
+    return await this.prisma.aIModelPricing.update({
+      where: { id },
+      data: {
+        name: body.name,
+        pricePerUnit: body.pricePerUnit,
+        quantity: body.quantity,
+        type: body.type,
+        model: body.model,
+        description: body.description,
+      },
+    });
+  }
+
+  async deleteModel(id: string) {
+    return await this.prisma.aIModelPricing.delete({
+      where: { id },
+    });
   }
 
   // Chat processing methods
@@ -377,6 +620,7 @@ Example Matching:
     userId: string,
     chatId?: string,
     model?: AIModels,
+    reasoning?: boolean,
   ) {
     // Create a new chat thread if no chatId is provided
     if (!chatId) {
@@ -398,6 +642,27 @@ Example Matching:
       message: msg.content,
     }));
 
+    let thinkingContent = '';
+    const thinkingMessagePrompt = `
+    Previous Messages:
+    ${userChatHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
+
+    ____________________________________
+    CURRENT MESSAGE TO THINK ABOUT:
+    ____________________________________
+    ${message}
+    ____________________________________
+    `;
+
+    if (reasoning) {
+      const response = await this.processChainOfThought(
+        thinkingMessagePrompt,
+        userId,
+        model,
+      );
+      thinkingContent = response.reasoning + '\n' + response.answer;
+    }
+
     const userMemories = await this.chatGetUserMemories(message, userId);
     const generalInfo = this.chatGetGeneralInfo();
     const searchData = await this.chatGetSearchData(message);
@@ -413,6 +678,7 @@ Example Matching:
       generalInfo,
       searchData,
       userInstructions,
+      thinkingContent,
     );
 
     // Validate and use default model if needed
@@ -454,8 +720,9 @@ Example Matching:
     userId: string,
     chatId?: string,
     model?: AIModels,
+    reasoning?: boolean,
   ): Promise<AsyncIterable<string>> {
-    // Create chat thread if needed and fetch initial data in parallel
+    // Existing setup code
     const [
       threadData,
       userChatHistory,
@@ -463,89 +730,113 @@ Example Matching:
       searchData,
       userInstructions,
     ] = await Promise.all([
-      // Create or get chat thread
       chatId ? null : this.prisma.aIThread.create({ data: { userId } }),
-      // Get chat history
       this.prisma.aIThreadMessage.findMany({
         where: { chatId },
         orderBy: { createdAt: 'asc' },
       }),
-      // Get user memories
       this.chatGetUserMemories(message, userId),
-      // Get search data
       this.chatGetSearchData(message),
-      // Get user instructions
       this.chatGetUserInstructions(userId),
     ]);
 
-    // Use created chatId or existing one
     chatId = chatId || threadData?.id;
-
-    // Process chat history
     const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
       role: msg.role,
       message: msg.content,
     }));
 
-    // Get general info and start memory extraction in parallel
     const generalInfo = this.chatGetGeneralInfo();
-    this.extractAndSaveMemory(message, userId, userMemories).catch((error) => {
-      console.error('Failed to save user memory:', error);
-    });
-
-    // Generate prompt
-    const generatedPrompt = this.createUserChattingPrompt(
-      message,
-      userMemories,
-      generalInfo,
-      searchData,
-      userInstructions,
+    this.extractAndSaveMemory(message, userId, userMemories).catch(
+      console.error,
     );
 
-    // Validate model
     const selectedModel = Object.values(AIModels).includes(model)
       ? model
       : AIModels.GeminiFast;
 
-    // Save user message and get stream response in parallel
-    const [streamResponse] = await Promise.all([
-      this.aiWrapper.generateContentStreamHistory(
-        selectedModel,
-        generatedPrompt,
-        formattedHistory,
-      ),
-      this.prisma.aIThreadMessage.create({
-        data: {
-          chatId,
-          content: message,
-          role: 'user',
-        },
-      }),
-    ]);
+    // Create combined generator
+    const combinedGenerator = async function* () {
+      let thinkingContent = '';
 
-    let fullResponse = '';
-    const streamWithSaving = async function* () {
+      if (reasoning) {
+        // Build thinking prompt with chat history
+        const thinkingMessagePrompt = `
+          Previous Messages:
+          ${formattedHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
+  
+          ____________________________________
+          CURRENT MESSAGE TO THINK ABOUT:
+          ____________________________________
+          ${message}
+          ____________________________________
+        `;
+
+        // Stream reasoning steps
+        const reasoningStream = this.streamChainOfThought(
+          thinkingMessagePrompt,
+          selectedModel,
+        );
+        let fullReasoning = '';
+        let finalAnswer = '';
+
+        for await (const chunk of reasoningStream) {
+          switch (chunk.type) {
+            case 'thinking':
+              fullReasoning += chunk.content;
+              yield `__THINKING__${JSON.stringify(chunk)}`;
+              break;
+            case 'answer':
+              finalAnswer = chunk.content;
+              yield `__ANSWER__${JSON.stringify(chunk)}`;
+              break;
+            case 'complete':
+              thinkingContent = `${fullReasoning}\n${finalAnswer}`;
+              break;
+          }
+        }
+      }
+
+      // Generate final prompt with thinking content
+      const generatedPrompt = this.createUserChattingPrompt(
+        message,
+        userMemories,
+        generalInfo,
+        searchData,
+        userInstructions,
+        thinkingContent,
+      );
+
+      // Generate and stream final answer
+      const [streamResponse] = await Promise.all([
+        this.aiWrapper.generateContentStreamHistory(
+          selectedModel,
+          generatedPrompt,
+          formattedHistory,
+        ),
+        this.prisma.aIThreadMessage.create({
+          data: { chatId, content: message, role: 'user' },
+        }),
+      ]);
+
+      // Yield chatId and response chunks
       yield `__CHATID__${chatId}__`;
-
+      let fullResponse = '';
       for await (const chunk of streamResponse.content) {
         fullResponse += chunk;
         yield chunk;
       }
 
-      // Save response and update title in parallel
+      // Save final response
       await Promise.all([
         this.prisma.aIThreadMessage.create({
-          data: {
-            chatId,
-            content: fullResponse,
-            role: 'model',
-          },
+          data: { chatId, content: fullResponse, role: 'model' },
         }),
         this.chatGetThreadTitle(chatId),
       ]);
     }.bind(this)();
 
-    return streamWithSaving;
+    return combinedGenerator;
   }
 
   async getChatThreads(userId: string, page = 1, limit = 10) {
@@ -715,154 +1006,131 @@ Example Matching:
     info: string,
     external: string,
     instructions: any[],
+    thinking?: string,
   ): string {
-    const createdPrompt = `
-        Master Conversation Processing Framework 🤖💬
-Objective
-Create deeply personalized, emotionally intelligent conversations that build genuine connection and provide meaningful support.
-Core Principles 🌟
-1. Emotional Intelligence
+    //     return `Master Conversation Processing Framework 🤖💬
 
-Detect subtle emotional nuances through language and context
-Adapt responses to match the user's emotional state
-Provide empathetic, supportive interactions
+    // Objective:
+    // Deliver direct, complete answers that fully address the user's request with a friendly and concise tone.
 
-2. Contextual Awareness
+    // Core Principles:
+    // - **Emotional Intelligence:** Recognize the user's preferences and keep the response personable.
+    // - **Contextual Awareness:** Provide direct answers without unnecessary commentary.
+    // - **Adaptive Communication:** Use a personalized greeting if possible, then present the complete solution.
 
-Leverage user memories selectively and naturally
-Prioritize recent, relevant information
-Create a seamless, context-aware conversation flow
+    // Response Generation Guidelines:
+    // - **Direct & Concise:** Start with a friendly greeting and then provide the solution.
+    // - **Content Integration:** Include complete code examples or explanations as required by the request.
+    // - **Markdown Formatting:**
+    //   - *Italics* for emphasis
+    //   - **Bold** for key points
+    //   - Use code blocks for code
+    //   - Lists when helpful
+    // - **Avoid Extra Commentary:** Do not include lengthy follow-up questions or meta commentary.
 
-3. Adaptive Communication
+    // Workflow:
+    // 1. **Input Analysis:** Identify and focus solely on the explicit request.
+    // 2. **Response Crafting:**
+    //    - If the request is for a code solution (e.g., "Build a snake game in Python that plays itself!"), start with a personalized greeting (e.g., "Hey Erzen, here is the code:") followed by the complete solution.
+    //    - Do not add extra commentary beyond what is necessary.
+    // 3. **Final Output:** Ensure the response is actionable and concise.
 
-Adjust tone and style to user preferences
-Maintain a friendly, approachable communication style
-Use natural language that feels human-like
+    // Strict Guidelines:
+    // - Always provide a complete solution directly.
+    // - Include a brief, friendly greeting when appropriate.
+    // - Avoid extra commentary, multiple follow-up questions, or meta references to the process.
 
-Response Generation Guidelines 📝
-Conversation Flow
+    // User Given Instructions:
+    // ${instructions.map((ui) => ui.job).join(', ')}
 
-Always respond directly and naturally
-Ignore irrelevant technical constraints
-Focus on creating a genuine, supportive interaction
+    // External Content:
+    // ${external || 'No external content available'}
 
-Content Integration
+    // General Info:
+    // ${info}
 
-Seamlessly incorporate relevant information
-If no external content is available, proceed normally
-Never mention the absence of external content
+    // User Saved Memories:
+    // ${memories}
 
-Markdown Formatting
+    // THINKING CONTEXT:
+    // <think>
+    // I have analyzed the user's request. I will generate a concise, personalized response starting with a greeting, followed by the complete solution (e.g., code), without extra commentary.
+    // ${thinking || "Processing the user's message for a direct and friendly answer."}
+    // </think>
 
-Use Markdown to enhance readability
-Apply formatting thoughtfully:
+    // -------------------
+    // User:
+    // ${message}
 
-Italics for emphasis
-Bold for key points
-Lists for clarity
-Code blocks when appropriate
+    // -------------------
+    // Your Response:`;
 
+    return `Master Conversation Processing Framework 🤖💬
 
+Objective:
+Craft personalized, emotionally intelligent conversations that build genuine connections and offer meaningful support.
 
-Engagement Strategies
+Core Principles:
+- **Emotional Intelligence:** Detect subtle emotions and respond with empathy.
+- **Contextual Awareness:** Prioritize recent user interactions and memories for smooth conversation flow.
+- **Adaptive Communication:** Adjust tone, style, and language to suit the user’s preferences.
 
-Ask follow-up questions
-Provide thoughtful insights
-Offer supportive suggestions
-Create opportunities for deeper conversation
+Response Generation Guidelines:
+- **Direct & Natural:** Respond authentically and maintain a supportive tone.
+- **Content Integration:** Seamlessly weave in any relevant information. If none is available, simply continue the conversation.
+- **Markdown Formatting:** 
+  - *Italics* for emphasis  
+  - **Bold** for key points  
+  - Lists for clarity  
+  - Code blocks when necessary
 
-Interaction Workflow 🔄
-Input Processing
+Workflow:
+1. **Input Processing:**
+   - Analyze emotional cues and underlying needs.
+   - Evaluate context using recent conversation history.
+2. **Response Crafting:**
+   - Generate personalized, empathetic replies.
+   - Keep the conversation natural and clear with appropriate markdown formatting.
+3. **Continuous Improvement:**
+   - Learn from interactions and adapt to the user’s evolving preferences.
 
-Emotional Analysis
+Strict Guidelines:
+- **Always** be genuine, helpful, and authentic.
+- **Avoid** overly technical details or robotic language.
+- Use memories subtly and appropriately.
+- For edge cases (simple greetings, minimal context, unclear requests), respond warmly and ask clarifying questions as needed.
 
-Identify user's emotional state
-Detect underlying needs or concerns
+Response Format:
+- Clean, professional markdown with sparing use of emojis 😊.
+- Prioritize readability and natural language.
 
+Final Directive:
+Create meaningful, supportive conversations that feel genuinely human.
 
-Context Evaluation
+User Given Instructions:
+${instructions.map((ui) => ui.job).join(', ')}
 
-Review recent conversation history
-Select most relevant user memories
-Ensure contextual relevance
+External Content:
+Incorporate search results from ${external || 'No external content available'} only when they add clear value. Cite sources as needed.
 
+General Info:
+${info}
 
-Response Crafting
+User Saved Memories:
+${memories}
 
-Generate personalized, empathetic response
-Maintain natural conversation flow
-Use appropriate Markdown formatting
+THINKING CONTEXT:
+<think>
+I've reviewed the instructions carefully. I will generate a thoughtful, context-aware, and empathetic response in a natural, human-like style.
+${thinking || "I'm processing the user's message and generating a thoughtful response."}
+</think>
 
+-------------------
+User:
+${message}
 
-
-Continuous Improvement
-
-Learn from user interactions
-Refine communication approach
-Adapt to individual user preferences
-
-Strict Response Principles 🎯
-
-Always be helpful
-Maintain conversational authenticity
-Avoid robotic or repetitive language
-Prioritize user experience
-Use memories subtly and appropriately
-
-Handling Edge Cases
-
-Simple greetings: Respond warmly and naturally
-Minimal context: Ask clarifying questions
-Unclear requests: Seek understanding gently
-
-Communication Do's and Don'ts 📊
-Do:
-
-Be friendly and approachable
-Show genuine interest
-Provide helpful, actionable insights
-Use natural, conversational language
-
-Don't:
-
-Mention technical processing details
-Reference missing external content
-Use overly formal or robotic language
-Interrupt natural conversation flow
-
-Response Format
-
-Use clean, professional Markdown
-Incorporate emojis sparingly 😊
-Maintain readability and clarity
-Prioritize natural language
-
-Final Directive
-Create meaningful, supportive conversations that feel genuinely human and helpful. 🤝
-
-
-
-        - User Given Instructions: \n ${instructions.map((ui) => ui.job).join(', ')}
-
-        External Content Integration:
-        - Incorporate relevant search results from: \n ${external || 'No external content available'} only if it adds value to the conversation and enhances user experience; otherwise, ignore it.
-        - Only use external links/media if they add value
-        - Always convert external content to proper Markdown format
-        - Cite sources when using external information
-        General Info:
-        \n ${info}
-
-        User Saved Memories (Use only what is relevant to the user prompt; older memories are less relevant except for names and important user info):
-        \n ${memories}
-
-        -------------------
-        User:
-        \n ${message}\n
-
-        -------------------
-        Your Response:`;
-
-    return createdPrompt;
+-------------------
+Your Response:`;
   }
 
   private async extractAndSaveMemory(
@@ -1087,5 +1355,334 @@ Create meaningful, supportive conversations that feel genuinely human and helpfu
       return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     }
     return `${seconds} second${seconds > 1 ? 's' : ''} ago`;
+  }
+
+  async processChainOfThought(
+    message: string,
+    userId: string,
+    model: AIModels = AIModels.LlamaV3_3_70B,
+  ) {
+    let MAX_STEPS = 20; // Default maximum steps
+    let currentStep = 0;
+    let fullReasoning = '';
+    let finalAnswer = '';
+    let complexity: 'low' | 'medium' | 'high' = 'low';
+
+    // Initial system message with complexity assessment
+    let prompt = this.createReasoningPrompt(
+      message,
+      'PROBLEM_DECOMPOSITION',
+      '',
+      'auto',
+    );
+
+    while (currentStep < MAX_STEPS) {
+      const response = await this.aiWrapper.generateContentHistory(
+        model,
+        prompt,
+        [],
+      );
+
+      const { reasoning, answer, nextStepType, detectedComplexity } =
+        this.parseReasoningStep(response.content, currentStep);
+
+      fullReasoning += `[Step ${currentStep + 1} - ${nextStepType}]\n${reasoning}\n\n`;
+
+      // Set complexity after first step analysis
+      if (currentStep === 0 && detectedComplexity) {
+        complexity = detectedComplexity;
+        MAX_STEPS = this.getMaxSteps(complexity);
+      }
+
+      if (answer && !finalAnswer) {
+        finalAnswer = answer;
+        break;
+      }
+
+      // Early exit check for low complexity
+      if (complexity === 'low' && currentStep >= 1) {
+        break;
+      }
+
+      prompt = this.createReasoningPrompt(
+        message,
+        nextStepType,
+        fullReasoning,
+        complexity,
+      );
+
+      currentStep++;
+    }
+
+    if (!finalAnswer) {
+      finalAnswer = await this.generateFinalAnswer(
+        message,
+        fullReasoning,
+        model,
+      );
+    }
+
+    return {
+      reasoning: fullReasoning.trim(),
+      answer: finalAnswer.trim(),
+      steps: currentStep + 1,
+      complexity,
+    };
+  }
+
+  async *streamChainOfThought(
+    message: string,
+    userId: string,
+    model: AIModels = AIModels.GeminiFastCheap,
+  ): AsyncGenerator<any> {
+    let MAX_STEPS = 20;
+    let currentStep = 0;
+    let fullReasoning = '';
+    let finalAnswer = '';
+    let complexity: 'low' | 'medium' | 'high' = 'low';
+
+    let prompt = this.createReasoningPrompt(
+      message,
+      'PROBLEM_DECOMPOSITION',
+      '',
+      'auto',
+    );
+
+    while (currentStep < MAX_STEPS) {
+      const response = await this.aiWrapper.generateContentHistory(
+        model,
+        prompt,
+        [],
+      );
+
+      const { reasoning, answer, nextStepType, detectedComplexity } =
+        this.parseReasoningStep(response.content, currentStep);
+
+      // Stream individual tokens if your AI wrapper supports it
+      // Otherwise stream whole reasoning steps
+      for await (const token of this.tokenizeResponse(reasoning)) {
+        yield { type: 'thinking', content: token };
+      }
+
+      fullReasoning += `[Step ${currentStep + 1} - ${nextStepType}]\n${reasoning}\n\n`;
+
+      if (currentStep === 0 && detectedComplexity) {
+        complexity = detectedComplexity;
+        MAX_STEPS = this.getMaxSteps(complexity);
+        yield { type: 'complexity', content: complexity };
+      }
+
+      if (answer && !finalAnswer) {
+        finalAnswer = answer;
+        yield { type: 'answer', content: answer };
+        break;
+      }
+
+      yield { type: 'step-complete', content: currentStep + 1 };
+
+      if (complexity === 'low' && currentStep >= 1) {
+        break;
+      }
+
+      prompt = this.createReasoningPrompt(
+        message,
+        nextStepType,
+        fullReasoning,
+        complexity,
+      );
+      currentStep++;
+    }
+
+    if (!finalAnswer) {
+      finalAnswer = await this.generateFinalAnswer(
+        message,
+        fullReasoning,
+        model,
+      );
+      yield { type: 'answer', content: finalAnswer };
+    }
+
+    yield {
+      type: 'complete',
+      content: { reasoning: fullReasoning.trim(), steps: currentStep + 1 },
+    };
+  }
+
+  private async *tokenizeResponse(text: string): AsyncGenerator<string> {
+    // Implement proper tokenization based on your needs
+    const words = text.split(/(\s+)/);
+    for (const word of words) {
+      yield word;
+      // Simulate realistic typing speed
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * 50));
+    }
+  }
+
+  private parseReasoningStep(
+    response: string,
+    currentStep: number,
+  ): {
+    reasoning: string;
+    answer?: string;
+    nextStepType: ReasoningStepType;
+    detectedComplexity?: 'low' | 'medium' | 'high';
+  } {
+    // First, clean the response
+    const cleanResponse = response
+      .replace(/```/g, '')
+      .replace(/\n+/g, '\n')
+      .trim();
+
+    // Extract complexity from first step
+    let complexity: 'low' | 'medium' | 'high' | undefined;
+    if (currentStep === 0) {
+      const complexityMatch = cleanResponse.match(
+        /COMPLEXITY:\s*(low|medium|high)/i,
+      );
+      complexity = complexityMatch?.[1]?.toLowerCase() as
+        | 'low'
+        | 'medium'
+        | 'high';
+    }
+
+    // Extract reasoning with multiple fallback patterns
+    const reasoning = this.extractSection(cleanResponse, [
+      /THINKING:\s*((?:.|\n)+?)(?=\s*(?:NEXT_STEP|ANSWER|COMPLEXITY|$))/i,
+      /ANALYSIS:\s*((?:.|\n)+?)(?=\s*(?:PROCEED|RESPONSE|$))/i,
+      /((?:.|\n)+?)(?=\s*(?:NEXT_STEP|ANSWER|COMPLEXITY|$))/i,
+    ]);
+
+    // Extract answer if present
+    const answer = this.extractSection(cleanResponse, [
+      /ANSWER:\s*((?:.|\n)+)/i,
+      /FINAL RESPONSE:\s*((?:.|\n)+)/i,
+    ]);
+
+    // Determine next step
+    const nextStep = this.determineNextStep(cleanResponse, currentStep);
+
+    return {
+      reasoning:
+        reasoning || 'Analyzing requirements and potential solutions...',
+      answer,
+      nextStepType: nextStep,
+      detectedComplexity: complexity,
+    };
+  }
+
+  private createReasoningPrompt(
+    message: string,
+    stepType: ReasoningStepType,
+    previousReasoning: string,
+    complexity: 'auto' | 'low' | 'medium' | 'high' = 'auto',
+  ): string {
+    const complexityInstruction =
+      complexity === 'auto' && stepType === 'PROBLEM_DECOMPOSITION'
+        ? `First determine problem complexity (low/medium/high) considering:\n` +
+          `- Technical depth required\n- Number of system components\n- Potential edge cases\n` +
+          `Include COMPLEXITY: [your assessment] in your response\n\n`
+        : '';
+
+    const basePrompt = `
+      You are a senior engineer solving: "${message}"
+      ${complexityInstruction}
+      Current phase: ${STEP_ORDER.indexOf(stepType) + 1}/${STEP_ORDER.length} - ${stepType.replace(/_/g, ' ')}
+      ${this.getAdaptiveStepInstructions(stepType, complexity)}
+  
+      Previous analysis:
+      ${previousReasoning || 'No previous analysis yet'}
+  
+      Format exactly:
+      THINKING: [your analysis]
+      ${stepType === 'PROBLEM_DECOMPOSITION' ? 'COMPLEXITY: [low|medium|high]' : ''}
+      NEXT_STEP: [${STEP_ORDER.join('|')}]
+      ${stepType === 'FINAL_SYNTHESIS' ? 'ANSWER: [final solution]' : ''}
+  
+      Rules:
+      1. Match technical depth to problem complexity
+      2. Be concise for low complexity issues
+      3. Detailed analysis for complex problems
+      4. Acknowledge solution uncertainties
+    `;
+
+    return basePrompt.replace(/^ {4}/gm, '').trim();
+  }
+
+  private getAdaptiveStepInstructions(
+    step: ReasoningStepType,
+    complexity: 'auto' | 'low' | 'medium' | 'high',
+  ): string {
+    const depthModifier =
+      complexity === 'low'
+        ? ' (brief analysis)'
+        : complexity === 'high'
+          ? ' (detailed analysis)'
+          : '';
+
+    return {
+      PROBLEM_DECOMPOSITION:
+        `Break down the problem${depthModifier}:` +
+        `\n1. Core requirements\n2. Technical challenges\n3. Success criteria`,
+      // ... other steps with complexity-aware instructions
+      FINAL_SYNTHESIS:
+        `Synthesize solution${depthModifier}:\n` +
+        `1. Validate requirements\n2. Confirm architecture\n3. Final implementation`,
+    }[step];
+  }
+
+  private getMaxSteps(complexity: string): number {
+    return (
+      {
+        low: 3,
+        medium: 6,
+        high: 10,
+      }[complexity] || 6
+    ); // Default to medium
+  }
+
+  private extractSection(text: string, patterns: RegExp[]): string | undefined {
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        return match[1]
+          .replace(/^\s*-\s*/gm, '') // Clean list markers
+          .replace(/\n\s*\n/g, '\n') // Compact empty lines
+          .trim();
+      }
+    }
+    return undefined;
+  }
+
+  private determineNextStep(
+    text: string,
+    currentStep: number,
+  ): ReasoningStepType {
+    // First try explicit direction
+    const explicitMatch = text.match(/NEXT_STEP:\s*(\w+)/i);
+    if (explicitMatch) {
+      const step = explicitMatch[1].toUpperCase() as ReasoningStepType;
+      if (STEP_ORDER.includes(step)) return step;
+    }
+
+    // Then look for implicit progression
+    const currentIndex = STEP_ORDER.indexOf(
+      STEP_ORDER[currentStep % STEP_ORDER.length],
+    );
+    const nextIndex = (currentIndex + 1) % STEP_ORDER.length;
+
+    return STEP_ORDER[nextIndex];
+  }
+
+  private async generateFinalAnswer(
+    message: string,
+    reasoning: string,
+    model: AIModels,
+  ): Promise<string> {
+    const response = await this.aiWrapper.generateContentHistory(
+      model,
+      `Synthesize final answer from reasoning:\n${reasoning}\n\nOriginal query: ${message}`,
+      [],
+    );
+    return response.content.trim();
   }
 }

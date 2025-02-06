@@ -69,6 +69,7 @@ model User {
   UserInstruction    UserInstruction[]
   AIThread           AIThread[]
   Instruction        Instruction[]
+  Application        Application[]
 
   @@index([email])
   @@index([username])
@@ -411,15 +412,47 @@ model PushSubscription {
 }
 
 model Application {
-  id        String    @id @default(uuid())
+  id        String             @id @default(uuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id])
   name      String
-  apiKey    String    @unique
+  apiKey    String             @unique
   products  Product[]
   plans     Plan[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  usages    ApplicationUsage[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  balance   Float              @default(0)
 
   @@index([apiKey])
+  @@index([apiKey, userId])
+}
+
+model AIModelPricing {
+  id           String             @id @default(uuid())
+  name         String // e.g. "Claude-3.5"
+  pricePerUnit Float // Price per token or unit, e.g. 0.01
+  quantity     Int // E.g. tokens included per pricing tier (for reference)
+  usages       ApplicationUsage[] // Relation to usage history
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  type         String // e.g. "text", "image", "audio", "video"
+  model        String // e.g. "gpt-3", "claude-3.5"
+  description  String?
+
+  @@index([name])
+  @@index([pricePerUnit])
+}
+
+model ApplicationUsage {
+  id               String         @id @default(uuid())
+  application      Application    @relation(fields: [applicationId], references: [id])
+  applicationId    String
+  aiModelPricing   AIModelPricing @relation(fields: [aiModelPricingId], references: [id])
+  aiModelPricingId String
+  tokensUsed       Int // Number of tokens used
+  cost             Float // Cost incurred (tokensUsed * pricePerUnit) at the time of usage
+  createdAt        DateTime       @default(now())
 }
 
 model Product {

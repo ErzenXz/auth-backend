@@ -188,8 +188,8 @@ export class AuthService {
    * @param context - The HTTP context containing user information.
    * @returns The result of the refresh process.
    */
-  async refresh(context: IHttpContext) {
-    const refreshToken = context.req.cookies['refreshToken'];
+  async refresh(context: IHttpContext, tokenParam: string) {
+    const refreshToken = context.req.cookies['refreshToken'] || tokenParam;
     return this.commandBus.execute(new UserRefreshTokenCommand(refreshToken));
   }
 
@@ -1052,7 +1052,7 @@ export class AuthService {
       });
 
       return context.res.redirect(
-        `https://auth.erzen.tk/external?accessToken=${accessToken}&status=success`,
+        `https://auth.erzen.tk/?accessToken=${accessToken}&status=success`,
       );
     } else {
       // Create a new user with the provided user.id and email
@@ -1150,7 +1150,7 @@ export class AuthService {
       });
 
       return context.res.redirect(
-        `https://auth.erzen.tk/external?accessToken=${accessToken}&status=success`,
+        `https://auth.erzen.tk/?accessToken=${accessToken}&status=success`,
       );
     }
   }
