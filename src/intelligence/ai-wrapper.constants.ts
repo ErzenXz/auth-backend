@@ -41,8 +41,11 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Gemini]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiFast]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiFastCheap]: AI_PROVIDERS.GOOGLE,
+  [AIModels.GeminiFastCheapSmall]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiBetter]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiAdvanced]: AI_PROVIDERS.GOOGLE,
+  [AIModels.GeminiTask]: AI_PROVIDERS.GOOGLE,
+  [AIModels.GeminiPro]: AI_PROVIDERS.GOOGLE,
 
   // OpenAI Models
   [AIModels.GPT35Turbo]: AI_PROVIDERS.OPENAI,

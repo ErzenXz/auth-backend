@@ -439,6 +439,7 @@ model AIModelPricing {
   type         String // e.g. "text", "image", "audio", "video"
   model        String // e.g. "gpt-3", "claude-3.5"
   description  String?
+  active       Boolean            @default(true)
 
   @@index([name])
   @@index([pricePerUnit])

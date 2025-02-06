@@ -4,10 +4,22 @@ import { BrowserService } from './browser.service';
 import { ConfigModule } from '@nestjs/config';
 import { XCacheModule } from 'src/cache/cache.module';
 import { NewsModule } from './news/news.module';
+import { DeepseekProvider } from '../providers/Deepseek.provider';
+import { GoogleProvider } from '../providers/Gemini.provider';
+import { LlamaProvider } from '../providers/Llama.provider';
+import { OpenAiProvider } from '../providers/OpenAI.provider';
+import { AiWrapperService } from '../providers/ai-wrapper.service';
+
+const AIProviders = [
+  GoogleProvider,
+  OpenAiProvider,
+  DeepseekProvider,
+  LlamaProvider,
+];
 
 @Module({
   imports: [ConfigModule, XCacheModule, NewsModule],
   controllers: [BrowserController],
-  providers: [BrowserService],
+  providers: [BrowserService, AiWrapperService, ...AIProviders],
 })
 export class BrowserModule {}

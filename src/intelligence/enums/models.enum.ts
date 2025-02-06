@@ -1,10 +1,13 @@
 export enum AIModels {
   // Gemini Models
-  Gemini = 'gemini-exp-1121',
-  GeminiFast = 'gemini-1.5-flash',
-  GeminiFastCheap = 'gemini-1.5-flash-8b',
+  Gemini = 'gemini-2.0-flash-001',
+  GeminiFast = 'gemini-2.0-flash-lite-preview-02-05',
+  GeminiFastCheap = 'gemini-1.5-flash',
+  GeminiFastCheapSmall = 'gemini-1.5-flash-8b',
   GeminiBetter = 'gemini-2.0-flash-exp',
-  GeminiAdvanced = 'gemini-2.0-flash-thinking-exp',
+  GeminiAdvanced = 'gemini-2.0-flash-thinking-exp-01-21',
+  GeminiTask = 'learnlm-1.5-pro-experimental',
+  GeminiPro = 'gemini-2.0-pro-exp-02-05',
 
   // OpenAI Models
   GPT4OMini = 'gpt-4o-mini-2024-07-18',
