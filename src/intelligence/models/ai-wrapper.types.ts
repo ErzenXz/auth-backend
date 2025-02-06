@@ -2,6 +2,7 @@ import { AIModels } from '../enums/models.enum';
 
 export interface AIResponse {
   content: string;
+  thinking?: string;
   usage?: {
     promptTokens: number;
     completionTokens: number;

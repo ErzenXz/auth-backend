@@ -692,6 +692,8 @@ Example Matching:
       userChatHistory,
     );
 
+    result.thinking = thinkingContent;
+
     const createdAtUtc = new Date();
     await this.prisma.aIThreadMessage.createMany({
       data: [
@@ -1360,7 +1362,7 @@ Your Response:`;
   async processChainOfThought(
     message: string,
     userId: string,
-    model: AIModels = AIModels.LlamaV3_3_70B,
+    model: AIModels = AIModels.GeminiFast,
   ) {
     let MAX_STEPS = 20; // Default maximum steps
     let currentStep = 0;
@@ -1433,7 +1435,7 @@ Your Response:`;
   async *streamChainOfThought(
     message: string,
     userId: string,
-    model: AIModels = AIModels.GeminiFastCheap,
+    model: AIModels = AIModels.GeminiFast,
   ): AsyncGenerator<any> {
     let MAX_STEPS = 20;
     let currentStep = 0;
