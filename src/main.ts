@@ -30,6 +30,7 @@ import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import compression from 'compression';
 import { RedisIoAdapter } from './messaging/adapters/redis-io.adapter';
 import { join } from 'path';
+import { PlaygroundAuthMiddleware } from './middlewares/graphql.middleware';
 
 async function bootstrap() {
   // Use HTTPS
@@ -74,7 +75,15 @@ async function bootstrap() {
     type: VersioningType.URI,
   });
 
-  app.use(helmet());
+  app.use((req, res, next) => {
+    if (req.originalUrl.startsWith('/graphql')) {
+      helmet({
+        contentSecurityPolicy: false,
+      })(req, res, next);
+    } else {
+      helmet()(req, res, next);
+    }
+  });
 
   const document = SwaggerModule.createDocument(app, config);
   const publicPath = join(__dirname, '..', 'public');
@@ -109,6 +118,8 @@ async function bootstrap() {
   });
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
+  app.use('/graphql', new PlaygroundAuthMiddleware().use);
 
   app.use(
     compression({

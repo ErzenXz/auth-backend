@@ -27,15 +27,23 @@ import { ChangeIPLocationHandler } from './auth/handlers/update-ip-location.hand
 import { EmailModule } from './email/email.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
+import { PostHogModule } from './services/modules/posthog.module';
+import { GraphQLModule } from '@nestjs/graphql';
+import { join } from 'path';
+import { ApolloDriver } from '@nestjs/apollo';
+import { SampleResolver } from './resolvers/sample.resolver';
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
+import { GqlThrottlerGuard } from './resolvers/guards/graphql.guard';
 
 const CommandHandlers = [ChangeIPLocationHandler];
-
+const GraphQLResolvers = [SampleResolver];
 @Module({
   imports: [
     DevtoolsModule.register({
       http: process.env.NODE_ENV !== 'production',
     }),
     WinstonModule.forRoot(winstonConfig),
+    PostHogModule,
     EmailModule,
     AuthModule,
     UserModule,
@@ -44,9 +52,14 @@ const CommandHandlers = [ChangeIPLocationHandler];
     VideoModule,
     LocationModule,
     PrismaModule,
+    StorageModule,
+    PrivacyModule,
+    MessagingModule,
     CustomEventEmitterModule,
+    IntelligenceModule,
+    CommandControlModule,
     ThrottlerModule.forRoot({
-      throttlers: [{ limit: 45, ttl: seconds(60), blockDuration: seconds(60) }],
+      throttlers: [{ limit: 10, ttl: seconds(60), blockDuration: seconds(60) }],
       storage: new ThrottlerStorageRedisService(
         new Redis({
           host: process.env.REDIS_URL,
@@ -67,12 +80,13 @@ const CommandHandlers = [ChangeIPLocationHandler];
         password: process.env.REDIS_PASSWORD,
       },
     }),
-    StorageModule,
-    PrivacyModule,
-    MessagingModule,
-    CustomEventEmitterModule,
-    IntelligenceModule,
-    CommandControlModule,
+    GraphQLModule.forRoot({
+      driver: ApolloDriver,
+      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+      playground: false,
+      plugins: [ApolloServerPluginLandingPageLocalDefault()],
+      context: ({ req }) => ({ req }),
+    }),
   ],
   controllers: [AppController],
   providers: [
@@ -83,10 +97,11 @@ const CommandHandlers = [ChangeIPLocationHandler];
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: GqlThrottlerGuard,
     },
     winston.Logger,
     ...CommandHandlers,
+    ...GraphQLResolvers,
   ],
 })
 export class AppModule {
