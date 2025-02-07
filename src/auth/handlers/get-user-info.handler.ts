@@ -2,10 +2,14 @@ import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
 import { UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { GetUserInfoQuery } from '../queries/get-user-info.query';
+import { PostHogService } from 'src/services/posthog.service';
 
 @QueryHandler(GetUserInfoQuery)
 export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly postHogService: PostHogService,
+  ) {}
 
   /**
    * Retrieves user information based on a valid refresh token.
@@ -63,6 +67,8 @@ export class GetUserInfoHandler implements IQueryHandler<GetUserInfoQuery> {
     if (user.tokenVersion !== tokenWithUser.tokenVersion) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    this.postHogService.captureEvent(user.id, 'user_info_retrieved');
 
     return {
       id: user.id,

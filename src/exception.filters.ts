@@ -35,10 +35,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
    * @param exception - The exception that was thrown.
    * @param host - The context of the request and response.
    */
-  catch(exception: unknown, host: ArgumentsHost): void {
+  catch(exception: unknown, host: ArgumentsHost): any {
+    const contextType = host.getType();
+
+    // If not an HTTP context (like GraphQL), log and rethrow the exception.
+    if (contextType !== 'http') {
+      this.logger.error(
+        `Non-HTTP error: ${exception}`,
+        (exception as Error).stack,
+      );
+      Sentry.captureException(exception);
+      throw exception;
+    }
+
+    let response: Response | undefined;
+    let request: Request | { url?: string } = {};
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    response = ctx.getResponse<Response>();
+    request = ctx.getRequest<Request>();
 
     const isHttpException = exception instanceof HttpException;
     const status = isHttpException
@@ -61,9 +75,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
+    const reqMethod = (request as Request)?.method ?? 'N/A';
+    const reqUrl = request?.url || 'N/A';
+
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `Error ${status} at ${request.method} ${request.url}: ${errorMessage} ${JSON.stringify(exception)}`,
+        `Error ${status} at ${reqMethod} ${reqUrl}: ${errorMessage} ${JSON.stringify(exception)}`,
         (exception as Error).stack,
       );
       Sentry.captureException(exception);
@@ -72,7 +89,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: reqUrl,
       message: errorMessage,
     });
   }

@@ -3,6 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UserRefreshTokenCommand } from '../commands/user-refresh-token.command';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { PostHogService } from 'src/services/posthog.service';
 
 @CommandHandler(UserRefreshTokenCommand)
 export class UserRefreshTokenHandler
@@ -11,6 +12,7 @@ export class UserRefreshTokenHandler
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly postHogService: PostHogService,
   ) {}
 
   /**
@@ -66,6 +68,8 @@ export class UserRefreshTokenHandler
       email: user.email,
       role: user.role,
     });
+
+    this.postHogService.captureEvent(user.id, 'user_refresh_token');
 
     return {
       accessToken,
