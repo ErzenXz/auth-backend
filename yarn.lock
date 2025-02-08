@@ -1312,10 +1312,10 @@
   dependencies:
     uuid "11.0.2"
 
-"@nestjs/devtools-integration@^0.1.6":
-  version "0.1.6"
-  resolved "https://registry.yarnpkg.com/@nestjs/devtools-integration/-/devtools-integration-0.1.6.tgz#61286080fc0a0fe2c982a78a19cb0850105e585f"
-  integrity sha512-7v2Oa7g2zxYB2DfRz5RsRyNOlrbPc32NG3FowyI3nGCOWtNaRAuZtAx7LjdnIphQGXDuIgVNMLROQaKpxI1eWg==
+"@nestjs/devtools-integration@^0.2.0":
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/@nestjs/devtools-integration/-/devtools-integration-0.2.0.tgz#b54a5df9f21c0dc3ab4f32fe483d60d0a4af67a3"
+  integrity sha512-RwQDnCour8l3D8hwu+o61DFehR7740BwRG7Pg7gbFyZJmK8SmynZH3mmeCc0+X8cxOYzr7hO12z0JtIN89//8w==
   dependencies:
     chalk "^4.1.2"
     node-fetch "^2.6.9"
