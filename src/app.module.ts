@@ -8,7 +8,7 @@ import { PhotoModule } from './photo/photo.module';
 import { VideoModule } from './video/video.module';
 import { LocationModule } from './location/location.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { seconds, ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { seconds, ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { StorageModule } from './storage/storage.module';
@@ -40,7 +40,7 @@ const GraphQLResolvers = [SampleResolver];
 @Module({
   imports: [
     DevtoolsModule.register({
-      http: process.env.NODE_ENV !== 'production',
+      http: process.env.ENVIRONMENT !== 'production',
     }),
     WinstonModule.forRoot(winstonConfig),
     PostHogModule,
@@ -84,6 +84,7 @@ const GraphQLResolvers = [SampleResolver];
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       playground: false,
+      introspection: true,
       plugins: [ApolloServerPluginLandingPageLocalDefault()],
       context: ({ req }) => ({ req }),
     }),
