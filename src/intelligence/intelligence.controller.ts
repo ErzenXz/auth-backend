@@ -222,6 +222,74 @@ export class IntelligenceController {
    * @param {CreateChatDto} createChatDto - The data transfer object containing chat message details.
    * @param {IHttpContext} context - The HTTP context containing user information.
    * @returns {Promise<AIResponse>} A promise that resolves to the AI response.
+   * @deprecated Use /chat endpoint instead (not recommended).
+   * @see /chat
+   */
+  @Post('chat/plain')
+  @Auth()
+  async chatPlain(
+    @Body() createChatDto: CreateChatDto,
+    @HttpContext() context: IHttpContext,
+  ): Promise<any> {
+    return await this.intelligenceService.processChatPlain(
+      createChatDto.message,
+      context.user.id,
+      createChatDto.chatId,
+      createChatDto.model,
+    );
+  }
+
+  /**
+   * Processes a chat message with streaming response.
+   * @param {CreateChatDto} createChatDto - The chat message details.
+   * @param {IHttpContext} context - HTTP context with user info.
+   * @param {Response} res - Express response object.
+   * @deprecated Use /chat/stream endpoint instead (not recommended).
+   * @returns {Promise<void>}
+   */
+  @Post('chat/plain/stream')
+  @Auth()
+  @Header('Content-Type', 'text/event-stream')
+  @Header('Cache-Control', 'no-cache')
+  @Header('Connection', 'keep-alive')
+  async chatStreamPlain(
+    @Body() createChatDto: CreateChatDto,
+    @HttpContext() context: IHttpContext,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders();
+    try {
+      const stream = await this.intelligenceService.processChatPlainStream(
+        createChatDto.message,
+        context.user.id,
+        createChatDto.chatId,
+        createChatDto.model,
+      );
+
+      // Write each chunk to the response
+      for await (const chunk of stream) {
+        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        res.flush();
+      }
+
+      // End the response
+      res.end();
+    } catch (error) {
+      res
+        .status(500)
+        .write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.end();
+    }
+  }
+
+  /**
+   * Processes a chat message.
+   * @param {CreateChatDto} createChatDto - The data transfer object containing chat message details.
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   * @returns {Promise<AIResponse>} A promise that resolves to the AI response.
    */
   @Post('chat')
   @Auth()

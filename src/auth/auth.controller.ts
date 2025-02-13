@@ -8,6 +8,7 @@ import {
   Req,
   Res,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto, LoginDto, RegisterDto } from './dtos';
@@ -216,10 +217,30 @@ export class AuthController {
     @Res({ passthrough: false }) res: Response,
     @Query() returnURL: { returnUrl?: string },
   ) {
+    // Load array of allowed domains from .env, comma separated
+    const allowedDomains =
+      process.env.ALLOWED_DOMAINS?.split(',').map((domain) =>
+        domain.trim().toLowerCase(),
+      ) || [];
+
+    // Get host header and extract the domain part (without port)
+    const hostHeader = req.headers.host;
+    if (!hostHeader) {
+      throw new ForbiddenException('Invalid domain');
+    }
+    const domain =
+      hostHeader.indexOf(':') !== -1
+        ? hostHeader.split(':')[0].toLowerCase()
+        : hostHeader.toLowerCase();
+
+    // Verify that the domain is one of the allowed domains
+    if (!allowedDomains.includes(domain)) {
+      throw new ForbiddenException('Domain (' + domain + ') is not allowed');
+    }
+
     const { origin } = req.headers;
 
-    // Check if the origin is erzen.tk
-    if (origin && !origin.includes('erzen.tk')) {
+    if (origin && !allowedDomains.some((allowed) => origin.includes(allowed))) {
       throw new UnauthorizedException('Invalid origin');
     }
 
@@ -398,7 +419,7 @@ export class AuthController {
       `;
 
       res.setHeader('Content-Type', 'text/html');
-      return res.send(transferPage);
+      return res.status(200).send(transferPage);
     } catch (error) {
       console.error('ARP transfer error:', error);
       const nonce = randomBytes(16).toString('base64');
@@ -434,117 +455,190 @@ export class AuthController {
       }
 
       const errorPage = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TrustPort - ARP</title>
-            <style nonce="${nonce}">
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-                
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
+       <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Required - TrustPort</title>
+    <style nonce="${nonce}">
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-                body {
-                    font-family: 'Inter', sans-serif;
-                    background: linear-gradient(135deg, #f6f7fe 0%, #f0f3ff 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    padding: 20px;
-                }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f2f4ff 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
 
-                .container {
-                    background: white;
-                    padding: 2.5rem;
-                    border-radius: 16px;
-                    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-                    width: 100%;
-                    max-width: 400px;
-                    text-align: center;
-                }
+        .container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 440px;
+            text-align: center;
+            transform: translateY(0);
+            opacity: 1;
+            animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        }
 
-                .logo {
-                    margin-bottom: 1.5rem;
-                }
+        .logo {
+            margin-bottom: 1.75rem;
+            position: relative;
+        }
 
-                .logo svg {
-                    width: 48px;
-                    height: 48px;
-                }
+        .logo svg {
+            width: 64px;
+            height: 64px;
+            filter: drop-shadow(0 4px 6px rgba(239, 68, 68, 0.15));
+            transform: scale(1);
+            animation: iconPulse 1.5s ease-in-out infinite;
+        }
 
-                h1 {
-                    font-size: 1.5rem;
-                    font-weight: 600;
-                    color: #1a1a1a;
-                    margin-bottom: 0.5rem;
-                }
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.5px;
+        }
 
-                #status {
-                    font-size: 1rem;
-                    color: #4b5563;
-                    margin-bottom: 1.5rem;
-                }
+        #error-message {
+            font-size: 1.05rem;
+            color: #4b5563;
+            line-height: 1.5;
+            margin-bottom: 2rem;
+            padding: 0 1rem;
+        }
 
-                .progress {
-                    width: 100%;
-                    height: 4px;
-                    background: #e5e7eb;
-                    border-radius: 2px;
-                    overflow: hidden;
-                    position: relative;
-                }
+        .redirect-notice {
+            background: #f8f9fc;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 2rem;
+        }
 
-                .progress-bar {
-                    position: absolute;
-                    height: 100%;
-                    background: #4f46e5;
-                    border-radius: 2px;
-                    transition: width 0.3s ease;
-                    width: 0%;
-                }
+        .redirect-text {
+            color: #64748b;
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
 
-                .error {
-                    background: #fee2e2;
-                    color: #991b1b;
-                    padding: 1rem;
-                    border-radius: 8px;
-                    margin-top: 1rem;
-                    display: none;
-                }
+        .countdown {
+            color: #4f46e5;
+            font-weight: 600;
+        }
 
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.5; }
-                }
+        .progress-container {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
 
-                .pulse {
-                    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="logo">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
-                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
-                </div>
-                <h1>Authentication Error</h1>
-                <p id="error-message">${error.message}</p>
+        .progress-bar {
+            height: 100%;
+            background: #4f46e5;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .manual-action {
+            margin-top: 2rem;
+        }
+
+        .retry-button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .retry-button:hover {
+            background: #4338ca;
+            transform: translateY(-1px);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes iconPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5">
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+        </div>
+        <h1>Authentication Required</h1>
+        <p id="error-message">You need to be authenticated to access this page. Please wait while we redirect you to the login page.</p>
+        
+        <div class="redirect-notice">
+            <p class="redirect-text">Redirecting in <span class="countdown">5</span> seconds</p>
+            <div class="progress-container">
+                <div class="progress-bar"></div>
             </div>
+        </div>
 
-      <script nonce="${nonce}">
-      window.location.href = "${authUrl.toString()}?returnTo=${returnURL.returnUrl}";
-      </script>
-      
-      </body>
-      </html>
+        <div class="manual-action">
+            <button class="retry-button" onclick="window.location.reload()">
+                Retry Now
+            </button>
+        </div>
+    </div>
+
+    <script nonce="${nonce}">
+        // Animated countdown and progress bar
+        let seconds = 5;
+        const countdownElement = document.querySelector('.countdown');
+        const progressBar = document.querySelector('.progress-bar');
+
+        const updateProgress = () => {
+            const progress = ((5 - seconds) / 5) * 100;
+            progressBar.style.width = progress;
+            countdownElement.textContent = seconds;
+            seconds--;
+
+            if (seconds < 0) {
+              window.location.href = "${authUrl.toString()}?returnTo=${returnURL.returnUrl}";
+            }
+        };
+
+        // Initial update
+        updateProgress();
+        // Update every second
+        const countdownInterval = setInterval(updateProgress, 1000);
+    </script>
+</body>
+</html>
       `;
 
       res.status(401).send(errorPage);

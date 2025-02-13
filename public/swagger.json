@@ -1760,6 +1760,54 @@
         ]
       }
     },
+    "/intelligence/chat/plain": {
+      "post": {
+        "operationId": "IntelligenceController_chatPlain",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/plain/stream": {
+      "post": {
+        "operationId": "IntelligenceController_chatStreamPlain",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
     "/intelligence/chat": {
       "post": {
         "operationId": "IntelligenceController_chat",

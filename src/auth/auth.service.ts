@@ -655,6 +655,7 @@ export class AuthService {
       where: { id: user.id },
       data: {
         password: hashedPassword,
+        tokenVersion: user.tokenVersion + 1,
       },
     });
 

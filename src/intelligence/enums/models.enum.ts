@@ -16,9 +16,11 @@ export enum AIModels {
   GPTO1Mini = 'o1-mini',
   GPT35Turbo = 'gpt-3.5-turbo-0125',
 
-  // Deepseek Models
-  DeepseekV3 = 'deepseek-chat',
-  DeepseekR1 = 'deepseek-reasoner',
+  // OpenRouter Models
+  DeepseekV3 = 'deepseek/deepseek-chat:free',
+  DeepseekR1 = 'deepseek/deepseek-r1:free',
+  DeepseekR1DistilledLlama = 'deepseek/deepseek-r1-distill-llama-70b:free',
+  Qwen2_5VL72B = 'qwen/qwen2.5-vl-72b-instruct:free',
 
   // Llama Models
   LlamaV3_3_70B = 'accounts/fireworks/models/llama-v3p3-70b-instruct',

@@ -882,6 +882,123 @@ Example Matching:
     return combinedGenerator;
   }
 
+  async processChatPlain(
+    message: string,
+    userId: string,
+    chatId?: string,
+    model?: AIModels,
+  ) {
+    // Create a new chat thread if no chatId is provided
+    if (!chatId) {
+      const newThread = await this.prisma.aIThread.create({
+        data: {
+          userId,
+        },
+      });
+      chatId = newThread.id;
+    }
+
+    const userChatHistory: ChatHistory[] = (
+      await this.prisma.aIThreadMessage.findMany({
+        where: { chatId },
+        orderBy: { createdAt: 'asc' },
+      })
+    ).map((msg) => ({
+      role: msg.role,
+      message: msg.content,
+    }));
+
+    // Validate and use default model if needed
+    const selectedModel = Object.values(AIModels).includes(model)
+      ? model
+      : AIModels.GeminiFast;
+
+    const result = await this.aiWrapper.generateContentHistory(
+      selectedModel,
+      message,
+      userChatHistory,
+    );
+
+    const createdAtUtc = new Date();
+    await this.prisma.aIThreadMessage.createMany({
+      data: [
+        {
+          chatId: chatId,
+          content: message,
+          role: 'user',
+          createdAt: createdAtUtc,
+        },
+        {
+          chatId: chatId,
+          content: result.content,
+          role: 'model',
+          createdAt: new Date(createdAtUtc.getTime() + 1000),
+        },
+      ],
+    });
+
+    return { result, chatId };
+  }
+
+  async processChatPlainStream(
+    message: string,
+    userId: string,
+    chatId?: string,
+    model?: AIModels,
+  ): Promise<AsyncIterable<string>> {
+    // Existing setup code
+    const [threadData, userChatHistory] = await Promise.all([
+      chatId ? null : this.prisma.aIThread.create({ data: { userId } }),
+      this.prisma.aIThreadMessage.findMany({
+        where: { chatId },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    chatId = chatId || threadData?.id;
+    const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
+      role: msg.role,
+      message: msg.content,
+    }));
+
+    const selectedModel = Object.values(AIModels).includes(model)
+      ? model
+      : AIModels.GeminiFast;
+
+    // Create combined generator
+    const combinedGenerator = async function* () {
+      // Generate and stream final answer
+      const [streamResponse] = await Promise.all([
+        this.aiWrapper.generateContentStreamHistory(
+          selectedModel,
+          message,
+          formattedHistory,
+        ),
+        this.prisma.aIThreadMessage.create({
+          data: { chatId, content: message, role: 'user' },
+        }),
+      ]);
+
+      // Yield chatId and response chunks
+      yield `__CHATID__${chatId}__`;
+      let fullResponse = '';
+      for await (const chunk of streamResponse.content) {
+        fullResponse += chunk;
+        yield chunk;
+        await new Promise((r) => setImmediate(r));
+      }
+
+      // Save final response
+      await Promise.all([
+        this.prisma.aIThreadMessage.create({
+          data: { chatId, content: fullResponse, role: 'model' },
+        }),
+      ]);
+    }.bind(this)();
+
+    return combinedGenerator;
+  }
+
   async getChatThreads(userId: string, page = 1, limit = 10) {
     const skip = (page - 1) * limit;
 

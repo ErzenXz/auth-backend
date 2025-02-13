@@ -10,7 +10,7 @@ import { XCacheModule } from 'src/cache/cache.module';
 import { AiWrapperService } from './providers/ai-wrapper.service';
 import { GoogleProvider } from './providers/Gemini.provider';
 import { OpenAiProvider } from './providers/OpenAI.provider';
-import { DeepseekProvider } from './providers/Deepseek.provider';
+import { OpenRouterProvider } from './providers/OpenRouter.provider';
 import { LlamaProvider } from './providers/Llama.provider';
 
 /**
@@ -21,7 +21,7 @@ import { LlamaProvider } from './providers/Llama.provider';
 const AIProviders = [
   GoogleProvider,
   OpenAiProvider,
-  DeepseekProvider,
+  OpenRouterProvider,
   LlamaProvider,
 ];
 @Module({

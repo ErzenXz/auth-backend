@@ -14,7 +14,7 @@ import {
 } from '../models/ai-wrapper.types';
 import { GoogleProvider } from './Gemini.provider';
 import { OpenAiProvider } from './OpenAI.provider';
-import { DeepseekProvider } from './Deepseek.provider';
+import { OpenRouterProvider } from './OpenRouter.provider';
 import { LlamaProvider } from './Llama.provider';
 
 @Injectable()
@@ -26,13 +26,13 @@ export class AiWrapperService {
   constructor(
     private readonly googleProvider: GoogleProvider,
     private readonly openAiProvider: OpenAiProvider,
-    private readonly deepseekProvider: DeepseekProvider,
+    private readonly openrouterProvider: OpenRouterProvider,
     private readonly llamaProvider: LlamaProvider,
   ) {
     this.providers = new Map<AIProvider, AIProviderBase>([
       [AI_PROVIDERS.GOOGLE, this.googleProvider],
       [AI_PROVIDERS.OPENAI, this.openAiProvider],
-      [AI_PROVIDERS.DEEPSEEK, this.deepseekProvider],
+      [AI_PROVIDERS.OPENROUTER, this.openrouterProvider],
       [AI_PROVIDERS.LLAMA, this.llamaProvider],
     ]);
     this.defaultModels = DEFAULT_MODELS;

@@ -10,17 +10,17 @@ import {
 import OpenAI from 'openai';
 
 @Injectable()
-export class DeepseekProvider implements AIProviderBase {
+export class OpenRouterProvider implements AIProviderBase {
   private readonly openai: OpenAI;
   private readonly defaultModel: AIModels;
 
   constructor(private readonly configService: ConfigService) {
     this.openai = new OpenAI({
-      baseURL: 'https://api.deepseek.com',
-      apiKey: this.configService.get<string>('DEEPSEEK_API_KEY'),
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: this.configService.get<string>('OPENROUTER_API_KEY'),
     });
     this.defaultModel = this.configService.get<AIModels>(
-      'DEFAULT_DEEPSEEK_MODEL',
+      'DEFAULT_OPENROUTER_MODEL',
       AIModels.DeepseekV3,
     );
   }

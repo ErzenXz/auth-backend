@@ -30,7 +30,7 @@ export const STEP_ORDER: ReasoningStepType[] = [
 export const AI_PROVIDERS = {
   GOOGLE: 'GOOGLE',
   OPENAI: 'OPENAI',
-  DEEPSEEK: 'DEEPSEEK',
+  OPENROUTER: 'OPENROUTER',
   LLAMA: 'LLAMA',
 } as const;
 
@@ -54,9 +54,11 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.GPTO1]: AI_PROVIDERS.OPENAI,
   [AIModels.GPTO1Mini]: AI_PROVIDERS.OPENAI,
 
-  // Deepseek Models
-  [AIModels.DeepseekV3]: AI_PROVIDERS.DEEPSEEK,
-  [AIModels.DeepseekR1]: AI_PROVIDERS.DEEPSEEK,
+  // OpenRouter Models
+  [AIModels.DeepseekV3]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.DeepseekR1]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.DeepseekR1DistilledLlama]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Qwen2_5VL72B]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.LlamaV3_3_70B]: AI_PROVIDERS.LLAMA,
@@ -75,6 +77,6 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
 export const DEFAULT_MODELS: Record<AIProvider, AIModels> = {
   [AI_PROVIDERS.GOOGLE]: AIModels.GeminiFast,
   [AI_PROVIDERS.OPENAI]: AIModels.GPT35Turbo,
-  [AI_PROVIDERS.DEEPSEEK]: AIModels.DeepseekV3,
+  [AI_PROVIDERS.OPENROUTER]: AIModels.DeepseekR1DistilledLlama,
   [AI_PROVIDERS.LLAMA]: AIModels.LlamaV3_3_70B,
 };
