@@ -651,7 +651,7 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(randomSecurePassword, 10);
 
-    this.prisma.user.update({
+    await this.prisma.user.update({
       where: { id: user.id },
       data: {
         password: hashedPassword,
@@ -659,11 +659,11 @@ export class AuthService {
       },
     });
 
-    this.prisma.emailPasswordReset.delete({
+    await this.prisma.emailPasswordReset.delete({
       where: { id: resetToken.id },
     });
 
-    this.prisma.userEvents.create({
+    await this.prisma.userEvents.create({
       data: {
         userId: user.id,
         eventType: 'password.reset',
