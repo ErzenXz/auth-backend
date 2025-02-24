@@ -249,19 +249,14 @@ export class IntelligenceController {
    */
   @Post('chat/plain/stream')
   @Auth()
-  @Header('Content-Type', 'text/event-stream')
-  @Header('Cache-Control', 'no-cache')
-  @Header('Connection', 'keep-alive')
-  @Header('Transfer-Encoding', 'chunked')
   async chatStreamPlain(
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Transfer-Encoding', 'chunked');
     res.flushHeaders();
     try {
       const stream = await this.intelligenceService.processChatPlainStream(
