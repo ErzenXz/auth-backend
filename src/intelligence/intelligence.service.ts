@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatMessageDto } from './dtos/create-chat.dto';
-import { IHttpContext } from 'src/auth/models';
 import { BrowserService } from './browser/browser.service';
 import { AiWrapperService } from './providers/ai-wrapper.service';
 import { AIModels } from './enums/models.enum';
@@ -762,24 +761,27 @@ Example Matching:
     reasoning?: boolean,
   ): Promise<AsyncIterable<string>> {
     // Existing setup code
-    const [
-      threadData,
-      userChatHistory,
-      userMemories,
-      searchData,
-      userInstructions,
-    ] = await Promise.all([
-      chatId ? null : this.prisma.aIThread.create({ data: { userId } }),
-      this.prisma.aIThreadMessage.findMany({
-        where: { chatId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.chatGetUserMemories(message, userId),
-      this.chatGetSearchData(message),
-      this.chatGetUserInstructions(userId),
-    ]);
 
-    chatId = chatId || threadData?.id;
+    if (!chatId) {
+      const newThread = await this.prisma.aIThread.create({
+        data: {
+          userId,
+        },
+      });
+      chatId = newThread.id;
+    }
+
+    const [userChatHistory, userMemories, searchData, userInstructions] =
+      await Promise.all([
+        this.prisma.aIThreadMessage.findMany({
+          where: { chatId },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.chatGetUserMemories(message, userId),
+        this.chatGetSearchData(message),
+        this.chatGetUserInstructions(userId),
+      ]);
+
     const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
       role: msg.role,
       message: msg.content,
@@ -946,16 +948,20 @@ Example Matching:
     chatId?: string,
     model?: AIModels,
   ): Promise<AsyncIterable<string>> {
-    // Existing setup code
-    const [threadData, userChatHistory] = await Promise.all([
-      chatId ? null : this.prisma.aIThread.create({ data: { userId } }),
-      this.prisma.aIThreadMessage.findMany({
-        where: { chatId },
-        orderBy: { createdAt: 'asc' },
-      }),
-    ]);
+    // Create chat thread if not provided
+    if (!chatId) {
+      const threadData = await this.prisma.aIThread.create({
+        data: { userId },
+      });
+      chatId = threadData.id;
+    }
 
-    chatId = chatId || threadData?.id;
+    // Get chat history after chatId is guaranteed to exist
+    const userChatHistory = await this.prisma.aIThreadMessage.findMany({
+      where: { chatId },
+      orderBy: { createdAt: 'asc' },
+    });
+
     const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
       role: msg.role,
       message: msg.content,
@@ -965,37 +971,49 @@ Example Matching:
       ? model
       : AIModels.GeminiFast;
 
-    // Create combined generator
+    // Create combined generator without buffering the entire response
     const combinedGenerator = async function* () {
-      // Generate and stream final answer
-      const [streamResponse] = await Promise.all([
-        this.aiWrapper.generateContentStreamHistory(
-          selectedModel,
-          message,
-          formattedHistory,
-        ),
-        this.prisma.aIThreadMessage.create({
-          data: { chatId, content: message, role: 'user' },
-        }),
-      ]);
+      // Start generating and streaming final answer right away
+      const streamResponse = this.aiWrapper.generateContentStreamHistory(
+        selectedModel,
+        message,
+        formattedHistory,
+      );
 
-      // Yield chatId and response chunks
+      // First yield the chatId
       yield `__CHATID__${chatId}__`;
+
       let fullResponse = '';
-      for await (const chunk of streamResponse.content) {
+      for await (const chunk of (await streamResponse).content) {
         fullResponse += chunk;
         yield chunk;
-        await new Promise((r) => setImmediate(r));
+        await new Promise((r) => setImmediate(r)); // let chunks flush
       }
+
+      const createdAtUtc = new Date();
 
       // Save final response
       await Promise.all([
         this.prisma.aIThreadMessage.create({
-          data: { chatId, content: fullResponse, role: 'model' },
+          data: {
+            chatId,
+            content: message,
+            role: 'user',
+            createdAt: createdAtUtc,
+          },
+        }),
+        this.prisma.aIThreadMessage.create({
+          data: {
+            chatId,
+            content: fullResponse,
+            role: 'model',
+            createdAt: new Date(createdAtUtc.getTime() + 1000),
+          },
         }),
       ]);
     }.bind(this)();
 
+    this.chatGetThreadTitle(chatId);
     return combinedGenerator;
   }
 

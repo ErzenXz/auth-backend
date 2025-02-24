@@ -91,7 +91,7 @@ export class OpenAiProvider implements AIProviderBase {
     try {
       const completion = await this.openai.chat.completions.create({
         messages: [
-          ...this.convertHistory(history),
+          this.convertHistory(history),
           { role: 'user', content: prompt },
         ],
         model,
@@ -123,7 +123,7 @@ export class OpenAiProvider implements AIProviderBase {
     try {
       const stream = (await this.openai.chat.completions.create({
         messages: [
-          ...this.convertHistory(history),
+          this.convertHistory(history),
           { role: 'user', content: prompt },
         ],
         model,
