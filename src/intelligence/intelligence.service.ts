@@ -210,7 +210,7 @@ export class IntelligenceService {
         throw new BadRequestException('Invalid instruction ID');
       }
 
-      const model = (instruction.model as AIModels) || AIModels.GeminiFast;
+      const model = (instruction.model as AIModels) || AIModels.Gemini;
 
       // Check if usage exceeds the limit
 
@@ -413,7 +413,7 @@ Example Matching:
         Analysis Result:`;
 
       const instructionSelectionResult = await this.aiWrapper.generateContent(
-        AIModels.GeminiFast,
+        AIModels.Gemini,
         instructionSelectionPrompt,
       );
 
@@ -633,7 +633,7 @@ Example Matching:
 
     try {
       const result = await this.aiWrapper.generateContent(
-        AIModels.GeminiFast,
+        AIModels.GeminiFastCheap,
         prompt,
       );
 
@@ -720,7 +720,7 @@ Example Matching:
     // Validate and use default model if needed
     const selectedModel = Object.values(AIModels).includes(model)
       ? model
-      : AIModels.GeminiFast;
+      : AIModels.Gemini;
 
     const result = await this.aiWrapper.generateContentHistory(
       selectedModel,
@@ -794,7 +794,7 @@ Example Matching:
 
     const selectedModel = Object.values(AIModels).includes(model)
       ? model
-      : AIModels.GeminiFast;
+      : AIModels.Gemini;
 
     // Create combined generator
     const combinedGenerator = async function* () {
@@ -913,7 +913,7 @@ Example Matching:
     // Validate and use default model if needed
     const selectedModel = Object.values(AIModels).includes(model)
       ? model
-      : AIModels.GeminiFast;
+      : AIModels.Gemini;
 
     const result = await this.aiWrapper.generateContentHistory(
       selectedModel,
@@ -969,7 +969,7 @@ Example Matching:
 
     const selectedModel = Object.values(AIModels).includes(model)
       ? model
-      : AIModels.GeminiFast;
+      : AIModels.Gemini;
 
     // Create combined generator without buffering the entire response
     const combinedGenerator = async function* () {
@@ -1134,7 +1134,7 @@ Example Matching:
       `;
 
     const aiResult = await this.aiWrapper.generateContent(
-      AIModels.GeminiFast,
+      AIModels.Gemini,
       prompt,
     );
 
@@ -1337,7 +1337,7 @@ INSTRUCTIONS:
 
     try {
       const aiResponse = await this.aiWrapper.generateContent(
-        AIModels.GeminiFast,
+        AIModels.Gemini,
         extractionPrompt,
       );
       let aiText = aiResponse.content.trim();
@@ -1498,7 +1498,7 @@ INSTRUCTIONS:
   async processChainOfThought(
     message: string,
     userId: string,
-    model: AIModels = AIModels.GeminiFast,
+    model: AIModels = AIModels.GeminiFastCheap,
   ) {
     let MAX_STEPS = 20; // Default maximum steps
     let currentStep = 0;
@@ -1571,7 +1571,7 @@ INSTRUCTIONS:
   async *streamChainOfThought(
     message: string,
     userId: string,
-    model: AIModels = AIModels.GeminiFast,
+    model: AIModels = AIModels.GeminiFastCheap,
   ): AsyncGenerator<any> {
     let MAX_STEPS = 20;
     let currentStep = 0;
