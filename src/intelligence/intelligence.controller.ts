@@ -254,10 +254,13 @@ export class IntelligenceController {
     @HttpContext() context: IHttpContext,
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'application/octet-stream');
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
+
     try {
       const stream = await this.intelligenceService.processChatPlainStream(
         createChatDto.message,
@@ -269,10 +272,15 @@ export class IntelligenceController {
       // Write each chunk to the response
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
-        res.flush();
+        // Explicitly flush after each chunk
+        await new Promise<void>((resolve) => {
+          res.flush();
+          resolve();
+        });
       }
 
-      // End the response
+      // End the response with a proper SSE end marker
+      res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
       res
