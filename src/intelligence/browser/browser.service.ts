@@ -218,7 +218,7 @@ ${text}
 
     try {
       return await this.aiWrapperService.generateContent(
-        AIModels.GeminiFast,
+        AIModels.Gemini,
         prompt,
       );
     } catch (error) {

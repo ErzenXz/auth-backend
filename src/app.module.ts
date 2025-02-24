@@ -59,7 +59,7 @@ const GraphQLResolvers = [SampleResolver];
     IntelligenceModule,
     CommandControlModule,
     ThrottlerModule.forRoot({
-      throttlers: [{ limit: 10, ttl: seconds(60), blockDuration: seconds(60) }],
+      throttlers: [{ limit: 25, ttl: seconds(60), blockDuration: seconds(60) }],
       storage: new ThrottlerStorageRedisService(
         new Redis({
           host: process.env.REDIS_URL,

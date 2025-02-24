@@ -252,6 +252,7 @@ export class IntelligenceController {
   @Header('Content-Type', 'text/event-stream')
   @Header('Cache-Control', 'no-cache')
   @Header('Connection', 'keep-alive')
+  @Header('Transfer-Encoding', 'chunked')
   async chatStreamPlain(
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
@@ -260,6 +261,7 @@ export class IntelligenceController {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Transfer-Encoding', 'chunked');
     res.flushHeaders();
     try {
       const stream = await this.intelligenceService.processChatPlainStream(
@@ -319,6 +321,7 @@ export class IntelligenceController {
   @Header('Content-Type', 'text/event-stream')
   @Header('Cache-Control', 'no-cache')
   @Header('Connection', 'keep-alive')
+  @Header('Transfer-Encoding', 'chunked')
   async chatStream(
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
@@ -327,6 +330,7 @@ export class IntelligenceController {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Transfer-Encoding', 'chunked');
     res.flushHeaders();
     try {
       const stream = await this.intelligenceService.processChatStream(
