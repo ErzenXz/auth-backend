@@ -256,7 +256,7 @@ export class IntelligenceController {
   ) {
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Connection', 'keep-alive'); // Keep connections alive
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
@@ -269,17 +269,20 @@ export class IntelligenceController {
         createChatDto.model,
       );
 
-      // Write each chunk to the response
+      // Use a timer to ensure chunks are flushed regularly
+      let chunkCount = 0;
+
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
-        // Explicitly flush after each chunk
-        await new Promise<void>((resolve) => {
-          res.flush();
-          resolve();
-        });
+        chunkCount++;
+
+        // Force flush every few chunks to prevent buffering
+        if (chunkCount % 3 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
       }
 
-      // End the response with a proper SSE end marker
+      // Send a final event to indicate completion
       res.write('data: [DONE]\n\n');
       res.end();
     } catch (error) {
