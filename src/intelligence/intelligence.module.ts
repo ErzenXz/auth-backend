@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { IntelligenceService } from './intelligence.service';
 import { IntelligenceController } from './intelligence.controller';
 import { PrismaModule } from '../prisma/prisma.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TextToSpeechModule } from './speech/speech.module';
 import { BrowserModule } from './browser/browser.module';
 import { BrowserService } from './browser/browser.service';
@@ -12,6 +12,8 @@ import { GoogleProvider } from './providers/Gemini.provider';
 import { OpenAiProvider } from './providers/OpenAI.provider';
 import { OpenRouterProvider } from './providers/OpenRouter.provider';
 import { LlamaProvider } from './providers/Llama.provider';
+import { IntelligenceGateway } from './intelligence.gateway';
+import { JwtModule } from '@nestjs/jwt';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
@@ -31,6 +33,16 @@ const AIProviders = [
     TextToSpeechModule,
     BrowserModule,
     XCacheModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: '10m',
+        },
+      }),
+      inject: [ConfigService],
+    }),
   ],
   controllers: [IntelligenceController],
   providers: [
@@ -38,6 +50,7 @@ const AIProviders = [
     BrowserService,
     AiWrapperService,
     ...AIProviders,
+    IntelligenceGateway,
   ],
 })
 export class IntelligenceModule {}
