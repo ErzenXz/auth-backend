@@ -34,6 +34,9 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
+        generationConfig: {
+          temperature: 0.5,
+        },
         ...options,
       });
       const result = await generativeModel.generateContent(prompt);
@@ -62,6 +65,9 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
+        generationConfig: {
+          temperature: 0.5,
+        },
         ...options,
       });
       const result = await generativeModel.generateContentStream(prompt);
@@ -103,6 +109,9 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
+        generationConfig: {
+          temperature: 0.5,
+        },
         ...options,
       });
 
@@ -137,6 +146,9 @@ export class GoogleProvider implements AIProviderBase {
     try {
       const generativeModel = this.genAI.getGenerativeModel({
         model,
+        generationConfig: {
+          temperature: 0.5,
+        },
         ...options,
       });
 

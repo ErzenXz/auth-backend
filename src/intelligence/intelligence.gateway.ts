@@ -27,7 +27,6 @@ export class IntelligenceGateway
   ) {}
 
   async handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
     const token = client.handshake.query.token as string;
 
     try {
@@ -40,9 +39,7 @@ export class IntelligenceGateway
     }
   }
 
-  async handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
-  }
+  async handleDisconnect(client: Socket) {}
 
   @SubscribeMessage('chatPlainStream')
   async handleChatStreamPlain(
@@ -51,7 +48,7 @@ export class IntelligenceGateway
   ) {
     try {
       // Get userId directly from client data (set during handleConnection)
-      const userId = client.data.userId;
+      const { userId } = client.data;
       if (!userId) {
         client.emit('chatError', { error: 'User not authenticated' });
         return;
@@ -67,14 +64,8 @@ export class IntelligenceGateway
           createChatDto.model,
         );
 
-        let chunkCount = 0;
         for await (const chunk of stream) {
           client.emit('chatChunk', { content: chunk });
-          chunkCount++;
-
-          if (chunkCount % 5 === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 5));
-          }
         }
 
         client.emit('chatComplete', { status: 'done' });
@@ -111,15 +102,32 @@ export class IntelligenceGateway
           userId,
           createChatDto.chatId,
           createChatDto.model,
+          createChatDto.reasoning,
         );
 
-        let chunkCount = 0;
         for await (const chunk of stream) {
-          client.emit('chatChunk', { content: chunk });
-          chunkCount++;
-
-          if (chunkCount % 5 === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 5));
+          if (typeof chunk === 'string') {
+            if (chunk.startsWith('__THINKING__')) {
+              try {
+                const thinkingContent = JSON.parse(
+                  chunk.replace('__THINKING__', ''),
+                );
+                client.emit('chatThinking', {
+                  content: thinkingContent.content,
+                });
+              } catch (e) {
+                console.error('Error parsing thinking data:', e);
+              }
+            } else if (
+              chunk.includes('__STEP_COMPLETE__') ||
+              chunk.includes('__COMPLEXITY__')
+            ) {
+              // Skip emitting these special messages
+            } else {
+              client.emit('chatChunk', { content: chunk });
+            }
+          } else {
+            client.emit('chatChunk', { content: chunk });
           }
         }
 

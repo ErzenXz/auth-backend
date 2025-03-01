@@ -21,7 +21,7 @@ export class LlamaProvider implements AIProviderBase {
     });
     this.defaultModel = this.configService.get<AIModels>(
       'DEFAULT_LLAMA_MODEL',
-      AIModels.LlamaV3_3_70B,
+      AIModels.Qwen2Coder,
     );
   }
 

@@ -23,15 +23,15 @@ export enum AIModels {
   Qwen2_5VL72B = 'qwen/qwen2.5-vl-72b-instruct:free',
 
   // Llama Models
-  LlamaV3_3_70B = 'accounts/fireworks/models/llama-v3p3-70b-instruct',
-  Llama_DeepseekV3 = 'accounts/fireworks/models/deepseek-v3',
-  LlamaV3_1_400B = 'accounts/fireworks/models/llama-v3p1-405b-instruct',
-  LlamaV3_1_8B = 'accounts/fireworks/models/llama-v3p1-8b-instruct',
-  GemmaV2Big = 'accounts/fireworks/models/gemma2-9b-it',
-  GemmaV1Big = 'accounts/fireworks/models/gemma-7b-it',
-  GemmaV1Small = 'accounts/fireworks/models/gemma-2b-it',
-  Qwen2 = 'accounts/fireworks/models/qwen2p5-72b-instruct',
   Qwen2Coder = 'accounts/fireworks/models/qwen2p5-coder-32b-instruct',
-  NousResearch = 'accounts/fireworks/models/nous-hermes-2-mixtral-8x7b-dpo',
-  Mistral22B = 'accounts/fireworks/models/hermes-2-pro-mistral-7b',
+
+  // Groq Models
+  Mistral_Saba_24B = 'mistral-saba-24b',
+  Deepseek_R1_Groq = 'deepseek-r1-distill-llama-70b-specdec',
+  Llama_3_3_70B_speed = 'llama-3.3-70b-specdec',
+  Llama_3_3_70B_vers = 'llama-3.3-70b-versatile',
+  Llama_3_2_11B = 'llama-3.2-11b-vision-preview',
+  Llama_3_1_9B = 'llama-3.1-8b-instant',
+  Llama_3_70B = 'llama3-70b-8192',
+  Gemma_2_9B = 'gemma2-9b-it',
 }

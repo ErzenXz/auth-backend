@@ -9,12 +9,14 @@ import { GoogleProvider } from '../providers/Gemini.provider';
 import { LlamaProvider } from '../providers/Llama.provider';
 import { OpenAiProvider } from '../providers/OpenAI.provider';
 import { AiWrapperService } from '../providers/ai-wrapper.service';
+import { GroqProvider } from '../providers/Groq.provider';
 
 const AIProviders = [
   GoogleProvider,
   OpenAiProvider,
   OpenRouterProvider,
   LlamaProvider,
+  GroqProvider,
 ];
 
 @Module({

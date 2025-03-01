@@ -9,7 +9,12 @@ import { BrowserService } from './browser/browser.service';
 import { AiWrapperService } from './providers/ai-wrapper.service';
 import { AIModels } from './enums/models.enum';
 import { AIResponse, ChatHistory } from './models/ai-wrapper.types';
-import { ReasoningStepType, STEP_ORDER } from './ai-wrapper.constants';
+import {
+  DraftStepType,
+  ProcessResult,
+  ReasoningStepType,
+  STEP_ORDER,
+} from './ai-wrapper.constants';
 import { randomBytes } from 'crypto';
 import { CreateApplicationDto } from './dtos/create-application.dto';
 
@@ -622,7 +627,7 @@ Example Matching:
     // Create prompt for AI to analyze messages
     const prompt = `
       Analyze these chat messages and generate a single, descriptive title (max 50 chars):
-      ${thread.messages.map((m) => `${m.role}: ${m.content}`).join('\n')}
+      ${thread.messages.map((m) => `${m.role}: ${m.content.substring(0, 50)}${m.content.length > 50 ? '...' : ''}`).join('\n')}
 
       Output requirements:
       - Return a single title string
@@ -633,7 +638,7 @@ Example Matching:
 
     try {
       const result = await this.aiWrapper.generateContent(
-        AIModels.GeminiFastCheap,
+        AIModels.Llama_3_2_11B,
         prompt,
       );
 
@@ -805,7 +810,7 @@ Example Matching:
         const thinkingMessagePrompt = `
           Previous Messages:
           ${formattedHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
-  
+      
           ____________________________________
           CURRENT MESSAGE TO THINK ABOUT:
           ____________________________________
@@ -814,27 +819,33 @@ Example Matching:
         `;
 
         // Stream reasoning steps
-        const reasoningStream = this.streamChainOfThought(
+        const reasoningStream = this.streamChainOfDrafts(
           thinkingMessagePrompt,
+          userId,
           selectedModel,
         );
         let fullReasoning = '';
-        let finalAnswer = '';
+        let draftContent = '';
 
         for await (const chunk of reasoningStream) {
           switch (chunk.type) {
-            case 'thinking':
-              fullReasoning += chunk.content;
+            case 'draft':
+              draftContent += chunk.content;
               yield `__THINKING__${JSON.stringify(chunk)}`;
               await new Promise((r) => setImmediate(r));
               break;
-            case 'answer':
-              finalAnswer = chunk.content;
-              yield `__ANSWER__${JSON.stringify(chunk)}`;
+            case 'draft-complete':
+              fullReasoning += draftContent;
+              draftContent = '';
+              yield `__STEP_COMPLETE__${JSON.stringify(chunk)}`;
+              await new Promise((r) => setImmediate(r));
+              break;
+            case 'complexity':
+              yield `__COMPLEXITY__${JSON.stringify(chunk)}`;
               await new Promise((r) => setImmediate(r));
               break;
             case 'complete':
-              thinkingContent = `${fullReasoning}\n${finalAnswer}`;
+              thinkingContent = fullReasoning;
               await new Promise((r) => setImmediate(r));
               break;
           }
@@ -1134,7 +1145,7 @@ Example Matching:
       `;
 
     const aiResult = await this.aiWrapper.generateContent(
-      AIModels.Gemini,
+      AIModels.Llama_3_3_70B_vers,
       prompt,
     );
 
@@ -1498,7 +1509,7 @@ INSTRUCTIONS:
   async processChainOfThought(
     message: string,
     userId: string,
-    model: AIModels = AIModels.GeminiFastCheap,
+    model: AIModels = AIModels.Llama_3_2_11B,
   ) {
     let MAX_STEPS = 20; // Default maximum steps
     let currentStep = 0;
@@ -1571,7 +1582,7 @@ INSTRUCTIONS:
   async *streamChainOfThought(
     message: string,
     userId: string,
-    model: AIModels = AIModels.GeminiFastCheap,
+    model: AIModels = AIModels.Llama_3_3_70B_vers,
   ): AsyncGenerator<any> {
     let MAX_STEPS = 20;
     let currentStep = 0;
@@ -1822,5 +1833,176 @@ INSTRUCTIONS:
       [],
     );
     return response.content.trim();
+  }
+
+  async processChainOfDrafts(
+    message: string,
+    userId: string,
+    model: AIModels = AIModels.Llama_3_3_70B_vers,
+  ): Promise<ProcessResult> {
+    let MAX_DRAFTS = 8;
+    let currentDraft = 0;
+    let complexity: 'low' | 'medium' | 'high' = 'low';
+    const drafts: string[] = [];
+
+    let prompt = this.createDraftPrompt(message, 'INITIAL_DRAFT', '');
+
+    while (currentDraft < MAX_DRAFTS) {
+      const response = await this.aiWrapper.generateContentHistory(
+        model,
+        prompt,
+        [],
+      );
+      const { ideas, detectedComplexity, needsRevision } =
+        this.parseDraftResponse(response.content, currentDraft);
+
+      drafts.push(ideas.join('\n'));
+
+      if (currentDraft === 0 && detectedComplexity) {
+        complexity = detectedComplexity;
+        MAX_DRAFTS = this.getMaxDrafts(complexity);
+      }
+
+      if (!needsRevision) break;
+
+      prompt = this.createDraftPrompt(
+        message,
+        'REVISION',
+        drafts.join('\n\n'),
+        complexity,
+      );
+
+      currentDraft++;
+    }
+
+    return {
+      reasoning: drafts.join('\n\n---\n\n'),
+      drafts,
+      complexity,
+    };
+  }
+
+  async *streamChainOfDrafts(
+    message: string,
+    userId: string,
+    model: AIModels = AIModels.Llama_3_3_70B_speed,
+  ): AsyncGenerator<any> {
+    let MAX_DRAFTS = 8;
+    let currentDraft = 0;
+    let complexity: 'low' | 'medium' | 'high' = 'low';
+    const drafts: string[] = [];
+
+    let prompt = this.createDraftPrompt(message, 'INITIAL_DRAFT', '');
+
+    while (currentDraft < MAX_DRAFTS) {
+      const response = await this.aiWrapper.generateContentHistory(
+        model,
+        prompt,
+        [],
+      );
+
+      const { ideas, detectedComplexity, needsRevision } =
+        this.parseDraftResponse(response.content, currentDraft);
+
+      // Stream individual tokens
+      for await (const token of this.tokenizeResponse(ideas.join('\n'))) {
+        yield { type: 'draft', content: token };
+      }
+
+      drafts.push(ideas.join('\n'));
+
+      if (currentDraft === 0 && detectedComplexity) {
+        complexity = detectedComplexity;
+        MAX_DRAFTS = this.getMaxDrafts(complexity);
+        yield { type: 'complexity', content: complexity };
+      }
+
+      yield { type: 'draft-complete', content: currentDraft + 1 };
+
+      if (!needsRevision) break;
+
+      prompt = this.createDraftPrompt(
+        message,
+        'REVISION',
+        drafts.join('\n\n'),
+        complexity,
+      );
+      currentDraft++;
+    }
+
+    yield {
+      type: 'complete',
+      content: {
+        reasoning: drafts.join('\n\n---\n\n'),
+        drafts,
+        complexity,
+      },
+    };
+  }
+
+  private createDraftPrompt(
+    message: string,
+    step: DraftStepType,
+    previousDrafts: string,
+    complexity?: 'low' | 'medium' | 'high',
+  ): string {
+    return `
+      Generate 3-7 distinct approaches for: "${message}"
+      
+      Requirements:
+      - Each idea must be ≤15 words
+      - Number each concept (1., 2., 3. etc.)
+      - Variety in perspectives/methods
+      ${complexity === 'high' ? '- Include unconventional combinations' : '- Maintain conceptual coherence'}
+      
+      ${previousDrafts ? `Previous ideas:\n${previousDrafts}` : ''}
+  
+      Format exactly:
+      DRAFT_BATCH: ${previousDrafts.split('\n').length + 1}
+      1. [First concise concept]
+      2. [Second contrasting approach]
+      3. [Third innovative angle]
+      ${step === 'INITIAL_DRAFT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
+    `
+      .replace(/^ {4}/gm, '')
+      .trim();
+  }
+
+  private parseDraftResponse(
+    response: string,
+    draftNumber: number,
+  ): {
+    ideas: string[];
+    detectedComplexity?: 'low' | 'medium' | 'high';
+    needsRevision: boolean;
+  } {
+    const cleanResponse = response.replace(/```/g, '').trim();
+
+    // Extract numbered ideas using regex
+    const ideaMatches = [
+      ...cleanResponse.matchAll(/^\d+\.\s(.+?)(?=\s*\d+\.|$)/gm),
+    ];
+    const ideas = ideaMatches.map((m) =>
+      m[1].trim().split(/\s+/).slice(0, 10).join(' '),
+    );
+
+    // Complexity detection (first draft only)
+    const complexityMatch =
+      draftNumber === 0
+        ? cleanResponse.match(/COMPLEXITY:\s*(low|medium|high)/i)
+        : null;
+
+    // Revision check
+    const needsRevision = cleanResponse.includes('IMPROVE_NEEDED: yes');
+
+    return {
+      ideas: ideas.length > 0 ? ideas : ['No viable concepts generated'],
+      detectedComplexity: complexityMatch?.[1]?.toLowerCase() as any,
+      needsRevision: needsRevision && draftNumber < 5,
+    };
+  }
+
+  private getMaxDrafts(complexity: string): number {
+    return { low: 2, medium: 3, high: 5 }[complexity] || 3;
   }
 }
