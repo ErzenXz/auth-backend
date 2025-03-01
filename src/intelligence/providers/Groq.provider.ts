@@ -10,18 +10,18 @@ import {
 import OpenAI from 'openai';
 
 @Injectable()
-export class OpenRouterProvider implements AIProviderBase {
+export class GroqProvider implements AIProviderBase {
   private readonly openai: OpenAI;
   private readonly defaultModel: AIModels;
 
   constructor(private readonly configService: ConfigService) {
     this.openai = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: this.configService.get<string>('OPENROUTER_API_KEY'),
+      baseURL: 'https://api.groq.com/openai/v1',
+      apiKey: this.configService.get<string>('GROQ_API_KEY'),
     });
     this.defaultModel = this.configService.get<AIModels>(
-      'DEFAULT_OPENROUTER_MODEL',
-      AIModels.DeepseekV3,
+      'DEFAULT_GROQ_MODEL',
+      AIModels.Llama_3_3_70B_vers,
     );
   }
 
@@ -49,7 +49,7 @@ export class OpenRouterProvider implements AIProviderBase {
       };
     } catch (error) {
       console.log(error);
-      throw new Error(`OpenAI failed: ${error.message}`);
+      throw new Error(`Groq failed: ${error.message}`);
     }
   }
 
@@ -70,7 +70,7 @@ export class OpenRouterProvider implements AIProviderBase {
         content: this.streamContent(stream),
       };
     } catch (error) {
-      throw new Error(`OpenAI stream failed: ${error.message}`);
+      throw new Error(`Groq stream failed: ${error.message}`);
     }
   }
 
@@ -111,9 +111,7 @@ export class OpenRouterProvider implements AIProviderBase {
       };
     } catch (error) {
       console.log(error);
-      throw new Error(
-        `Deepseek generateContentHistory failed: ${error.message}`,
-      );
+      throw new Error(`Groq generateContentHistory failed: ${error.message}`);
     }
   }
 
@@ -129,6 +127,7 @@ export class OpenRouterProvider implements AIProviderBase {
         messages: [...messagesHistory, { role: 'user', content: prompt }],
         model,
         stream: true,
+
         ...options,
       })) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
@@ -137,7 +136,7 @@ export class OpenRouterProvider implements AIProviderBase {
       };
     } catch (error) {
       throw new Error(
-        `Deepseek generateContentStreamHistory failed: ${error.message}`,
+        `Groq generateContentStreamHistory failed: ${error.message}`,
       );
     }
   }

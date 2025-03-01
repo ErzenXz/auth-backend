@@ -16,6 +16,7 @@ import { GoogleProvider } from './Gemini.provider';
 import { OpenAiProvider } from './OpenAI.provider';
 import { OpenRouterProvider } from './OpenRouter.provider';
 import { LlamaProvider } from './Llama.provider';
+import { GroqProvider } from './Groq.provider';
 
 @Injectable()
 export class AiWrapperService {
@@ -28,12 +29,14 @@ export class AiWrapperService {
     private readonly openAiProvider: OpenAiProvider,
     private readonly openrouterProvider: OpenRouterProvider,
     private readonly llamaProvider: LlamaProvider,
+    private readonly groqProvider: GroqProvider,
   ) {
     this.providers = new Map<AIProvider, AIProviderBase>([
       [AI_PROVIDERS.GOOGLE, this.googleProvider],
       [AI_PROVIDERS.OPENAI, this.openAiProvider],
       [AI_PROVIDERS.OPENROUTER, this.openrouterProvider],
       [AI_PROVIDERS.LLAMA, this.llamaProvider],
+      [AI_PROVIDERS.GROQ, this.groqProvider],
     ]);
     this.defaultModels = DEFAULT_MODELS;
   }

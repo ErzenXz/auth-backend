@@ -14,6 +14,7 @@ import { OpenRouterProvider } from './providers/OpenRouter.provider';
 import { LlamaProvider } from './providers/Llama.provider';
 import { IntelligenceGateway } from './intelligence.gateway';
 import { JwtModule } from '@nestjs/jwt';
+import { GroqProvider } from './providers/Groq.provider';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
@@ -25,6 +26,7 @@ const AIProviders = [
   OpenAiProvider,
   OpenRouterProvider,
   LlamaProvider,
+  GroqProvider,
 ];
 @Module({
   imports: [

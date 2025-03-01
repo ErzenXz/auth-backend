@@ -376,6 +376,19 @@ export class IntelligenceController {
     );
   }
 
+  @Post('chat/reasoning/draft')
+  @Auth()
+  async reasoningDraft(
+    @Body() createChatDto: CreateChatDto,
+    @HttpContext() context: IHttpContext,
+  ): Promise<any> {
+    return await this.intelligenceService.processChainOfDrafts(
+      createChatDto.message,
+      context.user.id,
+      createChatDto.model,
+    );
+  }
+
   @Sse('chat/reasoning/stream')
   @Auth()
   async streamReasoning(

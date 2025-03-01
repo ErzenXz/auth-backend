@@ -1880,6 +1880,30 @@
         ]
       }
     },
+    "/intelligence/chat/reasoning/draft": {
+      "post": {
+        "operationId": "IntelligenceController_reasoningDraft",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
     "/intelligence/chat/reasoning/stream": {
       "get": {
         "operationId": "IntelligenceController_streamReasoning",
