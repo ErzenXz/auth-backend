@@ -65,7 +65,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
-    "elevenlabs": "^0.18.1",
+    "elevenlabs": "^0.36.4",
     "graphql": "^16.10.0",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.1",
