@@ -43,6 +43,7 @@ export const AI_PROVIDERS = {
   OPENROUTER: 'OPENROUTER',
   LLAMA: 'LLAMA',
   GROQ: 'GROQ',
+  ANTHROPIC: 'ANTHROPIC',
 } as const;
 
 export type AIProvider = keyof typeof AI_PROVIDERS;
@@ -83,6 +84,17 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Llama_3_1_9B]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_70B]: AI_PROVIDERS.GROQ,
   [AIModels.Gemma_2_9B]: AI_PROVIDERS.GROQ,
+
+  // Anthropic Models
+  [AIModels.Claude37Sonnet]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude35SonnetNew]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude35Haiku]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude35SonnetOld]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude3Haiku]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude3Opus]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude3Sonnet]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude21]: AI_PROVIDERS.ANTHROPIC,
+  [AIModels.Claude20]: AI_PROVIDERS.ANTHROPIC,
 };
 
 export const DEFAULT_MODELS: Record<AIProvider, AIModels> = {
@@ -91,4 +103,5 @@ export const DEFAULT_MODELS: Record<AIProvider, AIModels> = {
   [AI_PROVIDERS.OPENROUTER]: AIModels.DeepseekR1DistilledLlama,
   [AI_PROVIDERS.LLAMA]: AIModels.Qwen2Coder,
   [AI_PROVIDERS.GROQ]: AIModels.DeepseekV3,
+  [AI_PROVIDERS.ANTHROPIC]: AIModels.Claude3Opus,
 };

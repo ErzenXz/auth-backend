@@ -1032,10 +1032,20 @@ Example Matching:
     const skip = (page - 1) * limit;
 
     return await this.prisma.aIThread.findMany({
-      where: { userId },
+      where: {
+        userId,
+        messages: {
+          some: {},
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: skip,
+      include: {
+        _count: {
+          select: { messages: true },
+        },
+      },
     });
   }
   async getChatThreadMessages(
@@ -1064,6 +1074,153 @@ Example Matching:
       take: limit,
       skip: skip,
     });
+  }
+
+  async deleteChatThread(userId: string, threadId: string) {
+    const thread = await this.prisma.aIThread.findFirst({
+      where: { id: threadId, userId },
+    });
+
+    if (!thread) {
+      throw new NotFoundException('Chat thread not found');
+    }
+
+    await this.prisma.aIThread.delete({
+      where: { id: threadId, userId },
+    });
+
+    return { message: 'Chat thread deleted successfully' };
+  }
+
+  async duplicateChatThread(userId: string, threadId: string) {
+    const originalThread = await this.prisma.aIThread.findFirst({
+      where: { id: threadId, userId },
+      include: { messages: true },
+    });
+
+    if (!originalThread) {
+      throw new NotFoundException('Chat thread not found');
+    }
+
+    const newThread = await this.prisma.aIThread.create({
+      data: {
+        userId,
+        title: `${originalThread.title || 'Chat Thread'} (Copy)`,
+      },
+    });
+
+    if (originalThread.messages?.length) {
+      await this.prisma.aIThreadMessage.createMany({
+        data: originalThread.messages.map((msg) => ({
+          chatId: newThread.id,
+          content: msg.content,
+          role: msg.role,
+          createdAt: new Date(),
+        })),
+      });
+    }
+
+    return newThread;
+  }
+
+  async renameChatThread(userId: string, threadId: string, newName: string) {
+    const thread = await this.prisma.aIThread.findFirst({
+      where: { id: threadId, userId },
+    });
+
+    if (!thread) {
+      throw new NotFoundException('Chat thread not found');
+    }
+
+    return await this.prisma.aIThread.update({
+      where: { id: threadId },
+      data: { title: newName },
+    });
+  }
+
+  async getAllChatThreadsWithMessages(userId: string) {
+    const threads = await this.prisma.aIThread.findMany({
+      where: {
+        userId,
+        messages: {
+          some: {},
+        },
+      },
+      include: {
+        messages: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+        _count: {
+          select: { messages: true },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return threads;
+  }
+
+  async getChatThreadForExport(userId: string, threadId: string) {
+    const thread = await this.prisma.aIThread.findFirst({
+      where: { id: threadId, userId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            content: true,
+            role: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!thread) {
+      throw new NotFoundException('Chat thread not found');
+    }
+
+    return {
+      id: thread.id,
+      title: thread.title,
+      createdAt: thread.createdAt,
+      messages: thread.messages,
+      exportedAt: new Date(),
+    };
+  }
+
+  async getAllChatThreadsForExport(userId: string) {
+    const threads = await this.prisma.aIThread.findMany({
+      where: {
+        userId,
+        messages: { some: {} },
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            content: true,
+            role: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      threads: threads.map((thread) => ({
+        id: thread.id,
+        title: thread.title,
+        createdAt: thread.createdAt,
+        messages: thread.messages,
+      })),
+      exportedAt: new Date(),
+      totalThreads: threads.length,
+    };
   }
 
   async chatGetUserMemories(prompt: string, userId: string) {
@@ -1947,21 +2104,21 @@ INSTRUCTIONS:
     complexity?: 'low' | 'medium' | 'high',
   ): string {
     return `
-      Generate 3-7 distinct approaches for: "${message}"
+      Generate 4-17 distinct answers/solutions for: "${message}"
       
       Requirements:
-      - Each idea must be ≤15 words
-      - Number each concept (1., 2., 3. etc.)
-      - Variety in perspectives/methods
-      ${complexity === 'high' ? '- Include unconventional combinations' : '- Maintain conceptual coherence'}
+      - Each answer must be ≤15 words
+      - Number each solution (1., 2., 3. etc.)
+      - Variety in responses/approaches 
+      ${complexity === 'high' ? '- Include unconventional solutions' : '- Maintain practical answers'}
       
-      ${previousDrafts ? `Previous ideas:\n${previousDrafts}` : ''}
+      ${previousDrafts ? `Previous answers:\n${previousDrafts}` : ''}
   
       Format exactly:
       DRAFT_BATCH: ${previousDrafts.split('\n').length + 1}
-      1. [First concise concept]
-      2. [Second contrasting approach]
-      3. [Third innovative angle]
+      1. [First concise solution]
+      2. [Second contrasting answer]
+      3. [Third innovative solution]
       ${step === 'INITIAL_DRAFT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
     `
       .replace(/^ {4}/gm, '')
@@ -2003,6 +2160,6 @@ INSTRUCTIONS:
   }
 
   private getMaxDrafts(complexity: string): number {
-    return { low: 2, medium: 3, high: 5 }[complexity] || 3;
+    return { low: 2, medium: 4, high: 8 }[complexity] || 3;
   }
 }

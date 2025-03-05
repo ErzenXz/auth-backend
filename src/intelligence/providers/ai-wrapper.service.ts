@@ -17,6 +17,7 @@ import { OpenAiProvider } from './OpenAI.provider';
 import { OpenRouterProvider } from './OpenRouter.provider';
 import { LlamaProvider } from './Llama.provider';
 import { GroqProvider } from './Groq.provider';
+import { AnthropicProvider } from './Anthropic.provider';
 
 @Injectable()
 export class AiWrapperService {
@@ -30,6 +31,7 @@ export class AiWrapperService {
     private readonly openrouterProvider: OpenRouterProvider,
     private readonly llamaProvider: LlamaProvider,
     private readonly groqProvider: GroqProvider,
+    private readonly anthropicProvider: AnthropicProvider,
   ) {
     this.providers = new Map<AIProvider, AIProviderBase>([
       [AI_PROVIDERS.GOOGLE, this.googleProvider],
@@ -37,6 +39,7 @@ export class AiWrapperService {
       [AI_PROVIDERS.OPENROUTER, this.openrouterProvider],
       [AI_PROVIDERS.LLAMA, this.llamaProvider],
       [AI_PROVIDERS.GROQ, this.groqProvider],
+      [AI_PROVIDERS.ANTHROPIC, this.anthropicProvider],
     ]);
     this.defaultModels = DEFAULT_MODELS;
   }

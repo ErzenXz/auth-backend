@@ -385,7 +385,6 @@ export class MessagingService {
       ),
     }));
   }
-
   /**
    * Retrieves detailed user information based on the username.
    *
@@ -406,6 +405,15 @@ export class MessagingService {
             settings: true,
           },
         },
+        refreshTokens: {
+          orderBy: {
+            lastUsed: 'desc',
+          },
+          take: 1,
+          select: {
+            lastUsed: true,
+          },
+        },
       },
     });
 
@@ -417,7 +425,16 @@ export class MessagingService {
     const settings: UserSettings =
       (userPrivacySetting?.settings as UserSettings) || {};
 
-    const activityStatus = settings.profile?.activeStatus || false;
+    const activityStatusEnabled = settings.profile?.activeStatus || false;
+
+    // Only check online status if user has enabled activity status
+    const isOnline = activityStatusEnabled
+      ? user.refreshTokens[0]?.lastUsed
+        ? new Date().getTime() -
+            new Date(user.refreshTokens[0].lastUsed).getTime() <
+          10 * 60 * 1000
+        : false
+      : false;
 
     return {
       id: user.id,
@@ -425,7 +442,7 @@ export class MessagingService {
       fullName: user.fullName,
       email: user.email,
       profilePicture: user.profilePicture,
-      activityStatus,
+      activityStatus: isOnline,
     };
   }
 
