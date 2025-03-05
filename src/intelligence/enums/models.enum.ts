@@ -34,4 +34,15 @@ export enum AIModels {
   Llama_3_1_9B = 'llama-3.1-8b-instant',
   Llama_3_70B = 'llama3-70b-8192',
   Gemma_2_9B = 'gemma2-9b-it',
+
+  // Anthropic Models
+  Claude37Sonnet = 'claude-3-7-sonnet-20250219',
+  Claude35SonnetNew = 'claude-3-5-sonnet-20241022',
+  Claude35Haiku = 'claude-3-5-haiku-20241022',
+  Claude35SonnetOld = 'claude-3-5-sonnet-20240620',
+  Claude3Haiku = 'claude-3-haiku-20240307',
+  Claude3Opus = 'claude-3-opus-20240229',
+  Claude3Sonnet = 'claude-3-sonnet-20240229',
+  Claude21 = 'claude-2.1',
+  Claude20 = 'claude-2.0',
 }

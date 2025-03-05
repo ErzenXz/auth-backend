@@ -15,6 +15,8 @@ import { LlamaProvider } from './providers/Llama.provider';
 import { IntelligenceGateway } from './intelligence.gateway';
 import { JwtModule } from '@nestjs/jwt';
 import { GroqProvider } from './providers/Groq.provider';
+import { CrawlerService } from './browser/crawler.service';
+import { AnthropicProvider } from './providers/Anthropic.provider';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
@@ -27,7 +29,10 @@ const AIProviders = [
   OpenRouterProvider,
   LlamaProvider,
   GroqProvider,
+  AnthropicProvider,
 ];
+
+const Services = [BrowserService, AiWrapperService, CrawlerService];
 @Module({
   imports: [
     PrismaModule,
@@ -49,10 +54,9 @@ const AIProviders = [
   controllers: [IntelligenceController],
   providers: [
     IntelligenceService,
-    BrowserService,
-    AiWrapperService,
-    ...AIProviders,
     IntelligenceGateway,
+    ...Services,
+    ...AIProviders,
   ],
 })
 export class IntelligenceModule {}

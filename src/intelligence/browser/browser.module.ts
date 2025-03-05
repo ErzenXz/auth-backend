@@ -10,6 +10,8 @@ import { LlamaProvider } from '../providers/Llama.provider';
 import { OpenAiProvider } from '../providers/OpenAI.provider';
 import { AiWrapperService } from '../providers/ai-wrapper.service';
 import { GroqProvider } from '../providers/Groq.provider';
+import { CrawlerService } from './crawler.service';
+import { AnthropicProvider } from '../providers/Anthropic.provider';
 
 const AIProviders = [
   GoogleProvider,
@@ -17,11 +19,15 @@ const AIProviders = [
   OpenRouterProvider,
   LlamaProvider,
   GroqProvider,
+  AnthropicProvider,
 ];
+
+const Services = [BrowserService, AiWrapperService, CrawlerService];
 
 @Module({
   imports: [ConfigModule, XCacheModule, NewsModule],
   controllers: [BrowserController],
-  providers: [BrowserService, AiWrapperService, ...AIProviders],
+  providers: [...Services, ...AIProviders],
+  exports: [BrowserService],
 })
 export class BrowserModule {}

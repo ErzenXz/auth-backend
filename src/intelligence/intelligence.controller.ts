@@ -434,7 +434,6 @@ export class IntelligenceController {
       +limit,
     );
   }
-
   /**
    * Get all user chat thread messages with pagination.
    * @param {string} id - Thread ID
@@ -455,6 +454,57 @@ export class IntelligenceController {
       id,
       +page,
       +limit,
+    );
+  }
+
+  /**
+   * Delete a chat thread
+   * @param {string} id - Thread ID
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   */
+  @Delete('chat/thread/:id')
+  @Auth()
+  async deleteChatThread(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.deleteChatThread(context.user.id, id);
+  }
+
+  /**
+   * Duplicate a chat thread
+   * @param {string} id - Thread ID
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   */
+  @Post('chat/thread/:id/duplicate')
+  @Auth()
+  async duplicateChatThread(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.duplicateChatThread(
+      context.user.id,
+      id,
+    );
+  }
+
+  /**
+   * Rename a chat thread
+   * @param {string} id - Thread ID
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   * @param {Object} body - Request body containing new name
+   */
+  @Put('chat/thread/:id/rename')
+  @Auth()
+  async renameChatThread(
+    @Param('id') id: string,
+    @Body() body: { name: string },
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.renameChatThread(
+      context.user.id,
+      id,
+      body.name,
     );
   }
 
@@ -546,5 +596,62 @@ export class IntelligenceController {
       context.user.id,
       id,
     );
+  }
+
+  /**
+   * Get all chat threads with their messages
+   * @param {IHttpContext} context - The HTTP context containing user information.
+   */
+  @Get('chat/threads/sync')
+  @Auth()
+  async syncChatThreads(@HttpContext() context: IHttpContext) {
+    return await this.intelligenceService.getAllChatThreadsWithMessages(
+      context.user.id,
+    );
+  }
+
+  /**
+   * Export a specific chat thread
+   * @param {string} id - Thread ID to export
+   * @param {IHttpContext} context - The HTTP context containing user information
+   * @param {Response} res - Express response object
+   */
+  @Get('chat/thread/:id/export')
+  @Auth()
+  @Header('Content-Type', 'application/json')
+  async exportChatThread(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+    @Res() res: Response,
+  ) {
+    const thread = await this.intelligenceService.getChatThreadForExport(
+      context.user.id,
+      id,
+    );
+
+    const filename = `chat-thread-${id}-${new Date().toISOString()}.json`;
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    return res.send(thread);
+  }
+
+  /**
+   * Export all chat threads for the user
+   * @param {IHttpContext} context - The HTTP context containing user information
+   * @param {Response} res - Express response object
+   */
+  @Get('chat/threads/export')
+  @Auth()
+  @Header('Content-Type', 'application/json')
+  async exportAllChatThreads(
+    @HttpContext() context: IHttpContext,
+    @Res() res: Response,
+  ) {
+    const threads = await this.intelligenceService.getAllChatThreadsForExport(
+      context.user.id,
+    );
+
+    const filename = `all-chat-threads-${new Date().toISOString()}.json`;
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    return res.send(threads);
   }
 }

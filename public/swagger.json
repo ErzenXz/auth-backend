@@ -1963,6 +1963,73 @@
         "tags": [
           "Intelligence"
         ]
+      },
+      "delete": {
+        "operationId": "IntelligenceController_deleteChatThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{id}/duplicate": {
+      "post": {
+        "operationId": "IntelligenceController_duplicateChatThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{id}/rename": {
+      "put": {
+        "operationId": "IntelligenceController_renameChatThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
       }
     },
     "/intelligence/chat/memory": {
@@ -2081,6 +2148,57 @@
         ]
       }
     },
+    "/intelligence/chat/threads/sync": {
+      "get": {
+        "operationId": "IntelligenceController_syncChatThreads",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{id}/export": {
+      "get": {
+        "operationId": "IntelligenceController_exportChatThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/threads/export": {
+      "get": {
+        "operationId": "IntelligenceController_exportAllChatThreads",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
     "/tts/convert": {
       "get": {
         "operationId": "TextToSpeechController_convert",
@@ -2124,6 +2242,86 @@
     "/browser/search": {
       "get": {
         "operationId": "BrowserController_searchWeb",
+        "parameters": [
+          {
+            "name": "query",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/browser/raw-search": {
+      "get": {
+        "operationId": "BrowserController_rawSearch",
+        "parameters": [
+          {
+            "name": "query",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/browser/raw-fetch": {
+      "get": {
+        "operationId": "BrowserController_rawFetch",
+        "parameters": [
+          {
+            "name": "url",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/browser/ai-search": {
+      "get": {
+        "operationId": "BrowserController_aiSearch",
+        "parameters": [
+          {
+            "name": "query",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/browser/ai-search/stream": {
+      "get": {
+        "operationId": "BrowserController_aiSearchStream",
         "parameters": [
           {
             "name": "query",
