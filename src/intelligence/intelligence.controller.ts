@@ -26,6 +26,7 @@ import { ProcessUserInstructionDto } from './dtos/process-user-instruction.dto';
 import { ProcessBetaUserInstructionDto } from './dtos/process-beta-user-instruction.dto';
 import { CreateApplicationDto } from './dtos/create-application.dto';
 import { Observable } from 'rxjs';
+import { RenameChatThreadDto } from './dtos/rename-chat-thread.dto';
 
 /**
  * IntelligenceController handles operations related to intelligence instructions and user memory.
@@ -369,7 +370,7 @@ export class IntelligenceController {
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
   ): Promise<any> {
-    return await this.intelligenceService.processChainOfThought(
+    return await this.intelligenceService.processChainOfThoughts(
       createChatDto.message,
       context.user.id,
       createChatDto.model,
@@ -395,7 +396,7 @@ export class IntelligenceController {
     @Body() createChatDto: CreateChatDto,
     @HttpContext() context: IHttpContext,
   ) {
-    const stream = this.intelligenceService.streamChainOfThought(
+    const stream = this.intelligenceService.streamChainOfThoughts(
       createChatDto.message,
       context.user.id,
       createChatDto.model,
@@ -498,7 +499,7 @@ export class IntelligenceController {
   @Auth()
   async renameChatThread(
     @Param('id') id: string,
-    @Body() body: { name: string },
+    @Body() body: RenameChatThreadDto,
     @HttpContext() context: IHttpContext,
   ) {
     return await this.intelligenceService.renameChatThread(

@@ -28,13 +28,16 @@ export const STEP_ORDER: ReasoningStepType[] = [
 ];
 
 export type DraftStepType = 'INITIAL_DRAFT' | 'REVISION';
+export type ThoughtStepType = 'INITIAL_THOUGHT' | 'REVISION';
 
 export const DRAFT_STEPS: DraftStepType[] = ['INITIAL_DRAFT', 'REVISION'];
+export const THOUGHT_STEPS: ThoughtStepType[] = ['INITIAL_THOUGHT', 'REVISION'];
 
 export interface ProcessResult {
   reasoning: string;
-  drafts: string[];
-  complexity: 'low' | 'medium' | 'high';
+  drafts?: string[];
+  thoughts?: string[];
+  complexity: 'low' | 'medium' | 'high' | 'very-high';
 }
 
 export const AI_PROVIDERS = {
