@@ -14,6 +14,7 @@ import {
   ProcessResult,
   ReasoningStepType,
   STEP_ORDER,
+  ThoughtStepType,
 } from './ai-wrapper.constants';
 import { randomBytes } from 'crypto';
 import { CreateApplicationDto } from './dtos/create-application.dto';
@@ -689,19 +690,19 @@ Example Matching:
     ${userChatHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
 
     ____________________________________
-    CURRENT MESSAGE TO THINK ABOUT:
+    CURRENT MESSAGE:
     ____________________________________
     ${message}
     ____________________________________
     `;
 
     if (reasoning) {
-      const response = await this.processChainOfThought(
+      const response = await this.processChainOfThoughts(
         thinkingMessagePrompt,
         userId,
         model,
       );
-      thinkingContent = response.reasoning + '\n' + response.answer;
+      thinkingContent = response.reasoning;
     }
 
     const userMemories = await this.chatGetUserMemories(message, userId);
@@ -812,29 +813,28 @@ Example Matching:
           ${formattedHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
       
           ____________________________________
-          CURRENT MESSAGE TO THINK ABOUT:
+          CURRENT MESSAGE:
           ____________________________________
           ${message}
           ____________________________________
         `;
 
         // Stream reasoning steps
-        const reasoningStream = this.streamChainOfDrafts(
+        const reasoningStream = this.streamChainOfThoughts(
           thinkingMessagePrompt,
           userId,
           selectedModel,
         );
         let fullReasoning = '';
         let draftContent = '';
-
         for await (const chunk of reasoningStream) {
           switch (chunk.type) {
-            case 'draft':
+            case 'thought':
               draftContent += chunk.content;
               yield `__THINKING__${JSON.stringify(chunk)}`;
               await new Promise((r) => setImmediate(r));
               break;
-            case 'draft-complete':
+            case 'thought-complete':
               fullReasoning += draftContent;
               draftContent = '';
               yield `__STEP_COMPLETE__${JSON.stringify(chunk)}`;
@@ -1075,7 +1075,6 @@ Example Matching:
       skip: skip,
     });
   }
-
   async deleteChatThread(userId: string, threadId: string) {
     const thread = await this.prisma.aIThread.findFirst({
       where: { id: threadId, userId },
@@ -1085,11 +1084,17 @@ Example Matching:
       throw new NotFoundException('Chat thread not found');
     }
 
+    // First delete all messages in the thread
+    await this.prisma.aIThreadMessage.deleteMany({
+      where: { chatId: threadId },
+    });
+
+    // Then delete the thread itself
     await this.prisma.aIThread.delete({
       where: { id: threadId, userId },
     });
 
-    return { message: 'Chat thread deleted successfully' };
+    return { message: 'Chat thread and messages deleted successfully' };
   }
 
   async duplicateChatThread(userId: string, threadId: string) {
@@ -1266,40 +1271,30 @@ Example Matching:
       return 'no';
     }
 
-    const prompt = `
- You are an expert at determining when a user's message requires a web search. Your job is to decide whether to respond with "no" or a concise search query based on the user's intent and conversation context.
+    const prompt = `You are an expert in evaluating whether a user's message calls for a web search. Your sole task is to decide—based on the user's intent and the conversation context—if you should output "no" or generate a single, concise search query using only relevant keywords.
 
-**When to return "no":**
-- The message is a casual greeting or small talk.
-- It expresses personal opinions, emotions, or preferences.
-- It discusses hypothetical scenarios or general knowledge that doesn't require up-to-date verification.
-- It is a follow-up message that doesn’t add new search-related information.
+When to respond with "no":
 
-**When to return a search query:**
-- The user asks about current events, news, or real-world data.
-- The user requests factual, technical, or tutorial information.
-- The message includes specific names, places, or events.
-- The query needs verification or is explicitly asking for a search.
-- There is insufficient context or available data in the database.
-- The user confirms a previous offer to search (e.g., “Yes, please” after "Do you want me to search for that?").
+The message consists of casual greetings, small talk, or pleasantries.
+It shares personal opinions, emotions, or subjective experiences.
+It discusses hypothetical scenarios or general topics that do not require real-time or verified information.
+It is a follow-up message that does not introduce new, search-relevant content.
+When to generate a search query:
 
-**Guidelines:**
-1. **Output ONLY** "no" or a single, focused search query.
-2. Keep the search query concise and composed of relevant keywords.
-3. Remove any personal or sensitive details from the query.
-4. Always consider the conversation context and chat history.
-5. Ensure the query accurately reflects the user’s intent.
+The user asks about current events, news, or real-world data.
+The message requests factual, technical, or tutorial information.
+It includes specific names, places, or events that warrant verification.
+The query explicitly asks for a search or implies that up-to-date information is needed.
+The conversation lacks sufficient context or data, making a web search necessary.
+The user affirms a previous prompt to search (e.g., “Yes, please”).
+Guidelines:
 
-**Examples:**
-- User: "Tell me the latest news in Kosovo."  
-  → Response: "latest news Kosovo"
-- User: "How does quantum computing work?"  
-  → Response: "quantum computing basics"
-- User: "Good morning!"  
-  → Response: "no"
-
-**User Message:** "${message}"
-      `;
+Output ONLY either "no" or a single, focused search query—nothing else.
+Ensure the search query is concise and strictly composed of keywords relevant to the user's request.
+Omit any personal or sensitive details from the query.
+Always consider the full conversation context and chat history to accurately capture the user's intent.
+Your output must clearly reflect whether a search is needed and, if so, what specific query to use.
+User Message: "${message}"`;
 
     const aiResult = await this.aiWrapper.generateContent(
       AIModels.Llama_3_3_70B_vers,
@@ -1307,13 +1302,21 @@ Example Matching:
     );
 
     let response = aiResult.content.trim();
-
     // Validate response
     if (response !== 'no' && response.length > 0) {
-      const searchResult = await this.browserService.searchAndProcess(response);
-      return searchResult.content;
+      const searchResult = await this.browserService.aiSearch(response);
+
+      // Ensure response is JSON formatted
+      try {
+        if (typeof searchResult === 'string') {
+          return JSON.parse(searchResult);
+        }
+        return searchResult;
+      } catch (e) {
+        return JSON.stringify({ searchResults: [] });
+      }
     }
-    return 'no search data found';
+    return JSON.stringify({ searchResults: [] });
   }
 
   private async chatGetUserInstructions(userId: string) {
@@ -1330,78 +1333,15 @@ Example Matching:
     instructions: any[],
     thinking?: string,
   ): string {
-    //     return `Master Conversation Processing Framework 🤖💬
-
-    // Objective:
-    // Deliver direct, complete answers that fully address the user's request with a friendly and concise tone.
-
-    // Core Principles:
-    // - **Emotional Intelligence:** Recognize the user's preferences and keep the response personable.
-    // - **Contextual Awareness:** Provide direct answers without unnecessary commentary.
-    // - **Adaptive Communication:** Use a personalized greeting if possible, then present the complete solution.
-
-    // Response Generation Guidelines:
-    // - **Direct & Concise:** Start with a friendly greeting and then provide the solution.
-    // - **Content Integration:** Include complete code examples or explanations as required by the request.
-    // - **Markdown Formatting:**
-    //   - *Italics* for emphasis
-    //   - **Bold** for key points
-    //   - Use code blocks for code
-    //   - Lists when helpful
-    // - **Avoid Extra Commentary:** Do not include lengthy follow-up questions or meta commentary.
-
-    // Workflow:
-    // 1. **Input Analysis:** Identify and focus solely on the explicit request.
-    // 2. **Response Crafting:**
-    //    - If the request is for a code solution (e.g., "Build a snake game in Python that plays itself!"), start with a personalized greeting (e.g., "Hey Erzen, here is the code:") followed by the complete solution.
-    //    - Do not add extra commentary beyond what is necessary.
-    // 3. **Final Output:** Ensure the response is actionable and concise.
-
-    // Strict Guidelines:
-    // - Always provide a complete solution directly.
-    // - Include a brief, friendly greeting when appropriate.
-    // - Avoid extra commentary, multiple follow-up questions, or meta references to the process.
-
-    // User Given Instructions:
-    // ${instructions.map((ui) => ui.job).join(', ')}
-
-    // External Content:
-    // ${external || 'No external content available'}
-
-    // General Info:
-    // ${info}
-
-    // User Saved Memories:
-    // ${memories}
-
-    // THINKING CONTEXT:
-    // <think>
-    // I have analyzed the user's request. I will generate a concise, personalized response starting with a greeting, followed by the complete solution (e.g., code), without extra commentary.
-    // ${thinking || "Processing the user's message for a direct and friendly answer."}
-    // </think>
-
-    // -------------------
-    // User:
-    // ${message}
-
-    // -------------------
-    // Your Response:`;
-
     return `
     SYSTEM PROMPT:
 -----------------------------------------------------------
-You are ErzenAI, a large language model designed to provide helpful, accurate, and engaging responses.
-
 [GENERAL GUIDELINES]
 - Use the "User Given Instructions" to understand the overall job and context.
 - When incorporating external content, do so only if it adds clear value and enhances the conversation.
   - Use only the provided external links or media if they contribute meaningfully.
-  - Always format any external content as proper Markdown.
-  - Cite all sources appropriately when including external information.
-- Integrate general information such as the current date or other pertinent details from the "General Info" section.
-- Reference user saved memories only if they are directly relevant to the current prompt. Prioritize important names or key user details.
+- Reference user saved memories only if they are directly relevant to the current prompt.
 - Leverage the "THINKING CONTEXT" enclosed within '<think> ... </think>' to guide your internal reasoning, but ensure that your final response remains clear, direct, and user-friendly.
-- Maintain a direct, friendly, and professional tone in your responses.
 
 [DATA FIELDS]
 1. **User Given Instructions:**
@@ -1409,8 +1349,6 @@ You are ErzenAI, a large language model designed to provide helpful, accurate, a
 
 2. **External Content Integration:**
    - Content Source: ${external || 'No external content available'}
-   - Note: Integrate external content only if it clearly enhances the conversation. Otherwise, ignore this section.
-   - Formatting: Convert any external links or media to Markdown and include citations.
 
 3. **General Info:**
    ${info}
@@ -1663,157 +1601,6 @@ INSTRUCTIONS:
     return `${seconds} second${seconds > 1 ? 's' : ''} ago`;
   }
 
-  async processChainOfThought(
-    message: string,
-    userId: string,
-    model: AIModels = AIModels.Llama_3_2_11B,
-  ) {
-    let MAX_STEPS = 20; // Default maximum steps
-    let currentStep = 0;
-    let fullReasoning = '';
-    let finalAnswer = '';
-    let complexity: 'low' | 'medium' | 'high' = 'low';
-
-    // Initial system message with complexity assessment
-    let prompt = this.createReasoningPrompt(
-      message,
-      'PROBLEM_DECOMPOSITION',
-      '',
-      'auto',
-    );
-
-    while (currentStep < MAX_STEPS) {
-      const response = await this.aiWrapper.generateContentHistory(
-        model,
-        prompt,
-        [],
-      );
-
-      const { reasoning, answer, nextStepType, detectedComplexity } =
-        this.parseReasoningStep(response.content, currentStep);
-
-      fullReasoning += `[Step ${currentStep + 1} - ${nextStepType}]\n${reasoning}\n\n`;
-
-      // Set complexity after first step analysis
-      if (currentStep === 0 && detectedComplexity) {
-        complexity = detectedComplexity;
-        MAX_STEPS = this.getMaxSteps(complexity);
-      }
-
-      if (answer && !finalAnswer) {
-        finalAnswer = answer;
-        break;
-      }
-
-      // Early exit check for low complexity
-      if (complexity === 'low' && currentStep >= 1) {
-        break;
-      }
-
-      prompt = this.createReasoningPrompt(
-        message,
-        nextStepType,
-        fullReasoning,
-        complexity,
-      );
-
-      currentStep++;
-    }
-
-    if (!finalAnswer) {
-      finalAnswer = await this.generateFinalAnswer(
-        message,
-        fullReasoning,
-        model,
-      );
-    }
-
-    return {
-      reasoning: fullReasoning.trim(),
-      answer: finalAnswer.trim(),
-      steps: currentStep + 1,
-      complexity,
-    };
-  }
-
-  async *streamChainOfThought(
-    message: string,
-    userId: string,
-    model: AIModels = AIModels.Llama_3_3_70B_vers,
-  ): AsyncGenerator<any> {
-    let MAX_STEPS = 20;
-    let currentStep = 0;
-    let fullReasoning = '';
-    let finalAnswer = '';
-    let complexity: 'low' | 'medium' | 'high' = 'low';
-
-    let prompt = this.createReasoningPrompt(
-      message,
-      'PROBLEM_DECOMPOSITION',
-      '',
-      'auto',
-    );
-
-    while (currentStep < MAX_STEPS) {
-      const response = await this.aiWrapper.generateContentHistory(
-        model,
-        prompt,
-        [],
-      );
-
-      const { reasoning, answer, nextStepType, detectedComplexity } =
-        this.parseReasoningStep(response.content, currentStep);
-
-      // Stream individual tokens if your AI wrapper supports it
-      // Otherwise stream whole reasoning steps
-      for await (const token of this.tokenizeResponse(reasoning)) {
-        yield { type: 'thinking', content: token };
-      }
-
-      fullReasoning += `[Step ${currentStep + 1} - ${nextStepType}]\n${reasoning}\n\n`;
-
-      if (currentStep === 0 && detectedComplexity) {
-        complexity = detectedComplexity;
-        MAX_STEPS = this.getMaxSteps(complexity);
-        yield { type: 'complexity', content: complexity };
-      }
-
-      if (answer && !finalAnswer) {
-        finalAnswer = answer;
-        yield { type: 'answer', content: answer };
-        break;
-      }
-
-      yield { type: 'step-complete', content: currentStep + 1 };
-
-      if (complexity === 'low' && currentStep >= 1) {
-        break;
-      }
-
-      prompt = this.createReasoningPrompt(
-        message,
-        nextStepType,
-        fullReasoning,
-        complexity,
-      );
-      currentStep++;
-    }
-
-    if (!finalAnswer) {
-      finalAnswer = await this.generateFinalAnswer(
-        message,
-        fullReasoning,
-        model,
-      );
-      yield { type: 'answer', content: finalAnswer };
-    }
-
-    yield {
-      type: 'complete',
-      content: { reasoning: fullReasoning.trim(), steps: currentStep + 1 },
-    };
-  }
-
   private async *tokenizeResponse(text: string): AsyncGenerator<string> {
     // Implement proper tokenization based on your needs
     const words = text.split(/(\s+)/);
@@ -1824,173 +1611,7 @@ INSTRUCTIONS:
     }
   }
 
-  private parseReasoningStep(
-    response: string,
-    currentStep: number,
-  ): {
-    reasoning: string;
-    answer?: string;
-    nextStepType: ReasoningStepType;
-    detectedComplexity?: 'low' | 'medium' | 'high';
-  } {
-    // First, clean the response
-    const cleanResponse = response
-      .replace(/```/g, '')
-      .replace(/\n+/g, '\n')
-      .trim();
-
-    // Extract complexity from first step
-    let complexity: 'low' | 'medium' | 'high' | undefined;
-    if (currentStep === 0) {
-      const complexityMatch = cleanResponse.match(
-        /COMPLEXITY:\s*(low|medium|high)/i,
-      );
-      complexity = complexityMatch?.[1]?.toLowerCase() as
-        | 'low'
-        | 'medium'
-        | 'high';
-    }
-
-    // Extract reasoning with multiple fallback patterns
-    const reasoning = this.extractSection(cleanResponse, [
-      /THINKING:\s*((?:.|\n)+?)(?=\s*(?:NEXT_STEP|ANSWER|COMPLEXITY|$))/i,
-      /ANALYSIS:\s*((?:.|\n)+?)(?=\s*(?:PROCEED|RESPONSE|$))/i,
-      /((?:.|\n)+?)(?=\s*(?:NEXT_STEP|ANSWER|COMPLEXITY|$))/i,
-    ]);
-
-    // Extract answer if present
-    const answer = this.extractSection(cleanResponse, [
-      /ANSWER:\s*((?:.|\n)+)/i,
-      /FINAL RESPONSE:\s*((?:.|\n)+)/i,
-    ]);
-
-    // Determine next step
-    const nextStep = this.determineNextStep(cleanResponse, currentStep);
-
-    return {
-      reasoning:
-        reasoning || 'Analyzing requirements and potential solutions...',
-      answer,
-      nextStepType: nextStep,
-      detectedComplexity: complexity,
-    };
-  }
-
-  private createReasoningPrompt(
-    message: string,
-    stepType: ReasoningStepType,
-    previousReasoning: string,
-    complexity: 'auto' | 'low' | 'medium' | 'high' = 'auto',
-  ): string {
-    const complexityInstruction =
-      complexity === 'auto' && stepType === 'PROBLEM_DECOMPOSITION'
-        ? `First determine problem complexity (low/medium/high) considering:\n` +
-          `- Technical depth required\n- Number of system components\n- Potential edge cases\n` +
-          `Include COMPLEXITY: [your assessment] in your response\n\n`
-        : '';
-
-    const basePrompt = `
-      You are a senior engineer solving: "${message}"
-      ${complexityInstruction}
-      Current phase: ${STEP_ORDER.indexOf(stepType) + 1}/${STEP_ORDER.length} - ${stepType.replace(/_/g, ' ')}
-      ${this.getAdaptiveStepInstructions(stepType, complexity)}
-  
-      Previous analysis:
-      ${previousReasoning || 'No previous analysis yet'}
-  
-      Format exactly:
-      THINKING: [your analysis]
-      ${stepType === 'PROBLEM_DECOMPOSITION' ? 'COMPLEXITY: [low|medium|high]' : ''}
-      NEXT_STEP: [${STEP_ORDER.join('|')}]
-      ${stepType === 'FINAL_SYNTHESIS' ? 'ANSWER: [final solution]' : ''}
-  
-      Rules:
-      1. Match technical depth to problem complexity
-      2. Be concise for low complexity issues
-      3. Detailed analysis for complex problems
-      4. Acknowledge solution uncertainties
-    `;
-
-    return basePrompt.replace(/^ {4}/gm, '').trim();
-  }
-
-  private getAdaptiveStepInstructions(
-    step: ReasoningStepType,
-    complexity: 'auto' | 'low' | 'medium' | 'high',
-  ): string {
-    const depthModifier =
-      complexity === 'low'
-        ? ' (brief analysis)'
-        : complexity === 'high'
-          ? ' (detailed analysis)'
-          : '';
-
-    return {
-      PROBLEM_DECOMPOSITION:
-        `Break down the problem${depthModifier}:` +
-        `\n1. Core requirements\n2. Technical challenges\n3. Success criteria`,
-      // ... other steps with complexity-aware instructions
-      FINAL_SYNTHESIS:
-        `Synthesize solution${depthModifier}:\n` +
-        `1. Validate requirements\n2. Confirm architecture\n3. Final implementation`,
-    }[step];
-  }
-
-  private getMaxSteps(complexity: string): number {
-    return (
-      {
-        low: 3,
-        medium: 6,
-        high: 10,
-      }[complexity] || 6
-    ); // Default to medium
-  }
-
-  private extractSection(text: string, patterns: RegExp[]): string | undefined {
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        return match[1]
-          .replace(/^\s*-\s*/gm, '') // Clean list markers
-          .replace(/\n\s*\n/g, '\n') // Compact empty lines
-          .trim();
-      }
-    }
-    return undefined;
-  }
-
-  private determineNextStep(
-    text: string,
-    currentStep: number,
-  ): ReasoningStepType {
-    // First try explicit direction
-    const explicitMatch = text.match(/NEXT_STEP:\s*(\w+)/i);
-    if (explicitMatch) {
-      const step = explicitMatch[1].toUpperCase() as ReasoningStepType;
-      if (STEP_ORDER.includes(step)) return step;
-    }
-
-    // Then look for implicit progression
-    const currentIndex = STEP_ORDER.indexOf(
-      STEP_ORDER[currentStep % STEP_ORDER.length],
-    );
-    const nextIndex = (currentIndex + 1) % STEP_ORDER.length;
-
-    return STEP_ORDER[nextIndex];
-  }
-
-  private async generateFinalAnswer(
-    message: string,
-    reasoning: string,
-    model: AIModels,
-  ): Promise<string> {
-    const response = await this.aiWrapper.generateContentHistory(
-      model,
-      `Synthesize final answer from reasoning:\n${reasoning}\n\nOriginal query: ${message}`,
-      [],
-    );
-    return response.content.trim();
-  }
+  // Chain of Drafts
 
   async processChainOfDrafts(
     message: string,
@@ -2104,12 +1725,12 @@ INSTRUCTIONS:
     complexity?: 'low' | 'medium' | 'high',
   ): string {
     return `
-      Generate 4-17 distinct answers/solutions for: "${message}"
+      Generate 3-8 distinct approaches for: "${message}"
       
       Requirements:
-      - Each answer must be ≤15 words
-      - Number each solution (1., 2., 3. etc.)
-      - Variety in responses/approaches 
+      - Each response must be ≤15 words
+      - Number each response (1., 2., 3. etc.)
+      - Variety in responses/approaches/perspectives/methods
       ${complexity === 'high' ? '- Include unconventional solutions' : '- Maintain practical answers'}
       
       ${previousDrafts ? `Previous answers:\n${previousDrafts}` : ''}
@@ -2161,5 +1782,181 @@ INSTRUCTIONS:
 
   private getMaxDrafts(complexity: string): number {
     return { low: 2, medium: 4, high: 8 }[complexity] || 3;
+  }
+
+  // Chain of Thoughts
+
+  async processChainOfThoughts(
+    message: string,
+    userId: string,
+    model: AIModels = AIModels.Llama_3_3_70B_vers,
+  ): Promise<ProcessResult> {
+    let MAX_STEPS = 22;
+    let currentStep = 0;
+    let complexity: 'low' | 'medium' | 'high' | 'very-high' = 'low';
+    const thoughts: string[] = [];
+
+    let prompt = this.createThoughtPrompt(message, 'INITIAL_THOUGHT', '');
+
+    while (currentStep < MAX_STEPS) {
+      const response = await this.aiWrapper.generateContentHistory(
+        model,
+        prompt,
+        [],
+      );
+      const { steps, detectedComplexity, needsRevision } =
+        this.parseThoughtResponse(response.content, currentStep);
+
+      thoughts.push(steps.join('\n'));
+
+      // On first iteration, update complexity and adjust max steps if detected.
+      if (currentStep === 0 && detectedComplexity) {
+        complexity = detectedComplexity;
+        MAX_STEPS = this.getMaxSteps(complexity);
+      }
+
+      if (!needsRevision) break;
+
+      prompt = this.createThoughtPrompt(
+        message,
+        'REVISION',
+        thoughts.join('\n\n'),
+        complexity,
+      );
+
+      currentStep++;
+    }
+
+    return {
+      reasoning: thoughts.join('\n\n---\n\n'),
+      thoughts,
+      complexity,
+    };
+  }
+
+  async *streamChainOfThoughts(
+    message: string,
+    userId: string,
+    model: AIModels = AIModels.Llama_3_3_70B_vers,
+  ): AsyncGenerator<any> {
+    let MAX_STEPS = 22;
+    let currentStep = 0;
+    let complexity: 'low' | 'medium' | 'high' | 'very-high' = 'low';
+    const thoughts: string[] = [];
+
+    let prompt = this.createThoughtPrompt(message, 'INITIAL_THOUGHT', '');
+
+    while (currentStep < MAX_STEPS) {
+      const response = await this.aiWrapper.generateContentHistory(
+        model,
+        prompt,
+        [],
+      );
+      const { steps, detectedComplexity, needsRevision } =
+        this.parseThoughtResponse(response.content, currentStep);
+
+      // Stream tokens from the chain-of-thought step
+      for await (const token of this.tokenizeResponse(steps.join('\n'))) {
+        yield { type: 'thought', content: token };
+      }
+
+      thoughts.push(steps.join('\n'));
+
+      if (currentStep === 0 && detectedComplexity) {
+        complexity = detectedComplexity;
+        MAX_STEPS = this.getMaxSteps(complexity);
+        yield { type: 'complexity', content: complexity };
+      }
+
+      yield { type: 'thought-complete', content: currentStep + 1 };
+
+      if (!needsRevision) break;
+
+      prompt = this.createThoughtPrompt(
+        message,
+        'REVISION',
+        thoughts.join('\n\n'),
+        complexity,
+      );
+      currentStep++;
+    }
+
+    yield {
+      type: 'complete',
+      content: {
+        reasoning: thoughts.join('\n\n---\n\n'),
+        thoughts,
+        complexity,
+      },
+    };
+  }
+
+  private createThoughtPrompt(
+    message: string,
+    step: ThoughtStepType,
+    previousThoughts: string,
+    complexity?: 'low' | 'medium' | 'high' | 'very-high',
+  ): string {
+    return `
+      Provide a chain-of-thought for: "${message}"
+      
+      Requirements:
+      - Generate 3-8 distinct reasoning steps
+      - Each step must be ≤25 words
+      - Number each step (1., 2., 3., etc.)
+      - Ensure each step builds upon the previous insights
+      ${complexity === 'high' ? '- Include unconventional insights' : '- Maintain practical reasoning'}
+      
+      ${previousThoughts ? `Previous reasoning steps:\n${previousThoughts}` : ''}
+  
+      Format exactly:
+      THOUGHT_BATCH: ${previousThoughts.split('\n').length + 1}
+      1. [First concise thought]
+      2. [Second contrasting insight]
+      3. [Third innovative step]
+      ${step === 'INITIAL_THOUGHT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
+    `
+      .replace(/^ {4}/gm, '')
+      .trim();
+  }
+
+  private parseThoughtResponse(
+    response: string,
+    stepNumber: number,
+  ): {
+    steps: string[];
+    detectedComplexity?: 'low' | 'medium' | 'high' | 'very-high';
+    needsRevision: boolean;
+  } {
+    const cleanResponse = response.replace(/```/g, '').trim();
+
+    // Extract numbered reasoning steps using regex
+    const stepMatches = [
+      ...cleanResponse.matchAll(/^\d+\.\s(.+?)(?=\s*\d+\.|$)/gm),
+    ];
+    const steps = stepMatches.map((m) =>
+      m[1].trim().split(/\s+/).slice(0, 10).join(' '),
+    );
+
+    // Detect complexity on the first step only
+    const complexityMatch =
+      stepNumber === 0
+        ? cleanResponse.match(/COMPLEXITY:\s*(low|medium|high|very-high)/i)
+        : null;
+
+    // Determine if further revision is needed
+    const needsRevision = cleanResponse.includes('IMPROVE_NEEDED: yes');
+
+    return {
+      steps: steps.length > 0 ? steps : ['No viable reasoning steps generated'],
+      detectedComplexity: complexityMatch?.[1]?.toLowerCase() as any,
+      needsRevision: needsRevision && stepNumber < 5,
+    };
+  }
+
+  private getMaxSteps(
+    complexity: 'low' | 'medium' | 'high' | 'very-high',
+  ): number {
+    return { low: 2, medium: 4, high: 8, 'very-high': 20 }[complexity] || 3;
   }
 }
