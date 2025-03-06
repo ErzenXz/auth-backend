@@ -1891,6 +1891,35 @@ INSTRUCTIONS:
     };
   }
 
+  // private createThoughtPrompt(
+  //   message: string,
+  //   step: ThoughtStepType,
+  //   previousThoughts: string,
+  //   complexity?: 'low' | 'medium' | 'high' | 'very-high',
+  // ): string {
+  //   return `
+  //     Provide a chain-of-thought for: "${message}"
+
+  //     Requirements:
+  //     - Generate 3-8 distinct reasoning steps
+  //     - Each step must be ≤25 words
+  //     - Number each step (1., 2., 3., etc.)
+  //     - Ensure each step builds upon the previous insights
+  //     ${complexity === 'high' ? '- Include unconventional insights' : '- Maintain practical reasoning'}
+
+  //     ${previousThoughts ? `Previous reasoning steps:\n${previousThoughts}` : ''}
+
+  //     Format exactly:
+  //     THOUGHT_BATCH: ${previousThoughts.split('\n').length + 1}
+  //     1. [First concise thought]
+  //     2. [Second contrasting insight]
+  //     3. [Third innovative step]
+  //     ${step === 'INITIAL_THOUGHT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
+  //   `
+  //     .replace(/^ {4}/gm, '')
+  //     .trim();
+  // }
+
   private createThoughtPrompt(
     message: string,
     step: ThoughtStepType,
@@ -1898,22 +1927,29 @@ INSTRUCTIONS:
     complexity?: 'low' | 'medium' | 'high' | 'very-high',
   ): string {
     return `
-      Provide a chain-of-thought for: "${message}"
+      Think step by step, like a human reasoning through a complex problem.
       
-      Requirements:
-      - Generate 3-8 distinct reasoning steps
-      - Each step must be ≤25 words
-      - Number each step (1., 2., 3., etc.)
-      - Ensure each step builds upon the previous insights
-      ${complexity === 'high' ? '- Include unconventional insights' : '- Maintain practical reasoning'}
+      Task: "${message}"
       
-      ${previousThoughts ? `Previous reasoning steps:\n${previousThoughts}` : ''}
+      How to respond:
+      - Start with fundamental considerations before diving into solutions.
+      - At each step, explain *why* this step matters in the larger context.
+      - If a new challenge arises from the previous step, acknowledge it and refine your approach.
+      - Feel free to express uncertainty or consider multiple angles.
+      - Connect thoughts naturally, as if explaining to a friend.
   
-      Format exactly:
+      ${complexity === 'very-high' ? '- Explore unconventional or out-of-the-box ideas.' : complexity === 'high' ? '- Provide advanced insights.' : '- Stick to practical, grounded reasoning.'}
+  
+      ${previousThoughts ? `So far, your reasoning has been:\n${previousThoughts}\nNow continue:` : ''}
+  
+      Format:
       THOUGHT_BATCH: ${previousThoughts.split('\n').length + 1}
-      1. [First concise thought]
-      2. [Second contrasting insight]
-      3. [Third innovative step]
+      
+      1. [First thought: Start with the broadest, most fundamental issue.]
+      2. [Then, naturally explore consequences and possible solutions.]
+      3. [If conflicts arise, reconsider previous logic or break the problem into smaller pieces.]
+      4. [Continue building upon previous steps.]
+      
       ${step === 'INITIAL_THOUGHT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
     `
       .replace(/^ {4}/gm, '')
