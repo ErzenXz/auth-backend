@@ -2022,6 +2022,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameChatThreadDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -3133,6 +3143,10 @@
         "properties": {}
       },
       "CreateChatDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RenameChatThreadDto": {
         "type": "object",
         "properties": {}
       },
