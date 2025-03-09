@@ -18,6 +18,13 @@ import {
 } from './ai-wrapper.constants';
 import { randomBytes } from 'crypto';
 import { CreateApplicationDto } from './dtos/create-application.dto';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  CreateProjectFileDto,
+  UpdateProjectFileDto,
+} from './dtos/project.dto';
+import { Prisma, AIProjectFile } from '@prisma/client';
 
 @Injectable()
 export class IntelligenceService {
@@ -1994,5 +2001,1548 @@ INSTRUCTIONS:
     complexity: 'low' | 'medium' | 'high' | 'very-high',
   ): number {
     return { low: 2, medium: 4, high: 8, 'very-high': 20 }[complexity] || 3;
+  }
+
+  // AI Project methods
+
+  async createProject(createProjectDto: CreateProjectDto, userId: string) {
+    return await this.prisma.aIProject.create({
+      data: {
+        name: createProjectDto.name,
+        description: createProjectDto.description,
+        ownerId: userId,
+      },
+    });
+  }
+
+  async listProjects(userId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    // Get projects owned by the user or where they're a collaborator
+    const projects = await this.prisma.aIProject.findMany({
+      where: {
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+      include: {
+        _count: {
+          select: {
+            files: true,
+            threads: true,
+            collaborators: true,
+          },
+        },
+      },
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return projects;
+  }
+
+  async getProject(projectId: string, userId: string) {
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            profilePicture: true,
+          },
+        },
+        collaborators: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                profilePicture: true,
+              },
+            },
+          },
+        },
+        files: {
+          include: {
+            currentVersion: true,
+          },
+        },
+        threads: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    return project;
+  }
+
+  async updateProject(
+    projectId: string,
+    updateProjectDto: UpdateProjectDto,
+    userId: string,
+  ) {
+    // Check if user is owner
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        ownerId: userId,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have permission to update it',
+      );
+    }
+
+    return await this.prisma.aIProject.update({
+      where: { id: projectId },
+      data: {
+        name: updateProjectDto.name,
+        description: updateProjectDto.description,
+      },
+    });
+  }
+
+  async deleteProject(projectId: string, userId: string) {
+    // Check if user is owner
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        ownerId: userId,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have permission to delete it',
+      );
+    }
+
+    // Delete all related records in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Delete file versions first
+      await tx.aIProjectFileVersion.deleteMany({
+        where: {
+          file: {
+            projectId,
+          },
+        },
+      });
+
+      // Delete files
+      await tx.aIProjectFile.deleteMany({
+        where: { projectId },
+      });
+
+      // Delete thread messages
+      await tx.aIThreadMessage.deleteMany({
+        where: {
+          chat: {
+            projectId,
+          },
+        },
+      });
+
+      // Delete threads
+      await tx.aIThread.deleteMany({
+        where: { projectId },
+      });
+
+      // Delete collaborators
+      await tx.aIProjectCollaborator.deleteMany({
+        where: { projectId },
+      });
+
+      // Finally delete the project
+      await tx.aIProject.delete({
+        where: { id: projectId },
+      });
+    });
+
+    return { message: 'Project deleted successfully' };
+  }
+
+  async createProjectThread(projectId: string, userId: string) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // Create a new thread
+    const thread = await this.prisma.aIThread.create({
+      data: {
+        title: `Thread ${new Date().toLocaleString()}`,
+        userId,
+        projectId,
+      },
+    });
+
+    return thread;
+  }
+
+  async listProjectThreads(projectId: string, userId: string) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // Get all threads for the project
+    const threads = await this.prisma.aIThread.findMany({
+      where: { projectId },
+      include: {
+        _count: {
+          select: { messages: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return threads;
+  }
+
+  async createProjectFile(
+    projectId: string,
+    createFileDto: CreateProjectFileDto,
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { ownerId: userId },
+          { collaborators: { some: { userId: userId, role: 'editor' } } },
+        ],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have edit access',
+      );
+    }
+
+    // Check if a file with the same path already exists
+    const existingFile = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        projectId,
+        path: createFileDto.path,
+      },
+    });
+
+    if (existingFile) {
+      throw new BadRequestException(
+        `A file with path '${createFileDto.path}' already exists in this project`,
+      );
+    }
+
+    // Create the file and its first version in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Create the file
+      const file = await tx.aIProjectFile.create({
+        data: {
+          name: createFileDto.name,
+          path: createFileDto.path,
+          projectId,
+        },
+      });
+
+      // Create the initial version
+      const version = await tx.aIProjectFileVersion.create({
+        data: {
+          fileId: file.id,
+          version: 1,
+          content: createFileDto.content,
+          commitMsg: createFileDto.commitMsg || 'Initial version',
+          authorId: userId,
+        },
+      });
+
+      // Update the file with the current version ID
+      const updatedFile = await tx.aIProjectFile.update({
+        where: { id: file.id },
+        data: {
+          currentVersionId: version.id,
+        },
+        include: {
+          currentVersion: true,
+        },
+      });
+
+      return updatedFile;
+    });
+
+    return result;
+  }
+
+  async initializeProjectFiles(
+    projectId: string,
+    files: CreateProjectFileDto[],
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { ownerId: userId },
+          { collaborators: { some: { userId: userId, role: 'editor' } } },
+        ],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have edit access',
+      );
+    }
+
+    // Check for duplicate paths in the input files
+    const paths = files.map((file) => file.path);
+    if (new Set(paths).size !== paths.length) {
+      throw new BadRequestException('Duplicate file paths detected');
+    }
+
+    // Check for existing files with the same paths
+    const existingFiles = await this.prisma.aIProjectFile.findMany({
+      where: {
+        projectId,
+        path: { in: paths },
+      },
+      select: { path: true },
+    });
+
+    if (existingFiles.length > 0) {
+      throw new BadRequestException(
+        `Files with paths ${existingFiles.map((f) => f.path).join(', ')} already exist in this project`,
+      );
+    }
+
+    // Create all files and versions in a transaction
+    const createdFiles = await this.prisma.$transaction(async (tx) => {
+      const results = [];
+
+      for (const fileDto of files) {
+        // Create the file
+        const file = await tx.aIProjectFile.create({
+          data: {
+            name: fileDto.name,
+            path: fileDto.path,
+            projectId,
+          },
+        });
+
+        // Create the initial version
+        const version = await tx.aIProjectFileVersion.create({
+          data: {
+            fileId: file.id,
+            version: 1,
+            content: fileDto.content,
+            commitMsg: fileDto.commitMsg || 'Initial version',
+            authorId: userId,
+          },
+        });
+
+        // Update the file with the current version ID
+        const updatedFile = await tx.aIProjectFile.update({
+          where: { id: file.id },
+          data: {
+            currentVersionId: version.id,
+          },
+          include: {
+            currentVersion: true,
+          },
+        });
+
+        results.push(updatedFile);
+      }
+
+      return results;
+    });
+
+    return { files: createdFiles };
+  }
+
+  async listProjectFiles(projectId: string, userId: string) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // Get all files for the project
+    const files = await this.prisma.aIProjectFile.findMany({
+      where: { projectId },
+      include: {
+        currentVersion: true,
+        _count: {
+          select: { versions: true },
+        },
+      },
+      orderBy: { path: 'asc' },
+    });
+
+    return files;
+  }
+
+  async getProjectFile(projectId: string, fileId: string, userId: string) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // Get the file with its current version
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        id: fileId,
+        projectId,
+      },
+      include: {
+        currentVersion: true,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    return file;
+  }
+
+  async getProjectFileVersions(
+    projectId: string,
+    fileId: string,
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // Check if the file exists and belongs to the project
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        id: fileId,
+        projectId,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Get all versions for the file
+    const versions = await this.prisma.aIProjectFileVersion.findMany({
+      where: { fileId },
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            profilePicture: true,
+          },
+        },
+      },
+      orderBy: { version: 'desc' },
+    });
+
+    return versions;
+  }
+
+  async updateProjectFile(
+    projectId: string,
+    fileId: string,
+    updateFileDto: UpdateProjectFileDto,
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { ownerId: userId },
+          { collaborators: { some: { userId: userId, role: 'editor' } } },
+        ],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have edit access',
+      );
+    }
+
+    // Get the file with its current version
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        id: fileId,
+        projectId,
+      },
+      include: {
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Create a new version and update the file in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Get the next version number
+      const nextVersion =
+        file.versions.length > 0 ? file.versions[0].version + 1 : 1;
+
+      // Create a new version
+      const newVersion = await tx.aIProjectFileVersion.create({
+        data: {
+          fileId,
+          version: nextVersion,
+          content: updateFileDto.content,
+          commitMsg: updateFileDto.commitMsg || `Updated file ${file.name}`,
+          authorId: userId,
+        },
+      });
+
+      // Update the file with the new current version
+      const updatedFile = await tx.aIProjectFile.update({
+        where: { id: fileId },
+        data: {
+          currentVersionId: newVersion.id,
+          updatedAt: new Date(),
+        },
+        include: {
+          currentVersion: true,
+        },
+      });
+
+      return updatedFile;
+    });
+
+    return result;
+  }
+
+  async revertProjectFile(
+    projectId: string,
+    fileId: string,
+    version: number,
+    commitMsg: string | undefined,
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { ownerId: userId },
+          { collaborators: { some: { userId: userId, role: 'editor' } } },
+        ],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have edit access',
+      );
+    }
+
+    // Get the file with its versions
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        id: fileId,
+        projectId,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Find the version to revert to
+    const versionToRevert = await this.prisma.aIProjectFileVersion.findFirst({
+      where: {
+        fileId,
+        version,
+      },
+    });
+
+    if (!versionToRevert) {
+      throw new NotFoundException(`Version ${version} not found for this file`);
+    }
+
+    // Get the latest version to determine the next version number
+    const latestVersion = await this.prisma.aIProjectFileVersion.findFirst({
+      where: { fileId },
+      orderBy: { version: 'desc' },
+    });
+
+    const nextVersion = latestVersion ? latestVersion.version + 1 : 1;
+
+    // Create a new version based on the old one and update the file in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Create a new version with the content from the version to revert to
+      const newVersion = await tx.aIProjectFileVersion.create({
+        data: {
+          fileId,
+          version: nextVersion,
+          content: versionToRevert.content,
+          commitMsg: commitMsg || `Reverted to version ${version}`,
+          authorId: userId,
+        },
+      });
+
+      // Update the file with the new current version
+      const updatedFile = await tx.aIProjectFile.update({
+        where: { id: fileId },
+        data: {
+          currentVersionId: newVersion.id,
+          updatedAt: new Date(),
+        },
+        include: {
+          currentVersion: true,
+        },
+      });
+
+      return updatedFile;
+    });
+
+    return result;
+  }
+
+  async addProjectCollaborator(
+    projectId: string,
+    collaboratorUserId: string,
+    role: string,
+    userId: string,
+  ) {
+    // Check if user is the owner of the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        ownerId: userId,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have permission to add collaborators',
+      );
+    }
+
+    // Check if the collaborator user exists
+    const collaboratorUser = await this.prisma.user.findUnique({
+      where: { id: collaboratorUserId },
+    });
+
+    if (!collaboratorUser) {
+      throw new NotFoundException('Collaborator user not found');
+    }
+
+    // Check if the user is already a collaborator
+    const existingCollaborator =
+      await this.prisma.aIProjectCollaborator.findUnique({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId: collaboratorUserId,
+          },
+        },
+      });
+
+    if (existingCollaborator) {
+      // Update the existing collaborator's role
+      return await this.prisma.aIProjectCollaborator.update({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId: collaboratorUserId,
+          },
+        },
+        data: { role },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              profilePicture: true,
+            },
+          },
+        },
+      });
+    }
+
+    // Add the user as a collaborator
+    return await this.prisma.aIProjectCollaborator.create({
+      data: {
+        projectId,
+        userId: collaboratorUserId,
+        role,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+  }
+
+  async listProjectCollaborators(projectId: string, userId: string) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // Get all collaborators for the project
+    const collaborators = await this.prisma.aIProjectCollaborator.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    return collaborators;
+  }
+
+  async removeProjectCollaborator(
+    projectId: string,
+    collaboratorUserId: string,
+    userId: string,
+  ) {
+    // Check if user is the owner of the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        ownerId: userId,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have permission to remove collaborators',
+      );
+    }
+
+    // Check if the collaborator exists
+    const collaborator = await this.prisma.aIProjectCollaborator.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: collaboratorUserId,
+        },
+      },
+    });
+
+    if (!collaborator) {
+      throw new NotFoundException('Collaborator not found');
+    }
+
+    // Remove the collaborator
+    await this.prisma.aIProjectCollaborator.delete({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: collaboratorUserId,
+        },
+      },
+    });
+
+    return { message: 'Collaborator removed successfully' };
+  }
+
+  async processAgent(
+    message: string,
+    projectId: string,
+    threadId: string | undefined,
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+      include: {
+        files: {
+          include: {
+            currentVersion: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // If no thread ID was provided, create a new thread
+    if (!threadId) {
+      const newThread = await this.prisma.aIThread.create({
+        data: {
+          title: `${message.split('\n')[0].slice(0, 50)}...`,
+          userId,
+          projectId,
+        },
+      });
+      threadId = newThread.id;
+    } else {
+      // Verify the thread exists and belongs to the project
+      const thread = await this.prisma.aIThread.findFirst({
+        where: {
+          id: threadId,
+          projectId,
+        },
+      });
+
+      if (!thread) {
+        throw new NotFoundException(
+          'Thread not found or does not belong to this project',
+        );
+      }
+    }
+
+    // Get previous messages from this thread to maintain context
+    const previousMessages = await this.prisma.aIThreadMessage.findMany({
+      where: { chatId: threadId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Format the conversation history
+    const conversationHistory: ChatHistory[] = previousMessages.map((msg) => ({
+      role: msg.role,
+      message: msg.content,
+    }));
+
+    // Prepare context about the project
+    const projectContext = {
+      projectName: project.name,
+      projectDescription: project.description,
+      files: project.files.map((file) => ({
+        name: file.name,
+        path: file.path,
+        content: file.currentVersion?.content,
+      })),
+    };
+
+    // Create a prompt with project context
+    const prompt = `
+      You are the Dev Instructions Agent managing a project named "${project.name}"${project.description ? `: ${project.description}` : ''}.
+      
+      Current Project Files:
+      ${project.files.map((file) => `- ${file.path}`).join('\n')}
+      
+      USER INSTRUCTION: ${message}
+      
+      Based on the instruction, determine which action to take:
+      1. If asked to create project files, generate the necessary files with appropriate content.
+      2. If asked to modify existing files, update their content with the requested changes.
+      3. If asked to revert file versions, identify which file needs to be reverted and to what version.
+      4. If asked for information about the project, provide the requested details based on the available files.
+      
+      Remember to explain what actions you're taking and provide reasoning.
+    `;
+
+    // Select an appropriate model
+    const selectedModel = AIModels.Gemini;
+
+    // Process the instruction with AI
+    const result = await this.aiWrapper.generateContentHistory(
+      selectedModel,
+      prompt,
+      conversationHistory,
+    );
+
+    // Now let's process the AI's response to determine what actions to take
+    const response = this.parseDevAgentResponse(
+      result.content,
+      project,
+      userId,
+    );
+
+    // Save the messages to the thread
+    await this.prisma.aIThreadMessage.createMany({
+      data: [
+        {
+          chatId: threadId,
+          content: message,
+          role: 'user',
+          createdAt: new Date(),
+        },
+        {
+          chatId: threadId,
+          content: result.content,
+          role: 'model',
+          createdAt: new Date(new Date().getTime() + 1000), // 1 second later
+        },
+      ],
+    });
+
+    // Return the AI response along with any actions taken
+    return {
+      response: result.content,
+      threadId,
+      actions: response.actions,
+    };
+  }
+
+  private parseDevAgentResponse(
+    response: string,
+    project: any,
+    userId: string,
+  ) {
+    // This is a placeholder implementation that should be expanded based on your requirements
+    // In a real implementation, you would parse the AI's response to identify file creation/modification intents
+
+    // For now, we'll just capture the response but not take any actions automatically
+    return {
+      actions: [],
+      message: 'Parsed AI agent response (no automatic actions taken yet)',
+    };
+
+    // Example of what a more complete implementation might look like:
+    /*
+    const fileCreationMatches = response.match(/create file ['"](.*?)['"]/gi);
+    const fileUpdateMatches = response.match(/update file ['"](.*?)['"]/gi);
+    
+    const actions = [];
+    
+    if (fileCreationMatches) {
+      for (const match of fileCreationMatches) {
+        const filePath = match.replace(/create file ['"](.*?)['"]/, '$1');
+        // Logic to create the file would go here
+        actions.push({ type: 'create', filePath });
+      }
+    }
+    
+    if (fileUpdateMatches) {
+      for (const match of fileUpdateMatches) {
+        const filePath = match.replace(/update file ['"](.*?)['"]/, '$1');
+        // Logic to update the file would go here
+        actions.push({ type: 'update', filePath });
+      }
+    }
+    
+    return { actions };
+    */
+  }
+
+  // Enhanced Agent Processing in the Service
+  async processAdvancedAgent(
+    message: string,
+    projectId: string,
+    threadId: string | undefined,
+    userId: string,
+  ) {
+    // Check if user has access to the project
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+      },
+      include: {
+        files: {
+          include: {
+            currentVersion: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have access',
+      );
+    }
+
+    // If no thread ID was provided, create a new thread
+    if (!threadId) {
+      const newThread = await this.prisma.aIThread.create({
+        data: {
+          title: `${message.split('\n')[0].slice(0, 50)}...`,
+          userId,
+          projectId,
+        },
+      });
+      threadId = newThread.id;
+    } else {
+      // Verify the thread exists and belongs to the project
+      const thread = await this.prisma.aIThread.findFirst({
+        where: {
+          id: threadId,
+          projectId,
+        },
+      });
+
+      if (!thread) {
+        throw new NotFoundException(
+          'Thread not found or does not belong to this project',
+        );
+      }
+    }
+
+    // Get previous messages from this thread to maintain context
+    const previousMessages = await this.prisma.aIThreadMessage.findMany({
+      where: { chatId: threadId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Format the conversation history
+    const conversationHistory: ChatHistory[] = previousMessages.map((msg) => ({
+      role: msg.role,
+      message: msg.content,
+    }));
+
+    // Prepare context about the project
+    const projectContext = {
+      projectName: project.name,
+      projectDescription: project.description,
+      files: project.files.map((file) => ({
+        name: file.name,
+        path: file.path,
+        content: file.currentVersion?.content,
+      })),
+    };
+
+    // Agent Orchestration System with retry capabilities
+    const agentPipeline = [
+      'project-architect',
+      'file-generator',
+      'code-validator',
+      'execution-agent',
+    ];
+
+    let currentState = {
+      requirements: message,
+      projectContext,
+      generatedFiles: [],
+      validationErrors: [],
+      executionPlan: [],
+    };
+
+    // Process through agent pipeline
+    for (const agent of agentPipeline) {
+      let retries = 3;
+      let agentResponse;
+      let validationError = '';
+
+      while (retries > 0) {
+        try {
+          const agentPrompt = this.buildAgentPrompt(
+            agent,
+            currentState,
+            validationError,
+          );
+          const result = await this.executeAgentWithRetry(
+            agent,
+            agentPrompt,
+            conversationHistory,
+            retries,
+          );
+
+          agentResponse = this.parseStructuredResponse(result.content, agent);
+          validationError = ''; // Reset error on success
+          break;
+        } catch (e) {
+          retries--;
+          validationError = e.message;
+
+          if (retries === 0) {
+            throw new Error(
+              `Agent ${agent} failed after 3 retries: ${e.message}`,
+            );
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // Add delay between retries
+        }
+      }
+
+      currentState = this.processAgentResponse(
+        agent,
+        agentResponse,
+        currentState,
+      );
+      await this.saveAgentStep(threadId, agent, agentResponse);
+
+      if (currentState.validationErrors.length > 0) {
+        await this.handleValidationErrors(currentState);
+        break;
+      }
+    }
+
+    // Execute validated plan
+    if (currentState.executionPlan.length > 0) {
+      await this.executeDevelopmentPlan(
+        projectId,
+        currentState.executionPlan,
+        userId,
+      );
+    }
+
+    return {
+      response: this.formatFinalResponse(currentState),
+      threadId,
+      actions: currentState.executionPlan,
+    };
+  }
+
+  private async executeAgentWithRetry(
+    agent: string,
+    prompt: string,
+    history: ChatHistory[],
+    retriesLeft: number,
+  ) {
+    let attempt = 1;
+    const maxAttempts = 3;
+
+    while (attempt <= maxAttempts) {
+      try {
+        const result = await this.aiWrapper.generateContentHistory(
+          AIModels.Gemini,
+          `${prompt}\n\nAttempt ${attempt}/${maxAttempts}:`,
+          history,
+        );
+
+        // Validate response structure
+        this.validateAgentResponse(agent, result.content);
+        return result;
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          throw new Error(`Final attempt failed: ${error.message}`);
+        }
+
+        // Add corrective context to history
+        history.push({
+          role: 'system',
+          message: `Format correction needed: ${error.message}`,
+        });
+
+        attempt++;
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt)); // Exponential backoff
+      }
+    }
+    throw new Error('Max retries exceeded');
+  }
+
+  private validateAgentResponse(agent: string, response: string) {
+    // First check for JSON validity
+    const parsed = this.parseStructuredResponse(response, agent);
+
+    // Then validate agent-specific structure
+    switch (agent) {
+      case 'project-architect':
+        if (!parsed.plan?.structure) {
+          throw new Error('Missing project structure in response');
+        }
+        break;
+
+      case 'file-generator':
+        if (!parsed.files || parsed.files.length === 0) {
+          throw new Error('No files generated in response');
+        }
+        break;
+
+      case 'code-validator':
+        if (!parsed.validation) {
+          throw new Error('Missing validation results');
+        }
+        break;
+
+      case 'execution-agent':
+        if (!parsed.actions || parsed.actions.length === 0) {
+          throw new Error('No execution actions provided');
+        }
+        break;
+    }
+  }
+
+  private buildAgentPrompt(
+    agentType: string,
+    state: any,
+    errorContext: string = '',
+  ): string {
+    // Safe access for file paths
+    const filePaths =
+      state.plan?.structure
+        ?.filter((f: any) => f?.type === 'file')
+        ?.map((f: any) => f.path) || [];
+
+    const baseContext = `
+      ${errorContext ? `\n\nERROR CONTEXT: ${errorContext}` : ''}
+      Project: ${state.projectContext.projectName}
+      Existing Files: ${state.projectContext.files.map((f: any) => f.path).join(', ')}
+      Requirements: ${state.requirements}
+    `;
+
+    const agentPrompts = {
+      'project-architect': `
+      Analyze the requirements and create a development plan:
+      1. Identify needed files and dependencies
+      2. Outline project structure
+      3. Highlight potential technical challenges
+      
+      Respond with JSON format:
+      {
+        "plan": {
+          "structure": [
+            {"path": "string", "type": "file/folder", "description": "string"},
+          ],
+          "dependencies": ["string"],
+          "challenges": ["string"]
+        }
+      }
+    `,
+      'file-generator': `
+      Generate file contents for: ${filePaths.join(', ')}
+      
+      For each file, respond with:
+      {
+        "files": [{
+          "path": "string",
+          "content": "string",
+          "dependencies": ["string"],
+          "validationChecks": ["html5", "css3", "responsive"]
+        }]
+      }
+    `,
+      'code-validator': `
+Validate generated files. Check for:
+- Syntax errors
+- Dependency consistency
+- Best practices
+
+Files to validate: ${state.generatedFiles.map((f: any) => f.path).join(', ')}
+
+Respond with:
+{
+  "validation": [{
+    "filePath": "string",
+    "issues": [{
+      "type": "error/warning", 
+      "message": "string",
+      "suggestion": "string (optional)"
+    }]
+  }]
+}
+Only include files with validation issues!
+`,
+      'execution-agent': `
+      Create execution plan considering validation results.
+      Format:
+      {
+        "actions": [{
+          "type": "create|update|revert",
+          "filePath": "string",
+          "content": "string",
+          "commitMsg": "string"
+        }]
+      }
+    `,
+    };
+
+    return `${baseContext}\n\nSTRICT FORMATTING RULES:
+    - Respond ONLY with valid JSON
+    - No additional text outside JSON
+    - Use exactly the specified structure
+    - Escape special characters properly
+    \n\n${agentPrompts[agentType]}\n\nSTRICT FORMATTING RULES:
+    - Respond ONLY with valid JSON
+    - No additional text outside JSON
+    - Use exactly the specified structure
+    - Escape special characters properly
+    \n\n`;
+  }
+
+  private async executeDevelopmentPlan(
+    projectId: string,
+    actions: any[],
+    userId: string,
+  ) {
+    for (const action of actions) {
+      switch (action.type) {
+        case 'create':
+          await this.createProjectFile(
+            projectId,
+            {
+              name: action.filePath.split('/').pop(),
+              path: action.filePath,
+              content: action.content,
+              commitMsg: action.commitMsg,
+            },
+            userId,
+          );
+          break;
+        case 'update':
+          const fileToUpdate = await this.getFileByPath(
+            projectId,
+            action.filePath,
+          );
+          await this.updateProjectFile(
+            projectId,
+            fileToUpdate.id,
+            {
+              content: action.content,
+              commitMsg: action.commitMsg,
+            },
+            userId,
+          );
+          break;
+        case 'revert':
+          const fileToRevert = await this.getFileByPath(
+            projectId,
+            action.filePath,
+          );
+          await this.revertProjectFile(
+            projectId,
+            fileToRevert.id,
+            action.version,
+            action.commitMsg,
+            userId,
+          );
+          break;
+      }
+    }
+  }
+
+  private parseStructuredResponse(response: string, agent: string): any {
+    try {
+      const cleaned = response
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+
+      // Validate JSON structure first
+      const parsed = JSON.parse(cleaned);
+
+      // Then validate content structure
+      this.validateResponseStructure(agent, parsed);
+
+      return parsed;
+    } catch (e) {
+      throw new Error(`Invalid response format: ${e.message}`);
+    }
+  }
+
+  private validateResponseStructure(agent: string, response: any) {
+    const validator: Record<string, (res: any) => void> = {
+      'project-architect': (res) => {
+        if (!res.plan || !Array.isArray(res.plan.structure)) {
+          throw new Error('Invalid project structure format');
+        }
+      },
+      'file-generator': (res) => {
+        if (!Array.isArray(res.files) || res.files.some((f: any) => !f?.path)) {
+          throw new Error('Files array missing or invalid file paths');
+        }
+      },
+      'code-validator': (res) => {
+        if (!Array.isArray(res.validation)) {
+          throw new Error('Validation results must be an array');
+        }
+      },
+      'execution-agent': (res) => {
+        if (!Array.isArray(res.actions)) {
+          throw new Error('Actions must be an array');
+        }
+      },
+    };
+
+    if (validator[agent]) {
+      validator[agent](response);
+    }
+  }
+
+  // Add these methods inside the IntelligenceService class
+  private formatFinalResponse(currentState: any): string {
+    // Flatten all validation issues from all files
+    const allIssues = currentState.validationErrors.flatMap(
+      (v: any) => v.issues?.map((i: any) => i.message) || [],
+    );
+
+    if (allIssues.length > 0) {
+      return `❌ Validation failed:\n${allIssues
+        .map((msg: string) => `• ${msg}`)
+        .join('\n')}`;
+    }
+
+    return `✅ Successfully executed ${currentState.executionPlan.length} actions:
+  ${currentState.executionPlan
+    .map((a: any) => `• ${a.type} ${a.filePath}`)
+    .join('\n')}`;
+  }
+
+  private processAgentResponse(
+    agent: string,
+    agentResponse: any,
+    currentState: any,
+  ): any {
+    const newState = { ...currentState };
+
+    switch (agent) {
+      case 'project-architect':
+        newState.plan = agentResponse.plan || { structure: [] };
+        break;
+
+      case 'file-generator':
+        newState.generatedFiles =
+          agentResponse.files?.filter((f: any) => f?.path) || [];
+        break;
+
+      case 'code-validator':
+        // Filter out validation entries without issues
+        newState.validationErrors = Array.isArray(agentResponse.validation)
+          ? agentResponse.validation.filter((v: any) => v.issues?.length > 0)
+          : [];
+        break;
+
+      case 'execution-agent':
+        newState.executionPlan = (agentResponse.actions || []).filter(
+          (a: any) => ['create', 'update', 'revert'].includes(a.type),
+        );
+        break;
+    }
+
+    return newState;
+  }
+
+  private async saveAgentStep(
+    threadId: string,
+    agent: string,
+    response: any,
+  ): Promise<void> {
+    await this.prisma.aIThreadMessage.create({
+      data: {
+        chatId: threadId,
+        content: JSON.stringify({
+          agent,
+          response: this.sanitizeForStorage(response),
+        }),
+        role: 'system',
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  private async handleValidationErrors(currentState: any): Promise<void> {
+    // Ensure proper error structure
+    currentState.validationErrors = currentState.validationErrors
+      .filter((v: any) => !!v.issues)
+      .map((v: any) => ({
+        ...v,
+        issues: v.issues.map((i: any) => ({
+          type: i.type || 'error',
+          message: i.message || 'Unspecified validation error',
+        })),
+      }));
+  }
+
+  private async getFileByPath(
+    projectId: string,
+    filePath: string,
+  ): Promise<AIProjectFile> {
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        projectId,
+        path: filePath,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File not found at path: ${filePath}`);
+    }
+
+    return file;
+  }
+
+  // Helper method to prevent storing sensitive data
+  private sanitizeForStorage(response: any): any {
+    const clone = { ...response };
+    if (clone.files) {
+      clone.files = clone.files.map((f: any) => ({
+        ...f,
+        content: f.content ? `<content length=${f.content.length}>` : null,
+      }));
+    }
+    return clone;
   }
 }

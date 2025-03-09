@@ -47,29 +47,32 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  photos             Photo[]
-  videos             Video[]
-  albums             Album[]
-  comments           Comment[]
-  likes              Like[]
-  refreshTokens      RefreshToken[]
-  AuthorizationCode  AuthorizationCode[]
-  OAuthToken         OAuthToken[]
-  UserConsent        UserConsent[]
-  UserEvents         UserEvents[]
-  UserLogin          UserLogin[]
-  UserPrivaySettings UserPrivaySettings[]
-  OAuthClient        OAuthClient[]
-  sentMessages       Message[]            @relation("Sender")
-  receivedMessages   Message[]            @relation("Receiver")
-  MessageRead        MessageRead[]
-  MessageDeletion    MessageDeletion[]
-  PushSubscription   PushSubscription[]
-  UserMemory         UserMemory[]
-  UserInstruction    UserInstruction[]
-  AIThread           AIThread[]
-  Instruction        Instruction[]
-  Application        Application[]
+  photos                Photo[]
+  videos                Video[]
+  albums                Album[]
+  comments              Comment[]
+  likes                 Like[]
+  refreshTokens         RefreshToken[]
+  AuthorizationCode     AuthorizationCode[]
+  OAuthToken            OAuthToken[]
+  UserConsent           UserConsent[]
+  UserEvents            UserEvents[]
+  UserLogin             UserLogin[]
+  UserPrivaySettings    UserPrivaySettings[]
+  OAuthClient           OAuthClient[]
+  sentMessages          Message[]               @relation("Sender")
+  receivedMessages      Message[]               @relation("Receiver")
+  MessageRead           MessageRead[]
+  MessageDeletion       MessageDeletion[]
+  PushSubscription      PushSubscription[]
+  UserMemory            UserMemory[]
+  UserInstruction       UserInstruction[]
+  AIThread              AIThread[]
+  Instruction           Instruction[]
+  Application           Application[]
+  AIProjectFileVersion  AIProjectFileVersion[]
+  AIProjectCollaborator AIProjectCollaborator[]
+  AIProject             AIProject[]             @relation("ProjectOwner")
 
   @@index([email])
   @@index([username])
@@ -581,6 +584,9 @@ model AIThread {
   user      User?             @relation(fields: [userId], references: [id])
   messages  AIThreadMessage[] @relation("AIThreadMessage")
 
+  projectId String?
+  project   AIProject? @relation("AIProjectThreads", fields: [projectId], references: [id])
+
   @@index([userId])
   @@index([createdAt])
   @@index([title])
@@ -596,4 +602,71 @@ model AIThreadMessage {
 
   @@index([chatId])
   @@index([createdAt])
+}
+
+model AIProject {
+  id            String                  @id @default(uuid())
+  name          String
+  description   String?
+  ownerId       String
+  owner         User                    @relation("ProjectOwner", fields: [ownerId], references: [id])
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  // A project can now have many threads
+  threads       AIThread[]              @relation("AIProjectThreads")
+  files         AIProjectFile[]
+  collaborators AIProjectCollaborator[]
+
+  @@index([ownerId])
+}
+
+model AIProjectCollaborator {
+  projectId String
+  userId    String
+  // Role could be "editor", "viewer", etc.
+  role      String
+  project   AIProject @relation(fields: [projectId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@id([projectId, userId])
+}
+
+model AIProjectFile {
+  id               String                 @id @default(uuid())
+  projectId        String
+  project          AIProject              @relation(fields: [projectId], references: [id])
+  // File name (e.g., "App.tsx")
+  name             String
+  // File path (e.g., "/src/App.tsx")
+  path             String
+  // Pointer to the current version (for quick lookups)
+  currentVersionId String?
+  currentVersion   AIProjectFileVersion?  @relation("CurrentFileVersion", fields: [currentVersionId], references: [id])
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  // The version history for the file
+  versions         AIProjectFileVersion[] @relation("FileVersions")
+
+  @@index([projectId])
+  @@index([path])
+}
+
+model AIProjectFileVersion {
+  id            String          @id @default(uuid())
+  fileId        String
+  file          AIProjectFile   @relation("FileVersions", fields: [fileId], references: [id])
+  // Sequential version number for ordering and revert logic
+  version       Int
+  // The content of the file at this version
+  content       String
+  // Optional commit message (e.g., "Fixed bug in header", "Reverted changes")
+  commitMsg     String?
+  // Author of the commit; can be null for automated changes
+  authorId      String?
+  author        User?           @relation(fields: [authorId], references: [id])
+  createdAt     DateTime        @default(now())
+  AIProjectFile AIProjectFile[] @relation("CurrentFileVersion")
+
+  @@unique([fileId, version])
+  @@index([fileId])
 }
