@@ -1347,8 +1347,8 @@ User Message: "${message}"`;
 1. **User Given Instructions:**
    ${instructions.map((ui) => ui.job).join(', ')}
 
-2. **External Content Integration:**
-   - Content Source: ${external || 'No external content available'}
+2. **External Raw Content Integration:**
+   ${typeof external === 'object' ? JSON.stringify(external) : external || 'No external content available'}
 
 3. **General Info:**
    ${info}
@@ -1971,7 +1971,7 @@ INSTRUCTIONS:
       ...cleanResponse.matchAll(/^\d+\.\s(.+?)(?=\s*\d+\.|$)/gm),
     ];
     const steps = stepMatches.map((m) =>
-      m[1].trim().split(/\s+/).slice(0, 10).join(' '),
+      m[1].trim().split(/\s+/).slice(0, 56).join(' '),
     );
 
     // Detect complexity on the first step only
