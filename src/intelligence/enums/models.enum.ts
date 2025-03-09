@@ -19,6 +19,7 @@ export enum AIModels {
   // OpenRouter Models
   DeepseekV3 = 'deepseek/deepseek-chat:free',
   DeepseekR1 = 'deepseek/deepseek-r1:free',
+  DeepseekR1Zero = 'deepseek/deepseek-r1-zero:free',
   DeepseekR1DistilledLlama = 'deepseek/deepseek-r1-distill-llama-70b:free',
   Qwen2_5VL72B = 'qwen/qwen2.5-vl-72b-instruct:free',
 
@@ -34,6 +35,7 @@ export enum AIModels {
   Llama_3_1_9B = 'llama-3.1-8b-instant',
   Llama_3_70B = 'llama3-70b-8192',
   Gemma_2_9B = 'gemma2-9b-it',
+  QwQ_32_B = 'qwen-qwq-32b',
 
   // Anthropic Models
   Claude37Sonnet = 'claude-3-7-sonnet-20250219',
