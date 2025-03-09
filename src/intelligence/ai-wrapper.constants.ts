@@ -72,6 +72,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   // OpenRouter Models
   [AIModels.DeepseekV3]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekR1]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.DeepseekR1Zero]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekR1DistilledLlama]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Qwen2_5VL72B]: AI_PROVIDERS.OPENROUTER,
 
@@ -87,6 +88,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Llama_3_1_9B]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_70B]: AI_PROVIDERS.GROQ,
   [AIModels.Gemma_2_9B]: AI_PROVIDERS.GROQ,
+  [AIModels.QwQ_32_B]: AI_PROVIDERS.GROQ,
 
   // Anthropic Models
   [AIModels.Claude37Sonnet]: AI_PROVIDERS.ANTHROPIC,
