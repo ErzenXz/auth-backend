@@ -647,6 +647,8 @@ model AIProjectFile {
   // The version history for the file
   versions         AIProjectFileVersion[] @relation("FileVersions")
 
+  isDeleted Boolean @default(false)
+
   @@index([projectId])
   @@index([path])
 }
@@ -666,6 +668,8 @@ model AIProjectFileVersion {
   author        User?           @relation(fields: [authorId], references: [id])
   createdAt     DateTime        @default(now())
   AIProjectFile AIProjectFile[] @relation("CurrentFileVersion")
+
+  isDeleted Boolean @default(false)
 
   @@unique([fileId, version])
   @@index([fileId])

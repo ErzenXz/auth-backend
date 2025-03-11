@@ -987,32 +987,17 @@ export class IntelligenceController {
   }
 
   /**
-   * Process a development instruction for an AI project
+   * Process a agent instruction for an AI project
    * @param {DevInstructionDto} instructionDto - The instruction to process
    * @param {IHttpContext} context - HTTP context with user information
    */
-  @Post('projects/dev-instruction')
-  @Auth()
-  async processDevInstruction(
-    @Body() instructionDto: DevInstructionDto,
-    @HttpContext() context: IHttpContext,
-  ) {
-    return await this.intelligenceService.processAgent(
-      instructionDto.instruction,
-      instructionDto.projectId,
-      instructionDto.threadId,
-      context.user.id,
-    );
-  }
-
-  // Enhanced Controller
-  @Post('projects/advanced-dev-instruction')
+  @Post('projects/process-agent')
   @Auth()
   async processAdvancedInstruction(
     @Body() instructionDto: DevInstructionDto,
     @HttpContext() context: IHttpContext,
   ) {
-    return await this.intelligenceService.processAdvancedAgent(
+    return await this.intelligenceService.executeAgentPipeline(
       instructionDto.instruction,
       instructionDto.projectId,
       instructionDto.threadId,

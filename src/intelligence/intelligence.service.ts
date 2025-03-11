@@ -25,6 +25,7 @@ import {
   UpdateProjectFileDto,
 } from './dtos/project.dto';
 import { Prisma, AIProjectFile } from '@prisma/client';
+import { AgentResponse } from './models/ai-agent.types';
 
 @Injectable()
 export class IntelligenceService {
@@ -1041,6 +1042,7 @@ Example Matching:
     return await this.prisma.aIThread.findMany({
       where: {
         userId,
+        projectId: null,
         messages: {
           some: {},
         },
@@ -1055,6 +1057,7 @@ Example Matching:
       },
     });
   }
+
   async getChatThreadMessages(
     userId: string,
     chatId: string,
@@ -2667,6 +2670,82 @@ INSTRUCTIONS:
     return result;
   }
 
+  async deleteProjectFile(projectId: string, fileId: string, userId: string) {
+    // Check if user has access to the project with edit permissions
+    const project = await this.prisma.aIProject.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { ownerId: userId },
+          { collaborators: { some: { userId: userId, role: 'editor' } } },
+        ],
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found or you do not have edit access',
+      );
+    }
+
+    // Get the file with its latest version
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: {
+        id: fileId,
+        projectId,
+      },
+      include: {
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Create a new version that marks the file as deleted
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Get the next version number
+      const nextVersion =
+        file.versions.length > 0 ? file.versions[0].version + 1 : 1;
+
+      // Create a new version with isDeleted flag
+      const newVersion = await tx.aIProjectFileVersion.create({
+        data: {
+          fileId,
+          version: nextVersion,
+          content: '', // Empty content for deleted file
+          commitMsg: `Deleted file ${file.name}`,
+          authorId: userId,
+          isDeleted: true, // Mark as deleted
+        },
+      });
+
+      // Update the file with the new current version and mark as deleted
+      const updatedFile = await tx.aIProjectFile.update({
+        where: { id: fileId },
+        data: {
+          currentVersionId: newVersion.id,
+          updatedAt: new Date(),
+          isDeleted: true, // Mark file as deleted
+        },
+        include: {
+          currentVersion: true,
+        },
+      });
+
+      return updatedFile;
+    });
+
+    return {
+      message: `File ${file.name} deleted successfully`,
+      file: result,
+    };
+  }
+
   async addProjectCollaborator(
     projectId: string,
     collaboratorUserId: string,
@@ -2829,34 +2908,31 @@ INSTRUCTIONS:
     return { message: 'Collaborator removed successfully' };
   }
 
-  async processAgent(
+  /**
+   * Main entry point for processing an advanced agent message.
+   * Flow: Project Architecture -> File Generator -> File Validator -> Improvements -> Execution
+   */
+  async executeAgentPipeline(
     message: string,
     projectId: string,
     threadId: string | undefined,
     userId: string,
   ) {
-    // Check if user has access to the project
+    // 1. Validate project access and get project context
     const project = await this.prisma.aIProject.findFirst({
       where: {
         id: projectId,
         OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
       },
-      include: {
-        files: {
-          include: {
-            currentVersion: true,
-          },
-        },
-      },
+      include: { files: { include: { currentVersion: true } } },
     });
-
     if (!project) {
       throw new NotFoundException(
         'Project not found or you do not have access',
       );
     }
 
-    // If no thread ID was provided, create a new thread
+    // 2. Get or create a thread for conversation context
     if (!threadId) {
       const newThread = await this.prisma.aIThread.create({
         data: {
@@ -2867,14 +2943,9 @@ INSTRUCTIONS:
       });
       threadId = newThread.id;
     } else {
-      // Verify the thread exists and belongs to the project
       const thread = await this.prisma.aIThread.findFirst({
-        where: {
-          id: threadId,
-          projectId,
-        },
+        where: { id: threadId, projectId },
       });
-
       if (!thread) {
         throw new NotFoundException(
           'Thread not found or does not belong to this project',
@@ -2882,19 +2953,19 @@ INSTRUCTIONS:
       }
     }
 
-    // Get previous messages from this thread to maintain context
+    // 3. Retrieve conversation history to maintain context
     const previousMessages = await this.prisma.aIThreadMessage.findMany({
       where: { chatId: threadId },
       orderBy: { createdAt: 'asc' },
     });
-
-    // Format the conversation history
     const conversationHistory: ChatHistory[] = previousMessages.map((msg) => ({
       role: msg.role,
       message: msg.content,
     }));
 
-    // Prepare context about the project
+    const startTime = new Date().getTime();
+
+    // 4. Build project context from existing project data
     const projectContext = {
       projectName: project.name,
       projectDescription: project.description,
@@ -2905,259 +2976,94 @@ INSTRUCTIONS:
       })),
     };
 
-    // Create a prompt with project context
-    const prompt = `
-      You are the Dev Instructions Agent managing a project named "${project.name}"${project.description ? `: ${project.description}` : ''}.
-      
-      Current Project Files:
-      ${project.files.map((file) => `- ${file.path}`).join('\n')}
-      
-      USER INSTRUCTION: ${message}
-      
-      Based on the instruction, determine which action to take:
-      1. If asked to create project files, generate the necessary files with appropriate content.
-      2. If asked to modify existing files, update their content with the requested changes.
-      3. If asked to revert file versions, identify which file needs to be reverted and to what version.
-      4. If asked for information about the project, provide the requested details based on the available files.
-      
-      Remember to explain what actions you're taking and provide reasoning.
-    `;
-
-    // Select an appropriate model
-    const selectedModel = AIModels.Gemini;
-
-    // Process the instruction with AI
-    const result = await this.aiWrapper.generateContentHistory(
-      selectedModel,
-      prompt,
-      conversationHistory,
-    );
-
-    // Now let's process the AI's response to determine what actions to take
-    const response = this.parseDevAgentResponse(
-      result.content,
-      project,
-      userId,
-    );
-
-    // Save the messages to the thread
-    await this.prisma.aIThreadMessage.createMany({
-      data: [
-        {
-          chatId: threadId,
-          content: message,
-          role: 'user',
-          createdAt: new Date(),
-        },
-        {
-          chatId: threadId,
-          content: result.content,
-          role: 'model',
-          createdAt: new Date(new Date().getTime() + 1000), // 1 second later
-        },
-      ],
-    });
-
-    // Return the AI response along with any actions taken
-    return {
-      response: result.content,
-      threadId,
-      actions: response.actions,
-    };
-  }
-
-  private parseDevAgentResponse(
-    response: string,
-    project: any,
-    userId: string,
-  ) {
-    // This is a placeholder implementation that should be expanded based on your requirements
-    // In a real implementation, you would parse the AI's response to identify file creation/modification intents
-
-    // For now, we'll just capture the response but not take any actions automatically
-    return {
-      actions: [],
-      message: 'Parsed AI agent response (no automatic actions taken yet)',
-    };
-
-    // Example of what a more complete implementation might look like:
-    /*
-    const fileCreationMatches = response.match(/create file ['"](.*?)['"]/gi);
-    const fileUpdateMatches = response.match(/update file ['"](.*?)['"]/gi);
-    
-    const actions = [];
-    
-    if (fileCreationMatches) {
-      for (const match of fileCreationMatches) {
-        const filePath = match.replace(/create file ['"](.*?)['"]/, '$1');
-        // Logic to create the file would go here
-        actions.push({ type: 'create', filePath });
-      }
-    }
-    
-    if (fileUpdateMatches) {
-      for (const match of fileUpdateMatches) {
-        const filePath = match.replace(/update file ['"](.*?)['"]/, '$1');
-        // Logic to update the file would go here
-        actions.push({ type: 'update', filePath });
-      }
-    }
-    
-    return { actions };
-    */
-  }
-
-  // Enhanced Agent Processing in the Service
-  async processAdvancedAgent(
-    message: string,
-    projectId: string,
-    threadId: string | undefined,
-    userId: string,
-  ) {
-    // Check if user has access to the project
-    const project = await this.prisma.aIProject.findFirst({
-      where: {
-        id: projectId,
-        OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
-      },
-      include: {
-        files: {
-          include: {
-            currentVersion: true,
-          },
-        },
-      },
-    });
-
-    if (!project) {
-      throw new NotFoundException(
-        'Project not found or you do not have access',
-      );
-    }
-
-    // If no thread ID was provided, create a new thread
-    if (!threadId) {
-      const newThread = await this.prisma.aIThread.create({
-        data: {
-          title: `${message.split('\n')[0].slice(0, 50)}...`,
-          userId,
-          projectId,
-        },
-      });
-      threadId = newThread.id;
-    } else {
-      // Verify the thread exists and belongs to the project
-      const thread = await this.prisma.aIThread.findFirst({
-        where: {
-          id: threadId,
-          projectId,
-        },
-      });
-
-      if (!thread) {
-        throw new NotFoundException(
-          'Thread not found or does not belong to this project',
-        );
-      }
-    }
-
-    // Get previous messages from this thread to maintain context
-    const previousMessages = await this.prisma.aIThreadMessage.findMany({
-      where: { chatId: threadId },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    // Format the conversation history
-    const conversationHistory: ChatHistory[] = previousMessages.map((msg) => ({
-      role: msg.role,
-      message: msg.content,
-    }));
-
-    // Prepare context about the project
-    const projectContext = {
-      projectName: project.name,
-      projectDescription: project.description,
-      files: project.files.map((file) => ({
-        name: file.name,
-        path: file.path,
-        content: file.currentVersion?.content,
-      })),
-    };
-
-    // Agent Orchestration System with retry capabilities
-    const agentPipeline = [
-      'project-architect',
-      'file-generator',
-      'code-validator',
-      'execution-agent',
-    ];
-
-    let currentState = {
+    // 5. Initialize the state that will be updated at each agent step
+    let currentState: any = {
       requirements: message,
       projectContext,
+      plan: {},
       generatedFiles: [],
       validationErrors: [],
       executionPlan: [],
     };
 
-    // Process through agent pipeline
+    // 6. Register the agent pipeline in strict order:
+    // Project Architecture -> File Generator -> File Validator -> Improvements -> Execution
+    const agentPipeline: Array<{
+      name: string;
+      execute: (
+        state: any,
+        history: ChatHistory[],
+        errorContext?: string,
+      ) => Promise<any>;
+    }> = [
+      {
+        name: 'project-architect',
+        execute: this.executeProjectArchitect.bind(this),
+      },
+      { name: 'file-generator', execute: this.executeFileGenerator.bind(this) },
+      { name: 'code-validator', execute: this.executeCodeValidator.bind(this) },
+      {
+        name: 'file-improvement',
+        execute: this.executeFileImprovement.bind(this),
+      },
+      {
+        name: 'execution-agent',
+        execute: this.executeExecutionAgent.bind(this),
+      },
+      // Optionally, add an image-generator agent here
+    ];
+
+    // 7. Process each agent in the pipeline sequentially
     for (const agent of agentPipeline) {
       let retries = 3;
-      let agentResponse;
-      let validationError = '';
+      let agentResponse: any;
+      let errorContext = '';
 
       while (retries > 0) {
         try {
-          const agentPrompt = this.buildAgentPrompt(
-            agent,
+          agentResponse = await agent.execute(
             currentState,
-            validationError,
-          );
-          const result = await this.executeAgentWithRetry(
-            agent,
-            agentPrompt,
             conversationHistory,
-            retries,
+            errorContext,
           );
-
-          agentResponse = this.parseStructuredResponse(result.content, agent);
-          validationError = ''; // Reset error on success
           break;
-        } catch (e) {
+        } catch (e: any) {
           retries--;
-          validationError = e.message;
-
+          errorContext = e.message;
           if (retries === 0) {
-            throw new Error(
-              `Agent ${agent} failed after 3 retries: ${e.message}`,
-            );
+            throw new Error(`Agent ${agent.name} failed: ${e.message}`);
           }
-
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // Add delay between retries
+          await this.delay(1000);
         }
       }
 
+      // Update state based on agent response and log the step
       currentState = this.processAgentResponse(
-        agent,
+        agent.name,
         agentResponse,
         currentState,
       );
-      await this.saveAgentStep(threadId, agent, agentResponse);
-
-      if (currentState.validationErrors.length > 0) {
-        await this.handleValidationErrors(currentState);
-        break;
-      }
+      await this.saveAgentStep(threadId, agent.name, agentResponse);
     }
 
-    // Execute validated plan
-    if (currentState.executionPlan.length > 0) {
+    // 8. Execute the final validated/improved plan
+    if (currentState.executionPlan && currentState.executionPlan.length > 0) {
       await this.executeDevelopmentPlan(
         projectId,
         currentState.executionPlan,
         userId,
       );
     }
+
+    // Add the user's message to the conversation history
+    await this.prisma.aIThreadMessage.create({
+      data: {
+        chatId: threadId,
+        role: 'user',
+        content: message,
+        createdAt: new Date(startTime),
+      },
+    });
 
     return {
       response: this.formatFinalResponse(currentState),
@@ -3166,15 +3072,108 @@ INSTRUCTIONS:
     };
   }
 
+  // Helper to create delays
+  private async delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // ---------- Agent Execution Functions ----------
+
+  private async executeProjectArchitect(
+    state: any,
+    history: ChatHistory[],
+    errorContext: string = '',
+  ): Promise<any> {
+    const agentType = 'project-architect';
+    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
+    const result = await this.executeAgentWithRetry(
+      agentType,
+      agentPrompt,
+      history,
+      3,
+    );
+    return this.parseStructuredResponse(result.content, agentType);
+  }
+
+  private async executeFileGenerator(
+    state: any,
+    history: ChatHistory[],
+    errorContext: string = '',
+  ): Promise<any> {
+    const agentType = 'file-generator';
+    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
+    const result = await this.executeAgentWithRetry(
+      agentType,
+      agentPrompt,
+      history,
+      3,
+    );
+    return this.parseStructuredResponse(result.content, agentType);
+  }
+
+  private async executeCodeValidator(
+    state: any,
+    history: ChatHistory[],
+    errorContext: string = '',
+  ): Promise<any> {
+    const agentType = 'code-validator';
+    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
+    const result = await this.executeAgentWithRetry(
+      agentType,
+      agentPrompt,
+      history,
+      3,
+    );
+    return this.parseStructuredResponse(result.content, agentType);
+  }
+
+  private async executeFileImprovement(
+    state: any,
+    history: ChatHistory[],
+    errorContext: string = '',
+  ): Promise<any> {
+    const agentType = 'file-improvement';
+    // Only run file improvement if there are validation errors;
+    // otherwise, simply pass through the current generated files.
+    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
+    const result = await this.executeAgentWithRetry(
+      agentType,
+      agentPrompt,
+      history,
+      3,
+    );
+    return this.parseStructuredResponse(result.content, agentType);
+  }
+
+  private async executeExecutionAgent(
+    state: any,
+    history: ChatHistory[],
+    errorContext: string = '',
+  ): Promise<any> {
+    const agentType = 'execution-agent';
+    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
+    const result = await this.executeAgentWithRetry(
+      agentType,
+      agentPrompt,
+      history,
+      3,
+    );
+    return this.parseStructuredResponse(result.content, agentType);
+  }
+
+  // ---------- Agent Communication & Validation ----------
+
+  /**
+   * Executes an agent call with retries. Uses your AI wrapper to generate content.
+   */
   private async executeAgentWithRetry(
     agent: string,
     prompt: string,
     history: ChatHistory[],
     retriesLeft: number,
-  ) {
+  ): Promise<AgentResponse> {
     let attempt = 1;
     const maxAttempts = 3;
-
     while (attempt <= maxAttempts) {
       try {
         const result = await this.aiWrapper.generateContentHistory(
@@ -3182,229 +3181,341 @@ INSTRUCTIONS:
           `${prompt}\n\nAttempt ${attempt}/${maxAttempts}:`,
           history,
         );
-
-        // Validate response structure
+        // Validate response structure before returning
         this.validateAgentResponse(agent, result.content);
         return result;
-      } catch (error) {
+      } catch (error: any) {
         if (attempt === maxAttempts) {
           throw new Error(`Final attempt failed: ${error.message}`);
         }
-
-        // Add corrective context to history
+        // Provide corrective context for the next attempt
         history.push({
           role: 'system',
           message: `Format correction needed: ${error.message}`,
         });
-
         attempt++;
-        await new Promise((resolve) => setTimeout(resolve, 500 * attempt)); // Exponential backoff
+        await this.delay(500 * attempt);
       }
     }
     throw new Error('Max retries exceeded');
   }
 
+  // Validate agent response based on its type
   private validateAgentResponse(agent: string, response: string) {
-    // First check for JSON validity
     const parsed = this.parseStructuredResponse(response, agent);
-
-    // Then validate agent-specific structure
     switch (agent) {
       case 'project-architect':
-        if (!parsed.plan?.structure) {
+        if (!parsed.plan || !parsed.plan.structure) {
           throw new Error('Missing project structure in response');
         }
         break;
-
       case 'file-generator':
         if (!parsed.files || parsed.files.length === 0) {
           throw new Error('No files generated in response');
         }
         break;
-
       case 'code-validator':
         if (!parsed.validation) {
           throw new Error('Missing validation results');
         }
         break;
-
+      case 'file-improvement':
+        if (!parsed.files || parsed.files.length === 0) {
+          throw new Error('No file improvements provided');
+        }
+        break;
       case 'execution-agent':
         if (!parsed.actions || parsed.actions.length === 0) {
           throw new Error('No execution actions provided');
         }
         break;
+      default:
+        throw new Error(`Unknown agent type: ${agent}`);
     }
   }
 
+  /**
+   * Builds an agent prompt based on the agent type and current state.
+   */
   private buildAgentPrompt(
     agentType: string,
     state: any,
     errorContext: string = '',
   ): string {
-    // Safe access for file paths
+    // For file-improvement, use validation errors to guide corrections.
+    if (
+      agentType === 'file-improvement' &&
+      state.validationErrors &&
+      state.validationErrors.length > 0
+    ) {
+      return `
+        CORRECT THESE FILES:
+        ${state.validationErrors
+          .map(
+            (v: any) => `
+          File: ${v.filePath}
+          Issues:
+          ${v.issues.map((i: any) => `- [${i.type}] ${i.message}`).join('\n')}
+        `,
+          )
+          .join('\n')}
+  
+        INSTRUCTIONS:
+        1. Fix all reported errors while preserving the existing structure.
+        2. Enhance code readability and maintain style consistency.
+  
+        RESPONSE FORMAT:
+        {
+          "files": [{
+            "path": "string",
+            "content": "string",
+            "changesMade": ["string"]
+          }]
+        }
+      `;
+    }
+
+    // For file-generator, instruct the agent to generate the full file content update
+    // whether creating new files or updating existing ones.
+    if (agentType === 'file-generator') {
+      return `
+        For each file defined in the project architecture:
+        - If the file does NOT exist in the Existing Files list, generate the full file content.
+        - If the file already exists, generate the full updated file content (do NOT output a diff).
+  
+        Respond with JSON in the following format:
+        {
+          "files": [{
+            "path": "string",
+            "content": "string", // Full file content update.
+            "action": "create|update", // "create" if file is new, "update" if file exists.
+            "dependencies": ["string"],
+            "validationChecks": ["html5", "css3", "responsive"]
+          }]
+        }
+      `;
+    }
+
+    // For project-architect, instruct the agent to produce a detailed project plan.
+    // In particular, for documentation files like readme.md, include detailed instructions.
+    if (agentType === 'project-architect') {
+      return `
+        You are an expert project architect. Analyze the requirements and create a development plan:
+
+        Current Requirement: "${state.requirements}"
+        
+        1. UNDERSTAND THE INTENT - Is this:
+           - A new project request (e.g., "Build a weather app")
+           - An improvement request (e.g., "Make the design better")
+           - A content modification (e.g., "Make the essay longer")
+           - A structural change (e.g., "Add authentication")
+           - A deletion request (e.g., "Remove the readme", "Delete the login page")
+        
+        2. CREATE AN APPROPRIATE PLAN based on the intent:
+           - For new projects: Define full structure with essential files
+           - For improvements: Identify specific files to modify
+           - For content changes: Focus on relevant content files
+           - For structural changes: Target architecture components
+           - For deletion requests: Identify files/folders to remove and handle dependencies
+        
+        3. ADAPT TO PROJECT CONTEXT:
+           ${
+             state.projectContext.files.length > 0
+               ? '- Work with existing files rather than starting from scratch'
+               : '- This is a new project, suggest a complete structure'
+           }
+           - For deletion requests, check if files exist before planning removal
+        
+        Respond with this JSON format (with appropriate values for the request type):
+        {
+          "plan": {
+        "structure": [
+          {"path": "string", "type": "file/folder", "action": "create/modify/delete", "description": "string"}
+        ],
+        "dependencies": ["string"],
+        "challenges": ["string"]
+          }
+        }
+      `;
+    }
+
     const filePaths =
       state.plan?.structure
         ?.filter((f: any) => f?.type === 'file')
         ?.map((f: any) => f.path) || [];
 
     const baseContext = `
-      ${errorContext ? `\n\nERROR CONTEXT: ${errorContext}` : ''}
+      ${errorContext ? `ERROR CONTEXT: ${errorContext}` : ''}
       Project: ${state.projectContext.projectName}
       Existing Files: ${state.projectContext.files.map((f: any) => f.path).join(', ')}
       Requirements: ${state.requirements}
     `;
 
-    const agentPrompts = {
-      'project-architect': `
-      Analyze the requirements and create a development plan:
-      1. Identify needed files and dependencies
-      2. Outline project structure
-      3. Highlight potential technical challenges
-      
-      Respond with JSON format:
-      {
-        "plan": {
-          "structure": [
-            {"path": "string", "type": "file/folder", "description": "string"},
-          ],
-          "dependencies": ["string"],
-          "challenges": ["string"]
-        }
-      }
-    `,
-      'file-generator': `
-      Generate file contents for: ${filePaths.join(', ')}
-      
-      For each file, respond with:
-      {
-        "files": [{
-          "path": "string",
-          "content": "string",
-          "dependencies": ["string"],
-          "validationChecks": ["html5", "css3", "responsive"]
-        }]
-      }
-    `,
+    const agentPrompts: Record<string, string> = {
       'code-validator': `
-Validate generated files. Check for:
-- Syntax errors
-- Dependency consistency
-- Best practices
-
-Files to validate: ${state.generatedFiles.map((f: any) => f.path).join(', ')}
-
-Respond with:
-{
-  "validation": [{
-    "filePath": "string",
-    "issues": [{
-      "type": "error/warning", 
-      "message": "string",
-      "suggestion": "string (optional)"
-    }]
-  }]
-}
-Only include files with validation issues!
-`,
+        Validate all files using industry-standard best practices and conventions:
+          1. For HTML files:
+             - Ensure valid structure and semantic usage.
+             - Check for accessibility compliance.
+             - Verify responsive design principles.
+          2. For CSS files:
+             - Validate against latest CSS standards.
+             - Check for efficient and maintainable styling.
+             - Ensure cross-browser compatibility.
+          3. For JavaScript/TypeScript and any other code files:
+             - Verify adherence to modern standards.
+             - Check for proper error handling and code organization.
+             - Ensure performance optimization techniques are applied.
+          4. For documentation files (e.g., README.md):
+             - Verify completeness of project information.
+             - Check for clear and concise explanations.
+          5. For all other files not covered above:
+             - Ensure consistent code style and formatting.
+             - Check for potential security vulnerabilities.
+             - Verify proper commenting and documentation.
+  
+        Respond with:
+        {
+          "validation": [{
+            "filePath": "string",
+            "issues": [{
+              "type": "error/warning",
+              "line": "number",
+              "column": "number",
+              "rule": "string",
+              "message": "string",
+              "suggestion": "string"
+            }]
+          }]
+        }
+      `,
       'execution-agent': `
-      Create execution plan considering validation results.
-      Format:
-      {
-        "actions": [{
-          "type": "create|update|revert",
-          "filePath": "string",
-          "content": "string",
-          "commitMsg": "string"
-        }]
-      }
-    `,
+        Create an execution plan based on the improved files and validation results.
+        Format:
+        {
+          "actions": [{
+            "type": "create|update|revert|delete",
+            "filePath": "string",
+            "content": "string",
+            "commitMsg": "string"
+          }]
+        }
+      `,
     };
 
-    return `${baseContext}\n\nSTRICT FORMATTING RULES:
-    - Respond ONLY with valid JSON
-    - No additional text outside JSON
-    - Use exactly the specified structure
-    - Escape special characters properly
-    \n\n${agentPrompts[agentType]}\n\nSTRICT FORMATTING RULES:
-    - Respond ONLY with valid JSON
-    - No additional text outside JSON
-    - Use exactly the specified structure
-    - Escape special characters properly
-    \n\n`;
+    return `${baseContext}
+    
+STRICT FORMATTING RULES:
+- Respond ONLY with valid JSON.
+- No additional text outside JSON.
+- Use exactly the specified structure.
+- Escape special characters properly.
+
+${agentPrompts[agentType] || ''}
+    
+STRICT FORMATTING RULES:
+- Respond ONLY with valid JSON.
+- No additional text outside JSON.
+- Use exactly the specified structure.
+- Escape special characters properly.
+`;
   }
 
+  // ---------- Execution Plan & File Operations ----------
+
+  /**
+   * Executes the development plan by iterating through file actions.
+   * In a production system, these operations should be wrapped in a transaction.
+   */
   private async executeDevelopmentPlan(
     projectId: string,
     actions: any[],
     userId: string,
   ) {
-    for (const action of actions) {
-      switch (action.type) {
-        case 'create':
-          await this.createProjectFile(
-            projectId,
-            {
-              name: action.filePath.split('/').pop(),
-              path: action.filePath,
-              content: action.content,
-              commitMsg: action.commitMsg,
-            },
-            userId,
-          );
-          break;
-        case 'update':
-          const fileToUpdate = await this.getFileByPath(
-            projectId,
-            action.filePath,
-          );
-          await this.updateProjectFile(
-            projectId,
-            fileToUpdate.id,
-            {
-              content: action.content,
-              commitMsg: action.commitMsg,
-            },
-            userId,
-          );
-          break;
-        case 'revert':
-          const fileToRevert = await this.getFileByPath(
-            projectId,
-            action.filePath,
-          );
-          await this.revertProjectFile(
-            projectId,
-            fileToRevert.id,
-            action.version,
-            action.commitMsg,
-            userId,
-          );
-          break;
+    try {
+      for (const action of actions) {
+        switch (action.type) {
+          case 'create':
+            await this.createProjectFile(
+              projectId,
+              {
+                name: action.filePath.split('/').pop(),
+                path: action.filePath,
+                content: action.content,
+                commitMsg: action.commitMsg,
+              },
+              userId,
+            );
+            break;
+          case 'update':
+            const fileToUpdate = await this.getFileByPath(
+              projectId,
+              action.filePath,
+            );
+            await this.updateProjectFile(
+              projectId,
+              fileToUpdate.id,
+              {
+                content: action.content,
+                commitMsg: action.commitMsg,
+              },
+              userId,
+            );
+            break;
+          case 'revert':
+            const fileToRevert = await this.getFileByPath(
+              projectId,
+              action.filePath,
+            );
+            await this.revertProjectFile(
+              projectId,
+              fileToRevert.id,
+              action.version,
+              action.commitMsg,
+              userId,
+            );
+            break;
+          case 'delete':
+            const fileToDelete = await this.getFileByPath(
+              projectId,
+              action.filePath,
+            );
+            await this.deleteProjectFile(projectId, fileToDelete.id, userId);
+            break;
+          default:
+            throw new Error(`Unknown action type: ${action.type}`);
+        }
       }
+    } catch (e: any) {
+      // In production, consider rolling back the transaction here.
+      throw new Error(`Execution plan failed: ${e.message}`);
     }
   }
 
+  // ---------- Response Parsing and Validation ----------
+
+  /**
+   * Parses and validates the JSON response returned by agents.
+   */
   private parseStructuredResponse(response: string, agent: string): any {
     try {
       const cleaned = response
         .replace(/```json/g, '')
         .replace(/```/g, '')
         .trim();
-
-      // Validate JSON structure first
       const parsed = JSON.parse(cleaned);
-
-      // Then validate content structure
       this.validateResponseStructure(agent, parsed);
-
       return parsed;
-    } catch (e) {
+    } catch (e: any) {
       throw new Error(`Invalid response format: ${e.message}`);
     }
   }
 
+  /**
+   * Validates that the JSON response adheres to the expected structure for each agent.
+   */
   private validateResponseStructure(agent: string, response: any) {
-    const validator: Record<string, (res: any) => void> = {
+    const validators: Record<string, (res: any) => void> = {
       'project-architect': (res) => {
         if (!res.plan || !Array.isArray(res.plan.structure)) {
           throw new Error('Invalid project structure format');
@@ -3420,6 +3531,13 @@ Only include files with validation issues!
           throw new Error('Validation results must be an array');
         }
       },
+      'file-improvement': (res) => {
+        if (!Array.isArray(res.files) || res.files.some((f: any) => !f?.path)) {
+          throw new Error(
+            'Files array missing or invalid file paths in improvement response',
+          );
+        }
+      },
       'execution-agent': (res) => {
         if (!Array.isArray(res.actions)) {
           throw new Error('Actions must be an array');
@@ -3427,64 +3545,50 @@ Only include files with validation issues!
       },
     };
 
-    if (validator[agent]) {
-      validator[agent](response);
+    if (validators[agent]) {
+      validators[agent](response);
     }
   }
 
-  // Add these methods inside the IntelligenceService class
-  private formatFinalResponse(currentState: any): string {
-    // Flatten all validation issues from all files
-    const allIssues = currentState.validationErrors.flatMap(
-      (v: any) => v.issues?.map((i: any) => i.message) || [],
-    );
-
-    if (allIssues.length > 0) {
-      return `❌ Validation failed:\n${allIssues
-        .map((msg: string) => `• ${msg}`)
-        .join('\n')}`;
-    }
-
-    return `✅ Successfully executed ${currentState.executionPlan.length} actions:
-  ${currentState.executionPlan
-    .map((a: any) => `• ${a.type} ${a.filePath}`)
-    .join('\n')}`;
-  }
-
+  /**
+   * Updates the system state based on an agent's response.
+   */
   private processAgentResponse(
     agent: string,
     agentResponse: any,
     currentState: any,
   ): any {
     const newState = { ...currentState };
-
     switch (agent) {
       case 'project-architect':
         newState.plan = agentResponse.plan || { structure: [] };
         break;
-
       case 'file-generator':
-        newState.generatedFiles =
-          agentResponse.files?.filter((f: any) => f?.path) || [];
+        newState.generatedFiles = agentResponse.files || [];
         break;
-
       case 'code-validator':
-        // Filter out validation entries without issues
         newState.validationErrors = Array.isArray(agentResponse.validation)
-          ? agentResponse.validation.filter((v: any) => v.issues?.length > 0)
+          ? agentResponse.validation.filter(
+              (v: any) => v.issues && v.issues.length > 0,
+            )
           : [];
         break;
-
+      case 'file-improvement':
+        newState.generatedFiles =
+          agentResponse.files || newState.generatedFiles;
+        break;
       case 'execution-agent':
-        newState.executionPlan = (agentResponse.actions || []).filter(
-          (a: any) => ['create', 'update', 'revert'].includes(a.type),
-        );
+        newState.executionPlan = agentResponse.actions || [];
         break;
     }
-
     return newState;
   }
 
+  // ---------- Logging & Storage Helpers ----------
+
+  /**
+   * Saves the agent's response to the thread for auditing purposes.
+   */
   private async saveAgentStep(
     threadId: string,
     agent: string,
@@ -3503,38 +3607,9 @@ Only include files with validation issues!
     });
   }
 
-  private async handleValidationErrors(currentState: any): Promise<void> {
-    // Ensure proper error structure
-    currentState.validationErrors = currentState.validationErrors
-      .filter((v: any) => !!v.issues)
-      .map((v: any) => ({
-        ...v,
-        issues: v.issues.map((i: any) => ({
-          type: i.type || 'error',
-          message: i.message || 'Unspecified validation error',
-        })),
-      }));
-  }
-
-  private async getFileByPath(
-    projectId: string,
-    filePath: string,
-  ): Promise<AIProjectFile> {
-    const file = await this.prisma.aIProjectFile.findFirst({
-      where: {
-        projectId,
-        path: filePath,
-      },
-    });
-
-    if (!file) {
-      throw new NotFoundException(`File not found at path: ${filePath}`);
-    }
-
-    return file;
-  }
-
-  // Helper method to prevent storing sensitive data
+  /**
+   * Sanitizes the response before storing to avoid saving sensitive data.
+   */
   private sanitizeForStorage(response: any): any {
     const clone = { ...response };
     if (clone.files) {
@@ -3544,5 +3619,33 @@ Only include files with validation issues!
       }));
     }
     return clone;
+  }
+
+  /**
+   * Formats a final response message summarizing the execution outcome.
+   */
+  private formatFinalResponse(currentState: any): string {
+    const allIssues = currentState.validationErrors.flatMap(
+      (v: any) => v.issues?.map((i: any) => i.message) || [],
+    );
+
+    return `✅ Successfully executed ${currentState.executionPlan.length} actions:\n${currentState.executionPlan
+      .map((a: any) => `• ${a.type} ${a.filePath}`)
+      .join('\n')}`;
+  }
+
+  // ---------- Project File Operation Helpers ----------
+
+  private async getFileByPath(
+    projectId: string,
+    filePath: string,
+  ): Promise<any> {
+    const file = await this.prisma.aIProjectFile.findFirst({
+      where: { projectId, path: filePath },
+    });
+    if (!file) {
+      throw new NotFoundException(`File not found at path: ${filePath}`);
+    }
+    return file;
   }
 }
