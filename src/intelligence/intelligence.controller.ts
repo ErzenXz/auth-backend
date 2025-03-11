@@ -27,6 +27,16 @@ import { ProcessBetaUserInstructionDto } from './dtos/process-beta-user-instruct
 import { CreateApplicationDto } from './dtos/create-application.dto';
 import { Observable } from 'rxjs';
 import { RenameChatThreadDto } from './dtos/rename-chat-thread.dto';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  CreateProjectFileDto,
+  InitializeProjectFilesDto,
+  UpdateProjectFileDto,
+  RevertFileVersionDto,
+  AddProjectCollaboratorDto,
+  DevInstructionDto,
+} from './dtos/project.dto';
 
 /**
  * IntelligenceController handles operations related to intelligence instructions and user memory.
@@ -654,5 +664,344 @@ export class IntelligenceController {
     const filename = `all-chat-threads-${new Date().toISOString()}.json`;
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     return res.send(threads);
+  }
+
+  // AI Projects Management
+
+  /**
+   * Creates a new AI project
+   * @param {CreateProjectDto} createProjectDto - Project data
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects')
+  @Auth()
+  async createProject(
+    @Body() createProjectDto: CreateProjectDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.createProject(
+      createProjectDto,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Lists all AI projects for the current user
+   * @param {IHttpContext} context - HTTP context with user information
+   * @param {number} page - Page number (default: 1)
+   * @param {number} limit - Items per page (default: 10)
+   */
+  @Get('projects')
+  @Auth()
+  async listProjects(
+    @HttpContext() context: IHttpContext,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return await this.intelligenceService.listProjects(
+      context.user.id,
+      +page,
+      +limit,
+    );
+  }
+
+  /**
+   * Gets a specific AI project by ID
+   * @param {string} id - Project ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Get('projects/:id')
+  @Auth()
+  async getProject(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.getProject(id, context.user.id);
+  }
+
+  /**
+   * Updates a specific AI project
+   * @param {string} id - Project ID
+   * @param {UpdateProjectDto} updateProjectDto - Updated project data
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Put('projects/:id')
+  @Auth()
+  async updateProject(
+    @Param('id') id: string,
+    @Body() updateProjectDto: UpdateProjectDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.updateProject(
+      id,
+      updateProjectDto,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Deletes a specific AI project
+   * @param {string} id - Project ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Delete('projects/:id')
+  @Auth()
+  async deleteProject(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.deleteProject(id, context.user.id);
+  }
+
+  /**
+   * Creates a new thread for a specific project
+   * @param {string} id - Project ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects/:id/threads')
+  @Auth()
+  async createProjectThread(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.createProjectThread(
+      id,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Lists all threads for a specific project
+   * @param {string} id - Project ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Get('projects/:id/threads')
+  @Auth()
+  async listProjectThreads(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.listProjectThreads(
+      id,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Creates a new file in a specific project
+   * @param {string} id - Project ID
+   * @param {CreateProjectFileDto} createProjectFileDto - File data
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects/:id/files')
+  @Auth()
+  async createProjectFile(
+    @Param('id') id: string,
+    @Body() createProjectFileDto: CreateProjectFileDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.createProjectFile(
+      id,
+      createProjectFileDto,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Initializes multiple files in a project at once
+   * @param {string} id - Project ID
+   * @param {InitializeProjectFilesDto} initFilesDto - Files to initialize
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects/:id/files/initialize')
+  @Auth()
+  async initializeProjectFiles(
+    @Param('id') id: string,
+    @Body() initFilesDto: InitializeProjectFilesDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.initializeProjectFiles(
+      id,
+      initFilesDto.files,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Lists all files for a specific project
+   * @param {string} id - Project ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Get('projects/:id/files')
+  @Auth()
+  async listProjectFiles(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.listProjectFiles(id, context.user.id);
+  }
+
+  /**
+   * Gets a specific file by ID
+   * @param {string} projectId - Project ID
+   * @param {string} fileId - File ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Get('projects/:projectId/files/:fileId')
+  @Auth()
+  async getProjectFile(
+    @Param('projectId') projectId: string,
+    @Param('fileId') fileId: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.getProjectFile(
+      projectId,
+      fileId,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Updates the content of a specific file
+   * @param {string} projectId - Project ID
+   * @param {string} fileId - File ID
+   * @param {UpdateProjectFileDto} updateFileDto - Updated file data
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Put('projects/:projectId/files/:fileId')
+  @Auth()
+  async updateProjectFile(
+    @Param('projectId') projectId: string,
+    @Param('fileId') fileId: string,
+    @Body() updateFileDto: UpdateProjectFileDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.updateProjectFile(
+      projectId,
+      fileId,
+      updateFileDto,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Gets all versions of a specific file
+   * @param {string} projectId - Project ID
+   * @param {string} fileId - File ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Get('projects/:projectId/files/:fileId/versions')
+  @Auth()
+  async getProjectFileVersions(
+    @Param('projectId') projectId: string,
+    @Param('fileId') fileId: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.getProjectFileVersions(
+      projectId,
+      fileId,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Reverts a file to a specific version
+   * @param {string} projectId - Project ID
+   * @param {string} fileId - File ID
+   * @param {RevertFileVersionDto} revertDto - Version to revert to
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects/:projectId/files/:fileId/revert')
+  @Auth()
+  async revertProjectFile(
+    @Param('projectId') projectId: string,
+    @Param('fileId') fileId: string,
+    @Body() revertDto: RevertFileVersionDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.revertProjectFile(
+      projectId,
+      fileId,
+      revertDto.version,
+      revertDto.commitMsg,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Adds a collaborator to a project
+   * @param {string} id - Project ID
+   * @param {AddProjectCollaboratorDto} collaboratorDto - Collaborator data
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects/:id/collaborators')
+  @Auth()
+  async addProjectCollaborator(
+    @Param('id') id: string,
+    @Body() collaboratorDto: AddProjectCollaboratorDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.addProjectCollaborator(
+      id,
+      collaboratorDto.userId,
+      collaboratorDto.role,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Lists all collaborators for a specific project
+   * @param {string} id - Project ID
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Get('projects/:id/collaborators')
+  @Auth()
+  async listProjectCollaborators(
+    @Param('id') id: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.listProjectCollaborators(
+      id,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Removes a collaborator from a project
+   * @param {string} projectId - Project ID
+   * @param {string} userId - User ID of the collaborator to remove
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Delete('projects/:projectId/collaborators/:userId')
+  @Auth()
+  async removeProjectCollaborator(
+    @Param('projectId') projectId: string,
+    @Param('userId') userId: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.removeProjectCollaborator(
+      projectId,
+      userId,
+      context.user.id,
+    );
+  }
+
+  /**
+   * Process a agent instruction for an AI project
+   * @param {DevInstructionDto} instructionDto - The instruction to process
+   * @param {IHttpContext} context - HTTP context with user information
+   */
+  @Post('projects/process-agent')
+  @Auth()
+  async processAdvancedInstruction(
+    @Body() instructionDto: DevInstructionDto,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.executeAgentPipeline(
+      instructionDto.instruction,
+      instructionDto.projectId,
+      instructionDto.threadId,
+      context.user.id,
+    );
   }
 }
