@@ -53,7 +53,7 @@
     "@socket.io/admin-ui": "^0.5.1",
     "@types/passport-linkedin-oauth2": "^1.5.6",
     "aws-sdk": "^2.1691.0",
-    "axios": "^1.7.9",
+    "axios": "^1.8.2",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.28.1",
     "cache-manager": "5.7.6",
