@@ -276,9 +276,12 @@ export class AgentExecutionService {
     config: IPromptStepConfig,
     context: IAgentContext,
   ): Promise<any> {
+    // Process template variables in the prompt
+    const processedPrompt = this.evaluateExpression(config.prompt, context);
+
     const response = await this.aiWrapper.generateContent(
       config.model as AIModels,
-      config.prompt,
+      processedPrompt,
     );
 
     if (config.outputSchema) {
@@ -366,10 +369,21 @@ export class AgentExecutionService {
   }
 
   /**
-   * Process object templates recursively
+   * Process object templates recursively with better handling of nested objects
    */
   private processObjectTemplates(obj: any, context: IAgentContext): void {
     if (!obj || typeof obj !== 'object') return;
+
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        if (typeof obj[i] === 'string') {
+          obj[i] = this.evaluateExpression(obj[i], context);
+        } else if (typeof obj[i] === 'object' && obj[i] !== null) {
+          this.processObjectTemplates(obj[i], context);
+        }
+      }
+      return;
+    }
 
     Object.keys(obj).forEach((key) => {
       if (typeof obj[key] === 'string') {
@@ -492,28 +506,55 @@ export class AgentExecutionService {
     if (!expression) return null;
 
     try {
+      // Handle complex objects by converting to string first
+      if (typeof expression !== 'string') {
+        return expression;
+      }
+
       // Replace variable references in the format {{variables.name}} and {{input.field}}
-      return expression.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-        const parts = path.trim().split('.');
+      // Use a recursive approach to handle nested templates
+      let result = expression;
+      let lastResult = '';
+      let iterations = 0;
 
-        if (parts.length < 2) return match;
+      // Continue replacing until we reach a stable result or max iterations
+      while (result !== lastResult && iterations < 10) {
+        lastResult = result;
+        iterations++;
 
-        if (parts[0] === 'variables' && parts.length >= 2) {
-          const varName = parts[1];
-          return context.variables[varName] !== undefined
-            ? JSON.stringify(context.variables[varName]).replace(/^"|"$/g, '')
-            : match;
-        }
+        result = result.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
+          const parts = path.trim().split('.');
 
-        if (parts[0] === 'input' && parts.length >= 2) {
-          const inputField = parts[1];
-          return context.input && context.input[inputField] !== undefined
-            ? JSON.stringify(context.input[inputField]).replace(/^"|"$/g, '')
-            : match;
-        }
+          if (parts.length < 2) return match;
 
-        return match;
-      });
+          if (parts[0] === 'variables' && parts.length >= 2) {
+            const varName = parts[1];
+            if (context.variables[varName] === undefined) return match;
+
+            // Handle different types appropriately
+            const value = context.variables[varName];
+            if (typeof value === 'string') return value;
+            if (value === null) return '';
+            return JSON.stringify(value);
+          }
+
+          if (parts[0] === 'input' && parts.length >= 2) {
+            const inputField = parts[1];
+            if (!context.input || context.input[inputField] === undefined)
+              return match;
+
+            // Handle different types appropriately
+            const value = context.input[inputField];
+            if (typeof value === 'string') return value;
+            if (value === null) return '';
+            return JSON.stringify(value);
+          }
+
+          return match;
+        });
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error evaluating expression: ${expression}`, error);
       return expression;
