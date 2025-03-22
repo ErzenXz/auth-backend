@@ -22,9 +22,15 @@ export enum AIModels {
   DeepseekR1Zero = 'deepseek/deepseek-r1-zero:free',
   DeepseekR1DistilledLlama = 'deepseek/deepseek-r1-distill-llama-70b:free',
   Qwen2_5VL72B = 'qwen/qwen2.5-vl-72b-instruct:free',
+  Qwen2_5_Code_32B = 'qwen/qwen-2.5-coder-32b-instruct:free',
+  Mistral_Small_3_1_24B = 'mistralai/mistral-small-3.1-24b-instruct:free',
+  OlympicCoder_32B = 'open-r1/olympiccoder-32b:free',
+  Gemma_3_27B = 'google/gemma-3-27b-it:free',
+  Reka_Flash_3 = 'rekaai/reka-flash-3:free',
+  Llama_3_1_Neutron_Nvidia = 'nvidia/llama-3.1-nemotron-70b-instruct:free',
 
   // Llama Models
-  Qwen2Coder = 'accounts/fireworks/models/qwen2p5-coder-32b-instruct',
+  Mistral_Small_3_Instruct = 'accounts/fireworks/models/mistral-small-24b-instruct-2501',
 
   // Groq Models
   Mistral_Saba_24B = 'mistral-saba-24b',

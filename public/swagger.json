@@ -2678,31 +2678,7 @@
         ]
       }
     },
-    "/intelligence/projects/dev-instruction": {
-      "post": {
-        "operationId": "IntelligenceController_processDevInstruction",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DevInstructionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Intelligence"
-        ]
-      }
-    },
-    "/intelligence/projects/advanced-dev-instruction": {
+    "/intelligence/projects/process-agent": {
       "post": {
         "operationId": "IntelligenceController_processAdvancedInstruction",
         "parameters": [],
@@ -3330,6 +3306,597 @@
           "Command Control"
         ]
       }
+    },
+    "/agents": {
+      "post": {
+        "operationId": "AgentController_createAgent",
+        "summary": "Create a new agent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The agent has been created"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      },
+      "get": {
+        "operationId": "AgentController_getAgents",
+        "summary": "Get all agents for the current user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of agents"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{id}": {
+      "get": {
+        "operationId": "AgentController_getAgent",
+        "summary": "Get a specific agent by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent found"
+          },
+          "404": {
+            "description": "Agent not found"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      },
+      "put": {
+        "operationId": "AgentController_updateAgent",
+        "summary": "Update an existing agent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent updated"
+          },
+          "404": {
+            "description": "Agent not found"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      },
+      "delete": {
+        "operationId": "AgentController_deleteAgent",
+        "summary": "Delete an agent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Agent deleted"
+          },
+          "404": {
+            "description": "Agent not found"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{agentId}/steps": {
+      "post": {
+        "operationId": "AgentController_addStep",
+        "summary": "Add a step to an agent",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentStepDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Step added"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{agentId}/steps/{stepId}": {
+      "put": {
+        "operationId": "AgentController_updateStep",
+        "summary": "Update a step",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stepId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentStepDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Step updated"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      },
+      "delete": {
+        "operationId": "AgentController_deleteStep",
+        "summary": "Delete a step",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stepId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Step deleted"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{agentId}/credentials": {
+      "post": {
+        "operationId": "AgentController_addCredential",
+        "summary": "Add a credential to an agent",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credential added"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{agentId}/credentials/{credentialId}": {
+      "put": {
+        "operationId": "AgentController_updateCredential",
+        "summary": "Update a credential",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "credentialId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credential updated"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      },
+      "delete": {
+        "operationId": "AgentController_deleteCredential",
+        "summary": "Delete a credential",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "credentialId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Credential deleted"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{agentId}/variables": {
+      "post": {
+        "operationId": "AgentController_addVariable",
+        "summary": "Add a variable to an agent",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentVariableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Variable added"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{agentId}/variables/{variableId}": {
+      "put": {
+        "operationId": "AgentController_updateVariable",
+        "summary": "Update a variable",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variableId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentVariableDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Variable updated"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      },
+      "delete": {
+        "operationId": "AgentController_deleteVariable",
+        "summary": "Delete a variable",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variableId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Variable deleted"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{id}/execute": {
+      "post": {
+        "operationId": "AgentController_executeAgent",
+        "summary": "Execute an agent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentExecutionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{id}/executions": {
+      "get": {
+        "operationId": "AgentController_getExecutions",
+        "summary": "Get execution history for an agent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of executions"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/agents/{id}/executions/{executionId}": {
+      "get": {
+        "operationId": "AgentController_getExecution",
+        "summary": "Get a specific execution",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "executionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution found"
+          }
+        },
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/api/agents/execute": {
+      "post": {
+        "operationId": "ApiAgentController_executeAgent",
+        "summary": "Execute an agent using an API key",
+        "parameters": [
+          {
+            "name": "api_key",
+            "required": true,
+            "in": "query",
+            "description": "API Key for authentication",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "required": true,
+            "in": "query",
+            "description": "ID of the agent to execute",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentExecutionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Agent API"
+        ]
+      }
     }
   },
   "info": {
@@ -3852,6 +4419,46 @@
         "properties": {}
       },
       "ExecuteCommandDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateAgentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateAgentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateAgentStepDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateAgentStepDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateAgentCredentialDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateAgentCredentialDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateAgentVariableDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateAgentVariableDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ExecuteAgentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AgentExecutionResponseDto": {
         "type": "object",
         "properties": {}
       }
