@@ -17,6 +17,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { GroqProvider } from './providers/Groq.provider';
 import { CrawlerService } from './browser/crawler.service';
 import { AnthropicProvider } from './providers/Anthropic.provider';
+import { AgentModule } from './agent/agent.module';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
@@ -40,6 +41,7 @@ const Services = [BrowserService, AiWrapperService, CrawlerService];
     TextToSpeechModule,
     BrowserModule,
     XCacheModule,
+    AgentModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

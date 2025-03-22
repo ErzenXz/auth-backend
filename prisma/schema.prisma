@@ -73,6 +73,7 @@ model User {
   AIProjectFileVersion  AIProjectFileVersion[]
   AIProjectCollaborator AIProjectCollaborator[]
   AIProject             AIProject[]             @relation("ProjectOwner")
+  Agent                 Agent[]
 
   @@index([email])
   @@index([username])
@@ -673,4 +674,95 @@ model AIProjectFileVersion {
 
   @@unique([fileId, version])
   @@index([fileId])
+}
+
+enum StepType {
+  PROMPT // AI prompt execution
+  API_CALL // External API calls
+  VALIDATION // Schema validation
+  TRANSFORMATION // Data transformation
+  CONDITION // Branching logic
+  LOOP // Iteration over data
+  WAIT // Delay execution
+  SET_VARIABLE // Set variable value
+  ERROR_HANDLER // Handle exceptions
+}
+
+model Agent {
+  id          String            @id @default(uuid())
+  name        String
+  description String?
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  steps       AgentStep[]
+  credentials AgentCredential[]
+  variables   AgentVariable[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+model AgentStep {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  type          StepType // Enum for step types
+  config        Json // Configuration specific to step type
+  order         Int // Default execution order
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id])
+  nextOnSuccess String? // ID of next step on success (null = continue to next in order)
+  nextOnFailure String? // ID of next step on failure (null = stop execution)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([agentId])
+  @@index([agentId, order])
+}
+
+model AgentCredential {
+  id        String   @id @default(uuid())
+  name      String // User-friendly name
+  type      String // e.g., "api_key", "oauth_token", "basic_auth"
+  value     String   @db.Text // Encrypted credential value
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, name])
+  @@index([agentId])
+}
+
+model AgentVariable {
+  id           String  @id @default(uuid())
+  name         String
+  defaultValue String? // Optional default value
+  description  String?
+  agentId      String
+  agent        Agent   @relation(fields: [agentId], references: [id])
+
+  @@unique([agentId, name])
+  @@index([agentId])
+}
+
+model AgentExecution {
+  id            String    @id @default(uuid())
+  agentId       String
+  status        String // RUNNING, COMPLETED, FAILED
+  input         Json
+  output        Json?
+  executionPath Json // Array of step IDs executed
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  stepResults   Json? // Results of each step execution
+  errorMessage  String?
+  tokenUsage    Int? // Total token usage if applicable
+  userId        String // User who initiated the execution
+
+  @@index([agentId])
+  @@index([userId])
+  @@index([status])
+  @@index([startTime])
 }

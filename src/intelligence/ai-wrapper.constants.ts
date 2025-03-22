@@ -75,9 +75,15 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.DeepseekR1Zero]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekR1DistilledLlama]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Qwen2_5VL72B]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Qwen2_5_Code_32B]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Mistral_Small_3_1_24B]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.OlympicCoder_32B]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Gemma_3_27B]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Reka_Flash_3]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Llama_3_1_Neutron_Nvidia]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
-  [AIModels.Qwen2Coder]: AI_PROVIDERS.LLAMA,
+  [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,
 
   // Groq Models
   [AIModels.Mistral_Saba_24B]: AI_PROVIDERS.GROQ,
@@ -103,10 +109,10 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
 };
 
 export const DEFAULT_MODELS: Record<AIProvider, AIModels> = {
-  [AI_PROVIDERS.GOOGLE]: AIModels.GeminiFast,
-  [AI_PROVIDERS.OPENAI]: AIModels.GPT35Turbo,
+  [AI_PROVIDERS.GOOGLE]: AIModels.Gemini,
+  [AI_PROVIDERS.OPENAI]: AIModels.GPT4OMini,
   [AI_PROVIDERS.OPENROUTER]: AIModels.DeepseekR1DistilledLlama,
-  [AI_PROVIDERS.LLAMA]: AIModels.Qwen2Coder,
+  [AI_PROVIDERS.LLAMA]: AIModels.Mistral_Small_3_Instruct,
   [AI_PROVIDERS.GROQ]: AIModels.DeepseekV3,
   [AI_PROVIDERS.ANTHROPIC]: AIModels.Claude3Opus,
 };
