@@ -3078,11 +3078,11 @@ INSTRUCTIONS:
   }
 
   // ---------- Agent Execution Functions ----------
-
   private async executeProjectArchitect(
     state: any,
     history: ChatHistory[],
     errorContext: string = '',
+    model?: AIModels,
   ): Promise<any> {
     const agentType = 'project-architect';
     const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
@@ -3091,6 +3091,7 @@ INSTRUCTIONS:
       agentPrompt,
       history,
       3,
+      model,
     );
     return this.parseStructuredResponse(result.content, agentType);
   }
@@ -3099,6 +3100,7 @@ INSTRUCTIONS:
     state: any,
     history: ChatHistory[],
     errorContext: string = '',
+    model?: AIModels,
   ): Promise<any> {
     const agentType = 'file-generator';
     const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
@@ -3107,6 +3109,7 @@ INSTRUCTIONS:
       agentPrompt,
       history,
       3,
+      model,
     );
     return this.parseStructuredResponse(result.content, agentType);
   }
@@ -3115,6 +3118,7 @@ INSTRUCTIONS:
     state: any,
     history: ChatHistory[],
     errorContext: string = '',
+    model?: AIModels,
   ): Promise<any> {
     const agentType = 'code-validator';
     const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
@@ -3123,6 +3127,7 @@ INSTRUCTIONS:
       agentPrompt,
       history,
       3,
+      model,
     );
     return this.parseStructuredResponse(result.content, agentType);
   }
@@ -3131,6 +3136,7 @@ INSTRUCTIONS:
     state: any,
     history: ChatHistory[],
     errorContext: string = '',
+    model?: AIModels,
   ): Promise<any> {
     const agentType = 'file-improvement';
     // Only run file improvement if there are validation errors;
@@ -3141,6 +3147,7 @@ INSTRUCTIONS:
       agentPrompt,
       history,
       3,
+      model,
     );
     return this.parseStructuredResponse(result.content, agentType);
   }
@@ -3149,6 +3156,7 @@ INSTRUCTIONS:
     state: any,
     history: ChatHistory[],
     errorContext: string = '',
+    model?: AIModels,
   ): Promise<any> {
     const agentType = 'execution-agent';
     const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
@@ -3157,6 +3165,7 @@ INSTRUCTIONS:
       agentPrompt,
       history,
       3,
+      model,
     );
     return this.parseStructuredResponse(result.content, agentType);
   }
@@ -3171,13 +3180,17 @@ INSTRUCTIONS:
     prompt: string,
     history: ChatHistory[],
     retriesLeft: number,
+    model?: AIModels,
   ): Promise<AgentResponse> {
     let attempt = 1;
     const maxAttempts = 3;
+    // Use the provided model or fall back to Gemini
+    const selectedModel = model || AIModels.Gemini;
+
     while (attempt <= maxAttempts) {
       try {
         const result = await this.aiWrapper.generateContentHistory(
-          AIModels.Gemini,
+          selectedModel,
           `${prompt}\n\nAttempt ${attempt}/${maxAttempts}:`,
           history,
         );
@@ -3300,42 +3313,58 @@ INSTRUCTIONS:
     // In particular, for documentation files like readme.md, include detailed instructions.
     if (agentType === 'project-architect') {
       return `
-        You are an expert project architect. Analyze the requirements and create a development plan:
+        You are an experienced project architect with a deep understanding of software engineering best practices. Your job is to analyze project requirements and provide a comprehensive, actionable development plan tailored to the request. Follow these instructions carefully:
 
-        Current Requirement: "${state.requirements}"
-        
-        1. UNDERSTAND THE INTENT - Is this:
-           - A new project request (e.g., "Build a weather app")
-           - An improvement request (e.g., "Make the design better")
-           - A content modification (e.g., "Make the essay longer")
-           - A structural change (e.g., "Add authentication")
-           - A deletion request (e.g., "Remove the readme", "Delete the login page")
-        
-        2. CREATE AN APPROPRIATE PLAN based on the intent:
-           - For new projects: Define full structure with essential files
-           - For improvements: Identify specific files to modify
-           - For content changes: Focus on relevant content files
-           - For structural changes: Target architecture components
-           - For deletion requests: Identify files/folders to remove and handle dependencies
-        
-        3. ADAPT TO PROJECT CONTEXT:
-           ${
-             state.projectContext.files.length > 0
-               ? '- Work with existing files rather than starting from scratch'
-               : '- This is a new project, suggest a complete structure'
-           }
-           - For deletion requests, check if files exist before planning removal
-        
-        Respond with this JSON format (with appropriate values for the request type):
-        {
-          "plan": {
-        "structure": [
-          {"path": "string", "type": "file/folder", "action": "create/modify/delete", "description": "string"}
-        ],
-        "dependencies": ["string"],
-        "challenges": ["string"]
-          }
-        }
+1. **Project Requirement Analysis:**  
+   - **Current Requirement:** "${state.requirements}"  
+   - **Example Context:** For instance, if the requirement is to build a notes app using React, identify key features (e.g., note creation, editing, deletion, tagging, and search), relevant UI/UX considerations, important dependencies (such as React libraries, state management tools, or routing frameworks), and any anticipated implementation challenges.
+
+2. **Context and File Handling:**  
+   - **Project Context Assessment:**  
+     $$
+     state.projectContext.files.length > 0 
+       ? '- Existing files are present: modify or update them as required.' 
+       : '- No existing files: propose a full project structure from scratch.'
+     $$
+   - **File Deletion or Modification Requests:**  
+     • For deletion or updates, first verify that the target files exist before planning file removal or changes.
+
+3. **Detailed Development Plan:**  
+   - **Structure:** Outline a file and folder structure plan where each entry includes:  
+     • A file or folder path  
+     • The type (file/folder)  
+     • The intended action (create/modify/delete)  
+     • A short description justifying the decision  
+   - **Dependencies:** List any libraries, frameworks, or external modules required.  
+   - **Challenges:** Identify any potential issues or challenges that might arise during development.
+
+4. **Handling Updates:**  
+   - For update requests, clearly define what requires updating. Analyze the current setup and explain what modifications will be made, including rationale.
+   
+5. **Response Format:**  
+   Your output must be in the following JSON format:
+   
+   $$
+   {
+     "plan": {
+       "structure": [
+         {
+           "path": "string",
+           "type": "file/folder",
+           "action": "create/modify/delete",
+           "description": "string"
+         }
+       ],
+       "dependencies": ["string"],
+       "challenges": ["string"]
+     }
+   }
+   $$
+   
+   Ensure that you strictly adhere to this JSON structure in your response.
+
+Remember, your goal is to offer clear and detailed guidance as if instructing another engineer, ensuring that each step of your plan is actionable and well-justified. Whether this is a new project or an update to an existing one, provide insight into exactly what needs to be done and why.
+
       `;
     }
 
