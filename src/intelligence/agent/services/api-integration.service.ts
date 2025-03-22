@@ -23,6 +23,11 @@ export class ApiIntegrationService {
       timeout: 30000, // 30 seconds default timeout
     };
 
+    console.log('API call config :', config);
+    console.log('API call body :', body);
+    console.log('API call headers :', headers);
+    console.log('Making API call to:', endpoint);
+    console.log('Using method:', method);
     if (['post', 'put', 'patch'].includes(method.toLowerCase()) && body) {
       config.data = body;
     }

@@ -3846,6 +3846,57 @@
           "Agents"
         ]
       }
+    },
+    "/api/agents/execute": {
+      "post": {
+        "operationId": "ApiAgentController_executeAgent",
+        "summary": "Execute an agent using an API key",
+        "parameters": [
+          {
+            "name": "api_key",
+            "required": true,
+            "in": "query",
+            "description": "API Key for authentication",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "required": true,
+            "in": "query",
+            "description": "ID of the agent to execute",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentExecutionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Agent API"
+        ]
+      }
     }
   },
   "info": {

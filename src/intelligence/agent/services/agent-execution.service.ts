@@ -54,6 +54,9 @@ export class AgentExecutionService {
       });
     });
 
+    // Initialize context outside the try block so it's accessible in catch
+    let context: IAgentContext | undefined;
+
     try {
       // Get agent and its steps
       const agent = await this.prisma.$transaction(async (tx) => {
@@ -73,7 +76,7 @@ export class AgentExecutionService {
       }
 
       // Initialize context
-      const context: IAgentContext = {
+      context = {
         variables: this.initializeVariables(agent.variables),
         input,
         stepResults: {},
@@ -143,6 +146,20 @@ export class AgentExecutionService {
       // Handle execution failure
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Agent execution failed: ${errorMessage}`, error);
+
+      // Create a result object that includes any context we have
+      const result: IAgentExecutionResult = {
+        id: execution.id,
+        status: 'FAILED',
+        output: context?.variables || {},
+        error: errorMessage,
+        executionPath: context?.executionPath || [],
+        startTime: context?.startTime || new Date(),
+        endTime: new Date(),
+        stepResults: context?.stepResults || {},
+        tokenUsage: this.calculateTotalTokenUsage(context?.stepResults || {}),
+      };
 
       await this.prisma.$transaction(async (tx) => {
         await tx.agentExecution.update({
@@ -150,12 +167,14 @@ export class AgentExecutionService {
           data: {
             status: 'FAILED',
             errorMessage,
+            output: context?.variables || {},
             endTime: new Date(),
+            tokenUsage: result.tokenUsage,
           },
         });
       });
 
-      throw error;
+      return result;
     }
   }
 
@@ -194,13 +213,20 @@ export class AgentExecutionService {
     try {
       const config = step.config as StepConfig;
       let output: any;
+      let tokenUsage = 0;
 
       switch (step.type) {
         case 'PROMPT':
-          output = await this.executePromptStep(
+          const promptResult = await this.executePromptStep(
             config as IPromptStepConfig,
             context,
           );
+          output =
+            typeof promptResult === 'object' && promptResult.content
+              ? promptResult.content
+              : promptResult;
+          tokenUsage =
+            typeof promptResult === 'object' ? promptResult.tokenUsage || 0 : 0;
           break;
         case 'API_CALL':
           output = await this.executeApiCallStep(
@@ -258,6 +284,7 @@ export class AgentExecutionService {
         status: 'SUCCESS',
         output,
         executionTime: Date.now() - startTime,
+        tokenUsage,
       };
     } catch (error) {
       return {
@@ -265,6 +292,7 @@ export class AgentExecutionService {
         output: null,
         error: error instanceof Error ? error : new Error(String(error)),
         executionTime: Date.now() - startTime,
+        tokenUsage: 0,
       };
     }
   }
@@ -298,8 +326,18 @@ export class AgentExecutionService {
       }
     }
 
+    // Store token usage information
+    const tokenUsage =
+      response.usage.totalTokens ||
+      (response.usage ? response.usage.totalTokens : 0);
+
     context.variables[config.outputVariable] = response.content;
-    return response.content;
+
+    // Return both content and token usage
+    return {
+      content: response.content,
+      tokenUsage: tokenUsage,
+    };
   }
 
   /**
@@ -309,11 +347,35 @@ export class AgentExecutionService {
     config: IApiCallStepConfig,
     context: IAgentContext,
   ): Promise<any> {
+    // Process template variables before making the API call
+    const endpoint = this.evaluateExpression(config.endpoint, context);
+    const method = this.evaluateExpression(config.method, context);
+
+    // Process headers
+    const headers = { ...config.headers };
+    for (const key in headers) {
+      if (typeof headers[key] === 'string') {
+        headers[key] = this.evaluateExpression(headers[key], context);
+      }
+    }
+
+    // Process body
+    let body = config.body;
+    if (body) {
+      if (typeof body === 'string') {
+        body = this.evaluateExpression(body, context);
+      } else if (typeof body === 'object') {
+        body = JSON.parse(JSON.stringify(body));
+        this.processObjectTemplates(body, context);
+      }
+    }
+
+    // Make the API call with processed values
     const result = await this.apiIntegration.makeApiCall(
-      config.endpoint,
-      config.method,
-      config.headers,
-      config.body,
+      endpoint,
+      method,
+      headers,
+      body,
       config.retryConfig,
     );
 
@@ -330,7 +392,6 @@ export class AgentExecutionService {
   ): Promise<any> {
     const input = context.variables[config.inputVariable];
     const validation = this.schemaValidation.validateData(input, config.schema);
-
     if (!validation.valid) {
       const errors = this.schemaValidation.formatErrors(validation.errors);
       if (config.onValidationFailure === 'STOP') {
@@ -338,7 +399,6 @@ export class AgentExecutionService {
       }
       // Handle other failure modes (RETRY, CONTINUE) as needed
     }
-
     return input;
   }
 
@@ -351,6 +411,14 @@ export class AgentExecutionService {
   ): Promise<any> {
     const input = context.variables[config.inputVariable];
     let output = input;
+
+    // Check if input variable exists
+    const inputExists = config.inputVariable in context.variables;
+    if (!inputExists) {
+      this.logger.warn(
+        `Transformation step using non-existent input variable: ${config.inputVariable}`,
+      );
+    }
 
     if (config.transformation && typeof config.transformation === 'string') {
       // Handle string transformation as a template
@@ -369,7 +437,7 @@ export class AgentExecutionService {
   }
 
   /**
-   * Process object templates recursively with better handling of nested objects
+   * Process object templates recursively
    */
   private processObjectTemplates(obj: any, context: IAgentContext): void {
     if (!obj || typeof obj !== 'object') return;
@@ -378,20 +446,20 @@ export class AgentExecutionService {
       for (let i = 0; i < obj.length; i++) {
         if (typeof obj[i] === 'string') {
           obj[i] = this.evaluateExpression(obj[i], context);
-        } else if (typeof obj[i] === 'object' && obj[i] !== null) {
+        } else if (obj[i] !== null && typeof obj[i] === 'object') {
           this.processObjectTemplates(obj[i], context);
         }
       }
       return;
     }
 
-    Object.keys(obj).forEach((key) => {
+    for (const key of Object.keys(obj)) {
       if (typeof obj[key] === 'string') {
         obj[key] = this.evaluateExpression(obj[key], context);
-      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      } else if (obj[key] !== null && typeof obj[key] === 'object') {
         this.processObjectTemplates(obj[key], context);
       }
-    });
+    }
   }
 
   /**
@@ -477,7 +545,6 @@ export class AgentExecutionService {
     const nextStepId = success
       ? currentStep.nextOnSuccess
       : currentStep.nextOnFailure;
-
     if (nextStepId) {
       return steps.find((step) => step.id === nextStepId) || null;
     }
@@ -512,45 +579,105 @@ export class AgentExecutionService {
       }
 
       // Replace variable references in the format {{variables.name}} and {{input.field}}
-      // Use a recursive approach to handle nested templates
       let result = expression;
       let lastResult = '';
       let iterations = 0;
+      const maxIterations = 10;
 
       // Continue replacing until we reach a stable result or max iterations
-      while (result !== lastResult && iterations < 10) {
+      while (result !== lastResult && iterations < maxIterations) {
         lastResult = result;
         iterations++;
 
+        // Handle {{variables.name}} format
         result = result.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-          const parts = path.trim().split('.');
+          try {
+            const parts = path.trim().split('.');
 
-          if (parts.length < 2) return match;
+            // Navigate through the nested properties
+            if (parts.length >= 2) {
+              let value = undefined;
 
-          if (parts[0] === 'variables' && parts.length >= 2) {
-            const varName = parts[1];
-            if (context.variables[varName] === undefined) return match;
+              if (parts[0] === 'variables') {
+                // Remove 'variables.' prefix
+                const nestedPath = parts.slice(1);
+                value = this.getNestedProperty(context.variables, nestedPath);
+              } else if (parts[0] === 'input') {
+                // Remove 'input.' prefix
+                const nestedPath = parts.slice(1);
+                value = this.getNestedProperty(context.input, nestedPath);
+              } else if (parts[0] === 'stepResults') {
+                // Handle stepResults access
+                const nestedPath = parts.slice(1);
+                value = this.getNestedProperty(context.stepResults, nestedPath);
+              }
 
-            // Handle different types appropriately
-            const value = context.variables[varName];
-            if (typeof value === 'string') return value;
-            if (value === null) return '';
-            return JSON.stringify(value);
+              // Convert value based on its type
+              if (value !== undefined) {
+                if (typeof value === 'string') return value;
+                if (typeof value === 'number') return String(value);
+                if (value === null) return '';
+                return JSON.stringify(value);
+              }
+            }
+
+            // If we couldn't resolve the variable, log it for debugging
+            this.logger.debug(`Could not resolve template variable: ${path}`);
+            return '(not available)';
+          } catch (err) {
+            this.logger.error(`Error processing template ${match}:`, err);
+            return '(error)';
           }
+        });
 
-          if (parts[0] === 'input' && parts.length >= 2) {
-            const inputField = parts[1];
-            if (!context.input || context.input[inputField] === undefined)
-              return match;
+        // Handle ${variable} format
+        result = result.replace(/\$\{([^}]+)\}/g, (match, path) => {
+          try {
+            const parts = path.trim().split('.');
 
-            // Handle different types appropriately
-            const value = context.input[inputField];
-            if (typeof value === 'string') return value;
-            if (value === null) return '';
-            return JSON.stringify(value);
+            // Handle direct variable access
+            if (
+              parts.length === 1 &&
+              context.variables[parts[0]] !== undefined
+            ) {
+              const value = context.variables[parts[0]];
+              if (typeof value === 'string') return value;
+              if (typeof value === 'number') return String(value);
+              if (value === null) return '';
+              return JSON.stringify(value);
+            }
+
+            // Navigate through nested properties
+            if (parts.length >= 2) {
+              let value = undefined;
+
+              if (parts[0] === 'variables') {
+                const nestedPath = parts.slice(1);
+                value = this.getNestedProperty(context.variables, nestedPath);
+              } else if (parts[0] === 'input') {
+                const nestedPath = parts.slice(1);
+                value = this.getNestedProperty(context.input, nestedPath);
+              } else if (parts[0] === 'stepResults') {
+                // Handle stepResults access
+                const nestedPath = parts.slice(1);
+                value = this.getNestedProperty(context.stepResults, nestedPath);
+              }
+
+              if (value !== undefined) {
+                if (typeof value === 'string') return value;
+                if (typeof value === 'number') return String(value);
+                if (value === null) return '';
+                return JSON.stringify(value);
+              }
+            }
+
+            // If we couldn't resolve the variable, log it for debugging
+            this.logger.debug(`Could not resolve template variable: ${path}`);
+            return '(not available)';
+          } catch (err) {
+            this.logger.error(`Error processing template ${match}:`, err);
+            return '(error)';
           }
-
-          return match;
         });
       }
 
@@ -559,5 +686,42 @@ export class AgentExecutionService {
       this.logger.error(`Error evaluating expression: ${expression}`, error);
       return expression;
     }
+  }
+
+  /**
+   * Get a nested property from an object using array of property names
+   */
+  private getNestedProperty(obj: any, path: string[]): any {
+    if (!obj || !path.length) return undefined;
+
+    let current = obj;
+
+    // Handle array index notation like "weather[0]"
+    for (let i = 0; i < path.length; i++) {
+      const key = path[i];
+
+      // Handle array indexing like "weather[0]"
+      const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
+      if (arrayMatch) {
+        const arrayName = arrayMatch[1];
+        const index = parseInt(arrayMatch[2], 10);
+
+        if (!current[arrayName] || !Array.isArray(current[arrayName])) {
+          return undefined;
+        }
+
+        current = current[arrayName][index];
+        continue;
+      }
+
+      // Regular property access
+      if (current[key] === undefined) {
+        return undefined;
+      }
+
+      current = current[key];
+    }
+
+    return current;
   }
 }

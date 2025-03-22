@@ -266,22 +266,166 @@ export class AgentService {
   ): Promise<AgentExecutionResponseDto> {
     await this.verifyAgentOwnership(agentId, userId);
 
-    const result = await this.agentExecutionService.executeAgent(
-      agentId,
-      executeAgentDto.input,
-      userId,
-    );
+    try {
+      const result = await this.agentExecutionService.executeAgent(
+        agentId,
+        executeAgentDto.input,
+        userId,
+      );
 
-    return {
-      id: result.id,
-      status: result.status,
-      output: result.output,
-      error: result.error,
-      executionPath: result.executionPath,
-      startTime: result.startTime.toISOString(),
-      endTime: result.endTime ? result.endTime.toISOString() : null,
-      tokenUsage: result.tokenUsage,
-    };
+      return {
+        id: result.id,
+        status: result.status,
+        output: result.output,
+        error: result.error,
+        executionPath: result.executionPath,
+        startTime: result.startTime.toISOString(),
+        endTime: result.endTime ? result.endTime.toISOString() : null,
+        tokenUsage: result.tokenUsage,
+      };
+    } catch (error) {
+      this.logger.error(`Error executing agent ${agentId}:`, error);
+
+      // Return a structured error response
+      return {
+        id: '', // ID will be empty for failed executions that couldn't be saved
+        status: 'FAILED',
+        output: {},
+        error: error instanceof Error ? error.message : String(error),
+        executionPath: [],
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        tokenUsage: 0,
+      };
+    }
+  }
+
+  /**
+   * Execute an agent with API key authentication
+   */
+  async executeAgentWithApiKey(
+    agentId: string,
+    executeAgentDto: ExecuteAgentDto,
+    apiKey: string,
+  ): Promise<AgentExecutionResponseDto> {
+    // 1. Verify API key and get application
+    const application = await this.prismaService.application.findFirst({
+      where: { apiKey },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Invalid API key');
+    }
+
+    // 2. Find the agent (regardless of owner)
+    const agent = await this.prismaService.agent.findUnique({
+      where: { id: agentId },
+    });
+
+    if (!agent) {
+      throw new NotFoundException(`Agent with ID ${agentId} not found`);
+    }
+
+    try {
+      // 3. Execute the agent using the agent owner's user ID
+      const result = await this.agentExecutionService.executeAgent(
+        agentId,
+        executeAgentDto.input,
+        agent.userId,
+      );
+
+      // 4. Calculate and record usage if tokens were used
+      if (result.tokenUsage > 0) {
+        await this.recordAgentUsage(
+          application.id,
+          result.tokenUsage,
+          agent.id,
+        );
+      }
+
+      return {
+        id: result.id,
+        status: result.status,
+        output: result.output,
+        error: result.error,
+        executionPath: result.executionPath,
+        startTime: result.startTime.toISOString(),
+        endTime: result.endTime ? result.endTime.toISOString() : null,
+        tokenUsage: result.tokenUsage,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error executing agent ${agentId} with API key:`,
+        error,
+      );
+
+      // Return a structured error response
+      return {
+        id: '',
+        status: 'FAILED',
+        output: {},
+        error: error instanceof Error ? error.message : String(error),
+        executionPath: [],
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        tokenUsage: 0,
+      };
+    }
+  }
+
+  /**
+   * Record agent usage and calculate cost
+   */
+  private async recordAgentUsage(
+    applicationId: string,
+    tokenUsage: number,
+    agentId: string,
+  ): Promise<void> {
+    try {
+      // Find appropriate pricing model - use a suitable default model for agents
+      const pricingData = await this.prismaService.aIModelPricing.findFirst({
+        where: {
+          model: 'gemini-1.0-pro', // Adjust to match your preferred model for billing
+          active: true,
+        },
+      });
+
+      if (!pricingData) {
+        this.logger.warn('No pricing model found for agent execution');
+        return;
+      }
+
+      // Calculate cost based on token usage
+      const pricePerUnit = pricingData.pricePerUnit;
+      const quantity = pricingData.quantity || 1000; // Tokens per unit
+      const cost = (tokenUsage / quantity) * pricePerUnit;
+
+      // Record usage and update balance
+      await this.prismaService.$transaction([
+        this.prismaService.applicationUsage.create({
+          data: {
+            applicationId,
+            aiModelPricingId: pricingData.id,
+            tokensUsed: tokenUsage,
+            cost,
+          },
+        }),
+        this.prismaService.application.update({
+          where: { id: applicationId },
+          data: {
+            balance: {
+              decrement: cost,
+            },
+          },
+        }),
+      ]);
+
+      this.logger.log(
+        `Recorded agent usage: ${tokenUsage} tokens, cost: ${cost}, application: ${applicationId}`,
+      );
+    } catch (error) {
+      this.logger.error('Error recording agent usage:', error);
+    }
   }
 
   // Execution history

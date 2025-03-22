@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { AgentController } from './agent.controller';
+import { ApiAgentController } from './api-agent.controller'; // New controller
 import { AgentExecutionService } from './services/agent-execution.service';
 import { CredentialManagerService } from './services/credential-manager.service';
 import { ApiIntegrationService } from './services/api-integration.service';
@@ -34,7 +35,7 @@ const Services = [AiWrapperService];
     ...Services,
     ...AIProviders,
   ],
-  controllers: [AgentController],
+  controllers: [AgentController, ApiAgentController], // Added the new controller
   exports: [AgentService, AgentExecutionService],
 })
 export class AgentModule {}
