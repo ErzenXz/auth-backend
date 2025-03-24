@@ -647,7 +647,7 @@ Example Matching:
 
     try {
       const result = await this.aiWrapper.generateContent(
-        AIModels.Llama_3_2_11B,
+        AIModels.Llama_3_3_70B_speed,
         prompt,
       );
 

@@ -81,6 +81,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Gemma_3_27B]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Reka_Flash_3]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Llama_3_1_Neutron_Nvidia]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.DeepseekV3_0324]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,
@@ -88,8 +89,10 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   // Groq Models
   [AIModels.Mistral_Saba_24B]: AI_PROVIDERS.GROQ,
   [AIModels.Deepseek_R1_Groq]: AI_PROVIDERS.GROQ,
+  [AIModels.Deepseek_R1_GroqQwen]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_3_70B_speed]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_3_70B_vers]: AI_PROVIDERS.GROQ,
+  [AIModels.Llama_3_2_90B_vision]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_2_11B]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_1_9B]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_70B]: AI_PROVIDERS.GROQ,
