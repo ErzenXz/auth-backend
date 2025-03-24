@@ -18,6 +18,7 @@ export enum AIModels {
 
   // OpenRouter Models
   DeepseekV3 = 'deepseek/deepseek-chat:free',
+  DeepseekV3_0324 = 'deepseek/deepseek-chat-v3-0324:free',
   DeepseekR1 = 'deepseek/deepseek-r1:free',
   DeepseekR1Zero = 'deepseek/deepseek-r1-zero:free',
   DeepseekR1DistilledLlama = 'deepseek/deepseek-r1-distill-llama-70b:free',
@@ -34,9 +35,11 @@ export enum AIModels {
 
   // Groq Models
   Mistral_Saba_24B = 'mistral-saba-24b',
-  Deepseek_R1_Groq = 'deepseek-r1-distill-llama-70b-specdec',
+  Deepseek_R1_Groq = 'deepseek-r1-distill-llama-70b',
+  Deepseek_R1_GroqQwen = 'deepseek-r1-distill-qwen-32b',
   Llama_3_3_70B_speed = 'llama-3.3-70b-specdec',
   Llama_3_3_70B_vers = 'llama-3.3-70b-versatile',
+  Llama_3_2_90B_vision = 'llama-3.2-90b-vision-preview',
   Llama_3_2_11B = 'llama-3.2-11b-vision-preview',
   Llama_3_1_9B = 'llama-3.1-8b-instant',
   Llama_3_70B = 'llama3-70b-8192',
