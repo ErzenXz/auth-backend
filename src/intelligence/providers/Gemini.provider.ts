@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  DynamicRetrievalMode,
-  GoogleGenerativeAI,
-} from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import {
   AIProviderBase,
   AIResponse,
@@ -14,16 +12,17 @@ import { AIModels } from '../enums/models.enum';
 
 @Injectable()
 export class GoogleProvider implements AIProviderBase {
-  private readonly genAI: GoogleGenerativeAI;
   private readonly defaultModel: AIModels;
+  private readonly googleAPI: GoogleGenAI;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>('GOOGLE_API_KEY');
-    this.genAI = new GoogleGenerativeAI(apiKey);
     this.defaultModel = this.configService.get<AIModels>(
       'DEFAULT_GOOGLE_MODEL',
       AIModels.GeminiFast,
     );
+    this.googleAPI = new GoogleGenAI({
+      apiKey: this.configService.get<string>('GEMINI_API_KEY'),
+    });
   }
 
   async generateContent(
@@ -32,23 +31,22 @@ export class GoogleProvider implements AIProviderBase {
     options?: any,
   ): Promise<AIResponse> {
     try {
-      const generativeModel = this.genAI.getGenerativeModel({
+      const response = await this.googleAPI.models.generateContent({
         model,
-        generationConfig: {
+        contents: prompt,
+        config: {
           temperature: 0.5,
+          ...options?.generationConfig,
         },
         ...options,
       });
-      const result = await generativeModel.generateContent(prompt);
-      const text = result.response.text();
 
       return {
-        content: text,
+        content: response.text,
         usage: {
-          promptTokens: result.response.usageMetadata?.promptTokenCount || 0,
-          completionTokens:
-            result.response.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: result.response.usageMetadata?.totalTokenCount || 0,
+          promptTokens: response.usageMetadata?.promptTokenCount || 0,
+          completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: response.usageMetadata?.totalTokenCount || 0,
         },
       };
     } catch (error) {
@@ -63,17 +61,18 @@ export class GoogleProvider implements AIProviderBase {
     options?: any,
   ): Promise<AIStreamResponse> {
     try {
-      const generativeModel = this.genAI.getGenerativeModel({
+      const response = await this.googleAPI.models.generateContentStream({
         model,
-        generationConfig: {
+        contents: prompt,
+        config: {
           temperature: 0.5,
+          ...options?.generationConfig,
         },
         ...options,
       });
-      const result = await generativeModel.generateContentStream(prompt);
 
       return {
-        content: this.streamContent(result.stream),
+        content: this.streamContent(response),
         usage: {
           promptTokens: 0,
           completionTokens: 0,
@@ -89,13 +88,8 @@ export class GoogleProvider implements AIProviderBase {
     role: string;
     parts: { text: string }[];
   }> {
-    return history.map((entry, index) => ({
-      role:
-        index === 0 && entry.role !== 'user'
-          ? 'user'
-          : entry.role === 'user'
-            ? 'user'
-            : 'model',
+    return history.map((entry) => ({
+      role: entry.role === 'user' ? 'user' : 'model',
       parts: [{ text: entry.message }],
     }));
   }
@@ -107,28 +101,26 @@ export class GoogleProvider implements AIProviderBase {
     options?: any,
   ): Promise<AIResponse> {
     try {
-      const generativeModel = this.genAI.getGenerativeModel({
+      const chat = this.googleAPI.chats.create({
         model,
-        generationConfig: {
+        history: this.convertHistory(history),
+        config: {
           temperature: 0.5,
+          ...options?.generationConfig,
         },
         ...options,
       });
 
-      const chat = generativeModel.startChat({
-        history: this.convertHistory(history),
+      const response = await chat.sendMessage({
+        message: prompt,
       });
 
-      const result = await chat.sendMessage(prompt);
-      const text = result.response.text();
-
       return {
-        content: text,
+        content: response.text,
         usage: {
-          promptTokens: result.response.usageMetadata?.promptTokenCount || 0,
-          completionTokens:
-            result.response.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: result.response.usageMetadata?.totalTokenCount || 0,
+          promptTokens: response.usageMetadata?.promptTokenCount || 0,
+          completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: response.usageMetadata?.totalTokenCount || 0,
         },
       };
     } catch (error) {
@@ -144,22 +136,22 @@ export class GoogleProvider implements AIProviderBase {
     options?: any,
   ): Promise<AIStreamResponse> {
     try {
-      const generativeModel = this.genAI.getGenerativeModel({
+      const chat = this.googleAPI.chats.create({
         model,
-        generationConfig: {
+        history: this.convertHistory(history),
+        config: {
           temperature: 0.5,
+          ...options?.generationConfig,
         },
         ...options,
       });
 
-      const chat = generativeModel.startChat({
-        history: this.convertHistory(history),
+      const stream = await chat.sendMessageStream({
+        message: prompt,
       });
 
-      const result = await chat.sendMessageStream(prompt);
-
       return {
-        content: this.streamContent(result.stream),
+        content: this.streamContent(stream),
         usage: {
           promptTokens: 0,
           completionTokens: 0,
@@ -170,11 +162,12 @@ export class GoogleProvider implements AIProviderBase {
       throw new Error(`Google AI stream history failed: ${error.message}`);
     }
   }
+
   private async *streamContent(
-    stream: AsyncGenerator<any>,
+    stream: AsyncIterable<any>,
   ): AsyncIterable<string> {
     for await (const chunk of stream) {
-      yield chunk.text();
+      yield chunk.text;
       await new Promise((r) => setImmediate(r)); // Flush each chunk immediately
     }
   }

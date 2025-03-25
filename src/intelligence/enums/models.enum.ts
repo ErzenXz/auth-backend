@@ -8,6 +8,7 @@ export enum AIModels {
   GeminiAdvanced = 'gemini-2.0-flash-thinking-exp-01-21',
   GeminiTask = 'learnlm-1.5-pro-experimental',
   GeminiPro = 'gemini-2.0-pro-exp-02-05',
+  Gemini2_5_Pro = 'gemini-2.5-pro-exp-03-25',
 
   // OpenAI Models
   GPT4OMini = 'gpt-4o-mini-2024-07-18',
