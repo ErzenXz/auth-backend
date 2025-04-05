@@ -3185,7 +3185,7 @@ INSTRUCTIONS:
     let attempt = 1;
     const maxAttempts = 3;
     // Use the provided model or fall back to Gemini
-    const selectedModel = model || AIModels.Gemini;
+    const selectedModel = model || AIModels.QuasarAlpha;
 
     while (attempt <= maxAttempts) {
       try {
