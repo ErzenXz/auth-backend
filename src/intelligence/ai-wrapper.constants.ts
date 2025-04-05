@@ -100,6 +100,8 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Llama_3_70B]: AI_PROVIDERS.GROQ,
   [AIModels.Gemma_2_9B]: AI_PROVIDERS.GROQ,
   [AIModels.QwQ_32_B]: AI_PROVIDERS.GROQ,
+  [AIModels.Llama_4_Scout]: AI_PROVIDERS.GROQ,
+  [AIModels.Llama_4_Maverick]: AI_PROVIDERS.GROQ,
 
   // Anthropic Models
   [AIModels.Claude37Sonnet]: AI_PROVIDERS.ANTHROPIC,

@@ -47,6 +47,8 @@ export enum AIModels {
   Llama_3_70B = 'llama3-70b-8192',
   Gemma_2_9B = 'gemma2-9b-it',
   QwQ_32_B = 'qwen-qwq-32b',
+  Llama_4_Scout = 'meta-llama/llama-4-scout-17b-16e-instruct',
+  Llama_4_Maverick = 'meta-llama/llama-4-maverick-17b-128e-instruct',
 
   // Anthropic Models
   Claude37Sonnet = 'claude-3-7-sonnet-20250219',
