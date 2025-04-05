@@ -30,6 +30,7 @@ export enum AIModels {
   Gemma_3_27B = 'google/gemma-3-27b-it:free',
   Reka_Flash_3 = 'rekaai/reka-flash-3:free',
   Llama_3_1_Neutron_Nvidia = 'nvidia/llama-3.1-nemotron-70b-instruct:free',
+  QuasarAlpha = 'openrouter/quasar-alpha',
 
   // Llama Models
   Mistral_Small_3_Instruct = 'accounts/fireworks/models/mistral-small-24b-instruct-2501',

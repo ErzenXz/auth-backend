@@ -83,6 +83,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Reka_Flash_3]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Llama_3_1_Neutron_Nvidia]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekV3_0324]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.QuasarAlpha]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,
