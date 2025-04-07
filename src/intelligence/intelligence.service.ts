@@ -609,15 +609,9 @@ Example Matching:
     }));
   }
 
-  async chatGetThreadTitle(chatId: string) {
+  async chatGetThreadTitle(chatId: string, message: string = '') {
     const thread = await this.prisma.aIThread.findFirst({
       where: { id: chatId },
-      include: {
-        messages: {
-          take: 5,
-          orderBy: { createdAt: 'asc' },
-        },
-      },
     });
 
     if (!thread) {
@@ -628,26 +622,44 @@ Example Matching:
       return thread.title;
     }
 
-    // If no messages, return default title
-    if (!thread.messages?.length) {
+    // If no message provided, return default title
+    if (!message || message.trim().length === 0) {
       return 'New Chat';
     }
 
-    // Create prompt for AI to analyze messages
-    const prompt = `
-      Analyze these chat messages and generate a single, descriptive title (max 50 chars):
-      ${thread.messages.map((m) => `${m.role}: ${m.content.substring(0, 50)}${m.content.length > 50 ? '...' : ''}`).join('\n')}
+    // Limit message to max 100 words for title generation
+    const limitedMessage = message.split(/\s+/).slice(0, 100).join(' ');
 
-      Output requirements:
-      - Return a single title string
+    // Create prompt for AI to generate title from message
+    const prompt = `
+      TASK: Generate a descriptive chat title from the following user message:
+      
+      USER MESSAGE: "${limitedMessage}"
+      
+      TITLE REQUIREMENTS:
+      - Capture the main topic or intent of the conversation
+      - Be specific and meaningful (not generic like "Chat" or "Conversation")
+      - Be concise and scannable at a glance
       - Maximum 50 characters
-      - No options or alternatives
-      - No explanations or additional text
+      - Use natural, plain language
+      
+      FORMAT REQUIREMENTS:
+      - Return ONLY the title text with no additional content
+      - No explanations, alternatives, or commentary
+      - No quotes, special characters, emojis, or markdown
+      - No leading/trailing spaces
+      
+      EXAMPLES:
+      Message: "How do I implement authentication in React with Firebase?"
+      Title: React Firebase Authentication Implementation
+      
+      Message: "What are good recipes for dinner with chicken and pasta?"
+      Title: Chicken and Pasta Dinner Recipes
     `;
 
     try {
       const result = await this.aiWrapper.generateContent(
-        AIModels.Llama_3_3_70B_speed,
+        AIModels.QuasarAlpha,
         prompt,
       );
 
@@ -762,7 +774,7 @@ Example Matching:
       ],
     });
 
-    await this.chatGetThreadTitle(chatId);
+    await this.chatGetThreadTitle(chatId, message);
 
     return { result, chatId };
   }
@@ -896,7 +908,7 @@ Example Matching:
         this.prisma.aIThreadMessage.create({
           data: { chatId, content: fullResponse, role: 'model' },
         }),
-        this.chatGetThreadTitle(chatId),
+        this.chatGetThreadTitle(chatId, message),
       ]);
     }.bind(this)();
 
@@ -990,6 +1002,8 @@ Example Matching:
       ? model
       : AIModels.Gemini;
 
+    this.chatGetThreadTitle(chatId, message);
+
     // Create combined generator without buffering the entire response
     const combinedGenerator = async function* () {
       // Start generating and streaming final answer right away
@@ -1032,7 +1046,6 @@ Example Matching:
       ]);
     }.bind(this)();
 
-    this.chatGetThreadTitle(chatId);
     return combinedGenerator;
   }
 
@@ -1281,7 +1294,7 @@ Example Matching:
       return 'no';
     }
 
-    const prompt = `You are an expert in evaluating whether a user's message calls for a web search. Your sole task is to decide—based on the user's intent and the conversation context—if you should output "no" or generate a single, concise search query using only relevant keywords.
+    const prompt = `You are an expert in evaluating whether a user's message calls for a web search. Your task is to decide—based on the user's intent and the conversation context—if you should output "no" or generate up to 3 concise search queries using only relevant keywords.
 
 When to respond with "no":
 
@@ -1289,43 +1302,69 @@ The message consists of casual greetings, small talk, or pleasantries.
 It shares personal opinions, emotions, or subjective experiences.
 It discusses hypothetical scenarios or general topics that do not require real-time or verified information.
 It is a follow-up message that does not introduce new, search-relevant content.
-When to generate a search query:
+
+When to generate search queries:
 
 The user asks about current events, news, or real-world data.
 The message requests factual, technical, or tutorial information.
 It includes specific names, places, or events that warrant verification.
 The query explicitly asks for a search or implies that up-to-date information is needed.
 The conversation lacks sufficient context or data, making a web search necessary.
-The user affirms a previous prompt to search (e.g., “Yes, please”).
+The user affirms a previous prompt to search (e.g., "Yes, please").
+
 Guidelines:
 
-Output ONLY either "no" or a single, focused search query—nothing else.
-Ensure the search query is concise and strictly composed of keywords relevant to the user's request.
-Omit any personal or sensitive details from the query.
+Output ONLY either "no" or up to 3 search queries separated by newlines—nothing else.
+For complex questions, generate multiple queries (maximum 3) that cover different aspects.
+Ensure each search query is concise and strictly composed of keywords relevant to the user's request.
+Omit any personal or sensitive details from the queries.
 Always consider the full conversation context and chat history to accurately capture the user's intent.
-Your output must clearly reflect whether a search is needed and, if so, what specific query to use.
-User Message: "${message}"`;
+
+    User Message: "${message}"`;
 
     const aiResult = await this.aiWrapper.generateContent(
-      AIModels.Llama_3_3_70B_vers,
+      AIModels.QuasarAlpha,
       prompt,
     );
 
     let response = aiResult.content.trim();
+
     // Validate response
     if (response !== 'no' && response.length > 0) {
-      const searchResult = await this.browserService.aiSearch(response);
+      // Split into multiple queries (max 3)
+      const queries = response
+        .split('\n')
+        .filter((q) => q.trim().length > 0)
+        .slice(0, 3);
 
-      // Ensure response is JSON formatted
-      try {
-        if (typeof searchResult === 'string') {
-          return JSON.parse(searchResult);
+      // Execute each search query and combine results
+      const allSearchResults: any[] = [];
+
+      for (const query of queries) {
+        const searchResult = await this.browserService.aiSearch(query);
+
+        try {
+          let parsedResults;
+          if (typeof searchResult === 'string') {
+            parsedResults = JSON.parse(searchResult);
+          } else {
+            parsedResults = searchResult;
+          }
+
+          if (
+            parsedResults.searchResults &&
+            Array.isArray(parsedResults.searchResults)
+          ) {
+            allSearchResults.push(...parsedResults.searchResults);
+          }
+        } catch (e) {
+          console.error('Failed to parse search results:', e);
         }
-        return searchResult;
-      } catch (e) {
-        return JSON.stringify({ searchResults: [] });
       }
+
+      return JSON.stringify({ searchResults: allSearchResults });
     }
+
     return JSON.stringify({ searchResults: [] });
   }
 
