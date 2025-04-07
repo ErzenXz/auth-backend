@@ -31,7 +31,7 @@ export enum AIModels {
   Reka_Flash_3 = 'rekaai/reka-flash-3:free',
   Llama_3_1_Neutron_Nvidia = 'nvidia/llama-3.1-nemotron-70b-instruct:free',
   QuasarAlpha = 'openrouter/quasar-alpha',
-  Llama_4_Maverick_Open = 'meta-llama/llama-4-maverick',
+  Llama_4_Maverick_Open = 'meta-llama/llama-4-maverick:free',
   Gemini2_5_Pro_Open = 'google/gemini-2.5-pro-exp-03-25:free',
   GeminiBetter = 'google/gemini-2.0-flash-exp:free',
 
