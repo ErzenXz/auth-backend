@@ -659,7 +659,7 @@ Example Matching:
 
     try {
       const result = await this.aiWrapper.generateContent(
-        AIModels.QuasarAlpha,
+        AIModels.Llama_4_Scout,
         prompt,
       );
 
@@ -1323,7 +1323,7 @@ Always consider the full conversation context and chat history to accurately cap
     User Message: "${message}"`;
 
     const aiResult = await this.aiWrapper.generateContent(
-      AIModels.QuasarAlpha,
+      AIModels.Llama_4_Scout,
       prompt,
     );
 
@@ -3188,7 +3188,7 @@ INSTRUCTIONS:
     let attempt = 1;
     const maxAttempts = 3;
     // Use the provided model or fall back to Gemini
-    const selectedModel = model || AIModels.QuasarAlpha;
+    const selectedModel = model || AIModels.OptimusAlpha;
 
     while (attempt <= maxAttempts) {
       try {
