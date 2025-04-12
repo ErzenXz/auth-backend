@@ -83,8 +83,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Reka_Flash_3]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Llama_3_1_Neutron_Nvidia]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekV3_0324]: AI_PROVIDERS.OPENROUTER,
-  [AIModels.QuasarAlpha]: AI_PROVIDERS.OPENROUTER,
-  [AIModels.Llama_4_Maverick_Open]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.OptimusAlpha]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Gemini2_5_Pro_Open]: AI_PROVIDERS.OPENROUTER,
   [AIModels.GeminiBetter]: AI_PROVIDERS.OPENROUTER,
 
@@ -104,7 +103,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Gemma_2_9B]: AI_PROVIDERS.GROQ,
   [AIModels.QwQ_32_B]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_4_Scout]: AI_PROVIDERS.GROQ,
-  // [AIModels.Llama_4_Maverick]: AI_PROVIDERS.GROQ,
+  [AIModels.Llama_4_Maverick]: AI_PROVIDERS.GROQ,
 
   // Anthropic Models
   [AIModels.Claude37Sonnet]: AI_PROVIDERS.ANTHROPIC,

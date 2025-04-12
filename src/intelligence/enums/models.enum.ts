@@ -4,11 +4,9 @@ export enum AIModels {
   GeminiFast = 'gemini-2.0-flash-lite-preview-02-05',
   GeminiFastCheap = 'gemini-1.5-flash',
   GeminiFastCheapSmall = 'gemini-1.5-flash-8b',
-  // GeminiBetter = 'gemini-2.0-flash-exp',
   GeminiAdvanced = 'gemini-2.0-flash-thinking-exp-01-21',
   GeminiTask = 'learnlm-1.5-pro-experimental',
   GeminiPro = 'gemini-2.0-pro-exp-02-05',
-  // Gemini2_5_Pro = 'gemini-2.5-pro-exp-03-25',
 
   // OpenAI Models
   GPT4OMini = 'gpt-4o-mini-2024-07-18',
@@ -30,8 +28,7 @@ export enum AIModels {
   Gemma_3_27B = 'google/gemma-3-27b-it:free',
   Reka_Flash_3 = 'rekaai/reka-flash-3:free',
   Llama_3_1_Neutron_Nvidia = 'nvidia/llama-3.1-nemotron-70b-instruct:free',
-  QuasarAlpha = 'openrouter/quasar-alpha',
-  Llama_4_Maverick_Open = 'meta-llama/llama-4-maverick:free',
+  OptimusAlpha = 'openrouter/optimus-alpha',
   Gemini2_5_Pro_Open = 'google/gemini-2.5-pro-exp-03-25:free',
   GeminiBetter = 'google/gemini-2.0-flash-exp:free',
 
@@ -51,7 +48,7 @@ export enum AIModels {
   Gemma_2_9B = 'gemma2-9b-it',
   QwQ_32_B = 'qwen-qwq-32b',
   Llama_4_Scout = 'meta-llama/llama-4-scout-17b-16e-instruct',
-  // Llama_4_Maverick = 'meta-llama/llama-4-maverick-17b-128e-instruct',
+  Llama_4_Maverick = 'meta-llama/llama-4-maverick-17b-128e-instruct',
 
   // Anthropic Models
   Claude37Sonnet = 'claude-3-7-sonnet-20250219',
