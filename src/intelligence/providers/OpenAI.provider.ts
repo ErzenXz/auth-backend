@@ -20,7 +20,7 @@ export class OpenAiProvider implements AIProviderBase {
     });
     this.defaultModel = this.configService.get<AIModels>(
       'DEFAULT_OPENAI_MODEL',
-      AIModels.GPT35Turbo,
+      AIModels.GPT4_1,
     );
   }
 
