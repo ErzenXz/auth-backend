@@ -1,6 +1,6 @@
 {
   "name": "erzen-xen-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A comprehensive global system for authentication, messaging, video, photos, and more, similar to Google services like Google Drive and Google Chat.",
   "author": "Erzen Krasniqi <[erzen.krasniqi04@gmail.com]>",
   "private": true,
@@ -22,7 +22,6 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "sentry:sourcemaps": "sentry-clip sourcemaps inject --org xenbit --project xen-auth ./dist && sentry-cli sourcemaps upload --org xenbit --project xen-auth ./dist",
     "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s"
-
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
