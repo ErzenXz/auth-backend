@@ -1,19 +1,20 @@
 export enum AIModels {
   // Gemini Models
-  Gemini = 'gemini-2.0-flash-001',
-  GeminiFast = 'gemini-2.0-flash-lite-preview-02-05',
+  Gemini = 'gemini-2.0-flash',
+  GeminiFast = 'gemini-2.0-flash-lite',
   GeminiFastCheap = 'gemini-1.5-flash',
   GeminiFastCheapSmall = 'gemini-1.5-flash-8b',
-  GeminiAdvanced = 'gemini-2.0-flash-thinking-exp-01-21',
-  GeminiTask = 'learnlm-1.5-pro-experimental',
-  GeminiPro = 'gemini-2.0-pro-exp-02-05',
+  GeminiPro = 'gemini-2.5-pro-exp-03-25',
 
   // OpenAI Models
   GPT4OMini = 'gpt-4o-mini-2024-07-18',
   GTP40 = 'chatgpt-4o-latest',
   GPTO1 = 'o1',
-  GPTO1Mini = 'o1-mini',
-  GPT35Turbo = 'gpt-3.5-turbo-0125',
+  GPT_o1_mini = 'o1-mini',
+  GPT_o3_mini = 'o3-mini',
+  GPT4_1 = 'gpt-4.1',
+  GPT4_1_mini = 'gpt-4.1-mini',
+  GPT4_1_nano = 'gpt-4.1-nano',
 
   // OpenRouter Models
   DeepseekV3 = 'deepseek/deepseek-chat:free',
@@ -28,9 +29,9 @@ export enum AIModels {
   Gemma_3_27B = 'google/gemma-3-27b-it:free',
   Reka_Flash_3 = 'rekaai/reka-flash-3:free',
   Llama_3_1_Neutron_Nvidia = 'nvidia/llama-3.1-nemotron-70b-instruct:free',
-  OptimusAlpha = 'openrouter/optimus-alpha',
   Gemini2_5_Pro_Open = 'google/gemini-2.5-pro-exp-03-25:free',
   GeminiBetter = 'google/gemini-2.0-flash-exp:free',
+  Deepcoder_14B = 'agentica-org/deepcoder-14b-preview:free',
 
   // Llama Models
   Mistral_Small_3_Instruct = 'accounts/fireworks/models/mistral-small-24b-instruct-2501',

@@ -1886,7 +1886,7 @@ INSTRUCTIONS:
   async *streamChainOfThoughts(
     message: string,
     userId: string,
-    model: AIModels = AIModels.Llama_3_3_70B_speed,
+    model: AIModels = AIModels.Llama_4_Scout,
   ): AsyncGenerator<any> {
     let MAX_STEPS = 22;
     let currentStep = 0;
@@ -1951,7 +1951,7 @@ INSTRUCTIONS:
 
       Requirements:
       - Generate 3-20 distinct reasoning steps
-      - Each step must be ≤100 words
+      - Each step must be ≤150 words
       - Number each step (1., 2., 3., etc.)
       - Ensure each step builds upon the previous insights
       ${complexity === 'high' ? '- Include unconventional insights' : '- Maintain practical reasoning'}
@@ -1963,7 +1963,7 @@ INSTRUCTIONS:
       1. [First concise thought]
       2. [Second contrasting insight]
       3. [Third innovative step]
-      ${step === 'INITIAL_THOUGHT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
+      ${step === 'INITIAL_THOUGHT' ? 'COMPLEXITY: [low|medium|high|very-high]' : 'IMPROVE_NEEDED: [yes/no]'}
     `
       .replace(/^ {4}/gm, '')
       .trim();
@@ -1984,7 +1984,7 @@ INSTRUCTIONS:
       ...cleanResponse.matchAll(/^\d+\.\s(.+?)(?=\s*\d+\.|$)/gm),
     ];
     const steps = stepMatches.map((m) =>
-      m[1].trim().split(/\s+/).slice(0, 56).join(' '),
+      m[1].trim().split(/\s+/).slice(0, 159).join(' '),
     );
 
     // Detect complexity on the first step only
@@ -2006,7 +2006,7 @@ INSTRUCTIONS:
   private getMaxSteps(
     complexity: 'low' | 'medium' | 'high' | 'very-high',
   ): number {
-    return { low: 2, medium: 4, high: 8, 'very-high': 20 }[complexity] || 3;
+    return { low: 2, medium: 7, high: 12, 'very-high': 20 }[complexity] || 3;
   }
 
   // AI Project methods
@@ -3188,7 +3188,7 @@ INSTRUCTIONS:
     let attempt = 1;
     const maxAttempts = 3;
     // Use the provided model or fall back to Gemini
-    const selectedModel = model || AIModels.OptimusAlpha;
+    const selectedModel = model || AIModels.Gemini2_5_Pro_Open;
 
     while (attempt <= maxAttempts) {
       try {

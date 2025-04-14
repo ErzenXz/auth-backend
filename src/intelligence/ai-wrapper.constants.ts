@@ -57,18 +57,17 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.GeminiFast]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiFastCheap]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiFastCheapSmall]: AI_PROVIDERS.GOOGLE,
-  // [AIModels.GeminiBetter]: AI_PROVIDERS.GOOGLE,
-  [AIModels.GeminiAdvanced]: AI_PROVIDERS.GOOGLE,
-  [AIModels.GeminiTask]: AI_PROVIDERS.GOOGLE,
   [AIModels.GeminiPro]: AI_PROVIDERS.GOOGLE,
-  // [AIModels.Gemini2_5_Pro]: AI_PROVIDERS.GOOGLE,
 
   // OpenAI Models
-  [AIModels.GPT35Turbo]: AI_PROVIDERS.OPENAI,
   [AIModels.GPT4OMini]: AI_PROVIDERS.OPENAI,
   [AIModels.GTP40]: AI_PROVIDERS.OPENAI,
   [AIModels.GPTO1]: AI_PROVIDERS.OPENAI,
-  [AIModels.GPTO1Mini]: AI_PROVIDERS.OPENAI,
+  [AIModels.GPT_o1_mini]: AI_PROVIDERS.OPENAI,
+  [AIModels.GPT_o3_mini]: AI_PROVIDERS.OPENAI,
+  [AIModels.GPT4_1]: AI_PROVIDERS.OPENAI,
+  [AIModels.GPT4_1_mini]: AI_PROVIDERS.OPENAI,
+  [AIModels.GPT4_1_nano]: AI_PROVIDERS.OPENAI,
 
   // OpenRouter Models
   [AIModels.DeepseekV3]: AI_PROVIDERS.OPENROUTER,
@@ -83,9 +82,9 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Reka_Flash_3]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Llama_3_1_Neutron_Nvidia]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekV3_0324]: AI_PROVIDERS.OPENROUTER,
-  [AIModels.OptimusAlpha]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Gemini2_5_Pro_Open]: AI_PROVIDERS.OPENROUTER,
   [AIModels.GeminiBetter]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Deepcoder_14B]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,
