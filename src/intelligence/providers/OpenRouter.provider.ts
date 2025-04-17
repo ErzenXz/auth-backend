@@ -21,7 +21,7 @@ export class OpenRouterProvider implements AIProviderBase {
     });
     this.defaultModel = this.configService.get<AIModels>(
       'DEFAULT_OPENROUTER_MODEL',
-      AIModels.DeepseekV3,
+      AIModels.Reka_Flash_3,
     );
   }
 
