@@ -387,6 +387,26 @@ ${text}
     }
   }
 
+  private async searchTavily(query: string) {
+    const options = {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.TAVILY_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: `{"query":"${query}","topic":"general","search_depth":"advanced","chunks_per_source":3,"max_results":5,"time_range":null,"days":7,"include_answer":false,"include_raw_content":false,"include_images":true,"include_image_descriptions":false,"include_domains":[],"exclude_domains":[]}`,
+    };
+
+    try {
+      const response = await fetch('https://api.tavily.com/search', options);
+      const data = await response.json();
+      return data || [];
+    } catch (error) {
+      console.error('Tavily search error:', error);
+      return [];
+    }
+  }
+
   private async fetchContentForAI(url: string) {
     const { data } = await axios.get(url, {
       headers: { 'User-Agent': this.getRandomUserAgent() },
@@ -431,6 +451,8 @@ ${text}
       this.searchWikipedia(query),
     ]);
 
+    const tavilyData = await this.searchTavily(query);
+
     const allResults = searchResults.flat().filter(Boolean);
     const uniqueUrls = Array.from(new Set(allResults.map((r) => r.url))).slice(
       0,
@@ -447,6 +469,29 @@ ${text}
         }
       }),
     );
+
+    // Add Tavily results if available
+    const tavilyContents = (
+      Array.isArray(tavilyData.results) ? tavilyData.results : []
+    ).map((result) => ({
+      url: result.url,
+      title: result.title,
+      content: result.content,
+    }));
+
+    // Add Tavily contents to the sources
+    contents.push(...tavilyContents);
+
+    // Add Tavily images as additional sources (if any)
+    const tavilyImages = (
+      Array.isArray(tavilyData.images) ? tavilyData.images : []
+    ).map((imgUrl: string) => ({
+      url: imgUrl,
+      title: 'Image',
+      content: `![Image](${imgUrl})`,
+    }));
+
+    contents.push(...tavilyImages);
 
     const validContents = contents.filter(Boolean).map((content) => ({
       ...content,
