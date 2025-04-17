@@ -508,52 +508,60 @@ Example Matching:
   }
 
   async bulkAddModels() {
+    // Prepare the list of current enum models
     const models = Object.entries(AIModels).map(([key, modelVal]) => ({
       name: key,
       model: modelVal,
       pricePerUnit: 0.01,
-      quantity: 1000000,
-      type: 'both',
+      quantity: 1_000_000,
+      type: 'both' as const,
       description: `${key} model from enum`,
       active: true,
     }));
 
-    const newModelsToCreate = [];
-    for (const modelItem of models) {
-      // Find existing models with the same 'name'
+    const toCreate: typeof models = [];
+
+    // For each enum model, upsert/inactivate older variants
+    for (const m of models) {
       const existing = await this.prisma.aIModelPricing.findMany({
-        where: { name: modelItem.name },
+        where: { name: m.name },
       });
 
-      // If a record with the same name and identical model already exists, skip creating a new one.
-      if (existing.some((rec) => rec.model === modelItem.model)) {
+      // Skip if exact model already exists
+      if (existing.some((rec) => rec.model === m.model)) {
         continue;
       }
 
-      // If there are records with the same name but with a different model value,
-      // update them to set active to false.
+      // Deactivate any records with same name but different model
       if (existing.length > 0) {
         await this.prisma.aIModelPricing.updateMany({
           where: {
-            name: modelItem.name,
-            model: { not: modelItem.model },
+            name: m.name,
+            model: { not: m.model },
           },
           data: { active: false },
         });
       }
 
-      // Queue the new model for creation.
-      newModelsToCreate.push(modelItem);
+      toCreate.push(m);
     }
 
-    if (newModelsToCreate.length > 0) {
+    // Bulk insert new enum models
+    if (toCreate.length) {
       await this.prisma.aIModelPricing.createMany({
-        data: newModelsToCreate,
+        data: toCreate,
         skipDuplicates: true,
       });
     }
 
-    return { message: 'Bulk update models executed successfully.' };
+    // Deactivate any DB entries no longer in the enum
+    const enumValues = Object.values(AIModels);
+    await this.prisma.aIModelPricing.updateMany({
+      where: { model: { notIn: enumValues } },
+      data: { active: false },
+    });
+
+    return { message: 'Bulk sync of enum models complete.' };
   }
 
   async updateModel(id: string, body: any) {
@@ -1314,7 +1322,7 @@ The user affirms a previous prompt to search (e.g., "Yes, please").
 
 Guidelines:
 
-Output ONLY either "no" or up to 3 search queries separated by newlines—nothing else.
+Output ONLY either "no" or up to 2 search queries separated by newlines—nothing else.
 For complex questions, generate multiple queries (maximum 3) that cover different aspects.
 Ensure each search query is concise and strictly composed of keywords relevant to the user's request.
 Omit any personal or sensitive details from the queries.
@@ -1379,51 +1387,72 @@ Always consider the full conversation context and chat history to accurately cap
     memories: string,
     info: string,
     external: string,
-    instructions: any[],
+    instructions: { job: string }[],
     thinking?: string,
   ): string {
+    const userInstructions = instructions.length
+      ? instructions.map((ui) => ui.job).join(', ')
+      : 'None';
+    const externalContent = external
+      ? typeof external === 'object'
+        ? JSON.stringify(external)
+        : external
+      : 'No external content available';
+    const thinkingCtx = thinking
+      ? thinking
+      : "Processing the user's message for a direct and friendly answer.";
+
     return `
-    SYSTEM PROMPT:
------------------------------------------------------------
-[GENERAL GUIDELINES]
-- Use the "User Given Instructions" to understand the overall job and context.
-- When incorporating external content, do so only if it adds clear value and enhances the conversation.
-  - Use only the provided external links or media if they contribute meaningfully.
-- Reference user saved memories only if they are directly relevant to the current prompt.
-- Leverage the "THINKING CONTEXT" enclosed within '<think> ... </think>' to guide your internal reasoning, but ensure that your final response remains clear, direct, and user-friendly.
-
-[DATA FIELDS]
-1. **User Given Instructions:**
-   ${instructions.map((ui) => ui.job).join(', ')}
-
-2. **External Raw Content Integration:**
-   ${typeof external === 'object' ? JSON.stringify(external) : external || 'No external content available'}
-
-3. **General Info:**
-   ${info}
-   (e.g., current date, relevant events, etc.)
-
-4. **User Saved Memories:**
-   ${memories}
-   (Use only the memories that are relevant to the current conversation. Older or less relevant details should be disregarded unless they pertain to important user information like names.)
-
-5. **THINKING CONTEXT:**
-   <think>
-   ${thinking || "Processing the user's message for a direct and friendly answer."}
-   </think>
-
-6. **User Prompt:**
-   ${message}
-
------------------------------------------------------------
-INSTRUCTIONS:
-- Review all sections above before generating your response.
-- If any section (such as external content) is missing or does not add value, proceed without it.
-- Your final output should be clear, concise, and directly address the user's prompt while incorporating any relevant instructions or context from the fields.
-- Always ensure that any external information is properly formatted and cited.
------------------------------------------------------------
-
-`;
+  SYSTEM PROMPT:
+  -----------------------------------------------------------
+  OVERVIEW
+  You are an AI assistant. Use the provided fields below plus the user's message 
+  to craft a clear, concise, and on‐point reply. Cite any external text, URLs, or 
+  images in Markdown so the user can see exactly what you used.
+  
+  TEMPLATE VARIABLES
+  1. user_instructions:
+     ${userInstructions}
+  
+  2. external_content:
+     ${externalContent}
+  
+  3. general_info:
+     ${info}
+  
+  4. user_memories:
+     ${memories}
+  
+  5. thinking_context:
+     <think>
+     ${thinkingCtx}
+     </think>
+  
+  6. user_message:
+     ${message}
+  
+  GUIDELINES
+  - Answer clearly and directly.
+  - When you incorporate any external_content:
+    • Cite text or data inline: “According to [1], …”
+    • Embed images with Markdown:
+      ![Alt text][img1]
+    • At the end, include a References section:
+      References:
+      [1] “Title,” Source, YYYY‑MM‑DD. URL  
+      [img1] https://example.com/image.png
+  - Omit any external content that doesn’t add value.
+  - Do not invent sources—use only what’s provided.
+  - The thinking_context is private; do NOT expose it in your final reply.
+  
+  RESPONSE FORMAT
+  1. Brief answer or solution.
+  2. Code snippets in Markdown code blocks (if any).
+  3. A “References” section for all cited text, URLs, or images (if used).
+  
+  Begin your response now to the user_message above.
+  -----------------------------------------------------------
+  `.trim();
   }
 
   private async extractAndSaveMemory(
@@ -3188,7 +3217,7 @@ INSTRUCTIONS:
     let attempt = 1;
     const maxAttempts = 3;
     // Use the provided model or fall back to Gemini
-    const selectedModel = model || AIModels.Gemini2_5_Pro_Open;
+    const selectedModel = model || AIModels.GeminiFlash_2_5;
 
     while (attempt <= maxAttempts) {
       try {
