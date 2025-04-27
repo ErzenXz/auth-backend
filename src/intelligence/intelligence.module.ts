@@ -18,6 +18,8 @@ import { GroqProvider } from './providers/Groq.provider';
 import { CrawlerService } from './browser/crawler.service';
 import { AnthropicProvider } from './providers/Anthropic.provider';
 import { AgentModule } from './agent/agent.module';
+import { UsageModule } from './usage/usage.module';
+import { UserModule } from 'src/user/user.module';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
@@ -42,6 +44,8 @@ const Services = [BrowserService, AiWrapperService, CrawlerService];
     BrowserModule,
     XCacheModule,
     AgentModule,
+    UserModule,
+    UsageModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -60,5 +64,6 @@ const Services = [BrowserService, AiWrapperService, CrawlerService];
     ...Services,
     ...AIProviders,
   ],
+  exports: [IntelligenceService],
 })
 export class IntelligenceModule {}

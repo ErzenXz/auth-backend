@@ -6,6 +6,7 @@ import { XCacheService } from 'src/cache/cache.service';
 import { AiWrapperService } from '../providers/ai-wrapper.service';
 import { AIResponse } from '../models/ai-wrapper.types';
 import { AIModels } from '../enums/models.enum';
+import { UsageService } from '../usage/usage.service';
 
 @Injectable()
 export class BrowserService {
@@ -26,6 +27,7 @@ export class BrowserService {
   constructor(
     private readonly cacheService: XCacheService,
     private readonly aiWrapperService: AiWrapperService,
+    private readonly usageService: UsageService,
   ) {}
 
   private getRandomUserAgent(): string {
@@ -388,22 +390,53 @@ ${text}
   }
 
   private async searchTavily(query: string) {
+    // Remove quotes from query to prevent JSON parsing issues
+    const sanitizedQuery = query.replace(/"/g, '');
+
     const options = {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.TAVILY_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: `{"query":"${query}","topic":"general","search_depth":"advanced","chunks_per_source":3,"max_results":5,"time_range":null,"days":7,"include_answer":false,"include_raw_content":false,"include_images":true,"include_image_descriptions":false,"include_domains":[],"exclude_domains":[]}`,
+      body: JSON.stringify({
+        query: sanitizedQuery,
+        topic: 'general',
+        search_depth: 'advanced',
+        chunks_per_source: 3,
+        max_results: 5,
+        time_range: null,
+        days: 7,
+        include_answer: false,
+        include_raw_content: false,
+        include_images: true,
+        include_image_descriptions: false,
+        include_domains: [],
+        exclude_domains: [],
+      }),
     };
 
     try {
+      console.log(`Tavily search request for: "${sanitizedQuery}"`);
       const response = await fetch('https://api.tavily.com/search', options);
+
+      if (!response.ok) {
+        console.error(
+          `Tavily API error: ${response.status} ${response.statusText}`,
+        );
+        const errorText = await response.text();
+        console.error(`Tavily error response: ${errorText}`);
+        return { results: [], images: [] };
+      }
+
       const data = await response.json();
-      return data || [];
+      console.log(
+        `Tavily search success: ${data.results?.length || 0} results, ${data.images?.length || 0} images`,
+      );
+      return data || { results: [], images: [] };
     } catch (error) {
       console.error('Tavily search error:', error);
-      return [];
+      return { results: [], images: [] };
     }
   }
 
@@ -441,7 +474,19 @@ ${text}
     return content.slice(0, maxLength - 3) + '...';
   }
 
-  async aiSearch(query: string) {
+  async aiSearch(query: string, userId: string) {
+    // Check usage limits before proceeding
+    if (userId) {
+      const hasAvailableUsage =
+        await this.usageService.checkAndIncrementUsage(userId);
+      if (!hasAvailableUsage) {
+        throw new HttpException(
+          'You have reached your monthly search limit. Please upgrade your plan for more searches.',
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
+
     const cacheKey = `ai-search:${query}`;
     const cached = await this.cacheService.getCache(cacheKey);
     if (cached) return JSON.parse(cached);
@@ -567,83 +612,246 @@ ${text}
     }
   }
 
-  async aiSearchStream(query: string, emitUpdate: (data: any) => void) {
-    emitUpdate({ status: 'started', message: 'Starting search...', query });
+  async aiSearchStream(
+    query: string,
+    userId: string,
+    emitCallback?: Function,
+  ): Promise<any> {
+    // Check usage limits before proceeding
+    if (userId) {
+      const hasAvailableUsage =
+        await this.usageService.checkAndIncrementUsage(userId);
+      if (!hasAvailableUsage) {
+        if (emitCallback) {
+          emitCallback({
+            status: 'error',
+            message:
+              'You have reached your monthly search limit. Please upgrade your plan for more searches.',
+            code: 'USAGE_LIMIT_REACHED',
+          });
+        }
+
+        throw new HttpException(
+          'You have reached your monthly search limit. Please upgrade your plan for more searches.',
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
+
+    // Sanitize the query by removing quotes to prevent JSON parsing issues
+    const sanitizedQuery = query.replace(/^["']|["']$/g, '');
+    let sources = [];
+    let contents = [];
+    const timestamp = new Date().toISOString();
+    let tavilyResponse = null;
 
     try {
-      // Search phase
-      emitUpdate({ status: 'searching', message: 'Searching DuckDuckGo...' });
-      const duckResults = await this.searchDuckDuckGo(query);
+      // Emit status updates if a callback is provided
+      if (emitCallback) {
+        emitCallback({
+          status: 'searching',
+          message: `Searching for "${sanitizedQuery}"...`,
+        });
+      }
 
-      emitUpdate({ status: 'searching', message: 'Searching Wikipedia...' });
-      const wikiResults = await this.searchWikipedia(query);
+      // 1. Start with a Tavily search
+      if (emitCallback) {
+        emitCallback({
+          status: 'tavily_search',
+          message: 'Searching Tavily...',
+        });
+      }
 
-      const allResults = [...duckResults, ...wikiResults].filter(Boolean);
-      const uniqueUrls = Array.from(
-        new Set(allResults.map((r) => r.url)),
-      ).slice(0, 5);
+      try {
+        tavilyResponse = await this.searchTavily(sanitizedQuery);
 
-      emitUpdate({
-        status: 'found',
-        message: `Found ${uniqueUrls.length} sources to analyze`,
-        sources: allResults,
-      });
+        // Debug logs for Tavily response
+        console.log(`Tavily search for "${sanitizedQuery}" returned:`);
+        console.log(`- Text results: ${tavilyResponse?.results?.length || 0}`);
+        console.log(`- Images: ${tavilyResponse?.images?.length || 0}`);
 
-      // Content fetching phase
-      const contents = [];
-      for (const url of uniqueUrls) {
-        try {
-          emitUpdate({
-            status: 'fetching',
-            message: `Fetching content from ${url}...`,
+        // Process Tavily text results
+        if (tavilyResponse?.results && Array.isArray(tavilyResponse.results)) {
+          tavilyResponse.results.forEach((result) => {
+            if (result && result.url) {
+              // Add to sources for the final response
+              sources.push({
+                title: result.title || 'Tavily Result',
+                url: result.url,
+                content: result.content || '',
+                source: 'tavily',
+              });
+
+              // Add to contents for processing
+              contents.push({
+                url: result.url,
+                title: result.title || 'Tavily Result',
+                content: result.content || '',
+                source: 'tavily',
+              });
+            }
           });
+        }
 
-          const content = await this.fetchContentForAI(url);
-          const processedContent = {
-            url,
-            ...content,
-            content: this.truncateContent(content.content, 2000),
-          };
-
-          contents.push(processedContent);
-          emitUpdate({
-            status: 'fetched',
-            message: `Successfully processed ${url}`,
-            content: processedContent,
+        // Process Tavily image results
+        if (tavilyResponse?.images && Array.isArray(tavilyResponse.images)) {
+          tavilyResponse.images.forEach((imageUrl) => {
+            if (imageUrl) {
+              // Add to sources for the final response
+              sources.push({
+                title: 'Image from Tavily',
+                url: imageUrl,
+                content: `![Image](${imageUrl})`,
+                source: 'tavily_image',
+              });
+            }
           });
-        } catch (error) {
-          emitUpdate({
+        }
+
+        // Notify client about Tavily search completion
+        if (emitCallback) {
+          emitCallback({
+            status: 'tavily_complete',
+            message: `Found ${tavilyResponse?.results?.length || 0} results and ${tavilyResponse?.images?.length || 0} images.`,
+            rawTavilyData: tavilyResponse,
+          });
+        }
+      } catch (error) {
+        console.error('Tavily search error:', error);
+        if (emitCallback) {
+          emitCallback({
             status: 'error',
-            message: `Failed to fetch ${url}`,
-            error: error.message,
+            message: 'Error during Tavily search.',
           });
         }
       }
 
+      // 2. Continue with additional searches (Wikipedia and DuckDuckGo)
+      if (emitCallback) {
+        emitCallback({
+          status: 'additional_search',
+          message: 'Searching additional sources...',
+        });
+      }
+
+      try {
+        // Fetch results from DuckDuckGo and Wikipedia
+        const [duckDuckGoResults, wikipediaResults] = await Promise.all([
+          this.searchDuckDuckGo(sanitizedQuery),
+          this.searchWikipedia(sanitizedQuery),
+        ]);
+
+        // Combine all search results
+        const additionalResults = [
+          ...(duckDuckGoResults || []),
+          ...(wikipediaResults || []),
+        ].filter(Boolean);
+
+        // Get unique URLs from the additional results
+        const uniqueUrls = Array.from(
+          new Set(additionalResults.map((r) => r.url)),
+        ).slice(0, 5);
+
+        // Process content for these URLs
+        const additionalContents = await Promise.all(
+          uniqueUrls.map(async (url) => {
+            try {
+              const content = await this.fetchContentForAI(url);
+              const sourceType = wikipediaResults.some((r) => r.url === url)
+                ? 'wikipedia'
+                : 'duckduckgo';
+
+              // Add to the sources array
+              sources.push({
+                title: content.title || 'Search Result',
+                url: url,
+                content: content.content || '',
+                source: sourceType,
+              });
+
+              return {
+                url,
+                ...content,
+                source: sourceType,
+              };
+            } catch (error) {
+              console.error(`Error fetching content for ${url}:`, error);
+              return null;
+            }
+          }),
+        );
+
+        // Add valid additional contents to the contents array
+        contents.push(...additionalContents.filter(Boolean));
+
+        if (emitCallback) {
+          emitCallback({
+            status: 'additional_search_complete',
+            message: `Found ${additionalContents.filter(Boolean).length} additional results.`,
+          });
+        }
+      } catch (error) {
+        console.error('Error in additional searches:', error);
+        if (emitCallback) {
+          emitCallback({
+            status: 'warning',
+            message:
+              'Some additional searches failed, but continuing with available results.',
+          });
+        }
+      }
+
+      // Log the sources collected for debugging
+      console.log('Sources collected:');
+      console.log(
+        `- Tavily text results: ${sources.filter((s) => s.source === 'tavily').length}`,
+      );
+      console.log(
+        `- Tavily images: ${sources.filter((s) => s.source === 'tavily_image').length}`,
+      );
+      console.log(
+        `- Wikipedia: ${sources.filter((s) => s.source === 'wikipedia').length}`,
+      );
+      console.log(
+        `- DuckDuckGo: ${sources.filter((s) => s.source === 'duckduckgo').length}`,
+      );
+      console.log(
+        `- Other: ${sources.filter((s) => !['tavily', 'tavily_image', 'wikipedia', 'duckduckgo'].includes(s.source)).length}`,
+      );
+      console.log(`Total sources: ${sources.length}`);
+
+      // Return the final result with all sources
       const result = {
-        query,
-        sources: contents,
-        timestamp: new Date().toISOString(),
+        query: sanitizedQuery,
+        sources: sources,
+        timestamp: timestamp,
       };
 
-      emitUpdate({
-        status: 'completed',
-        message: 'Search completed',
-        result,
-      });
-
-      // Cache the final result
-      const cacheKey = `ai-search:${query}`;
-      await this.cacheService.setCache(cacheKey, JSON.stringify(result));
+      if (emitCallback) {
+        emitCallback({
+          status: 'completed',
+          message: 'Search completed.',
+          result: result,
+        });
+      }
 
       return result;
     } catch (error) {
-      emitUpdate({
-        status: 'error',
-        message: 'Search failed',
+      console.error('Error in aiSearchStream:', error);
+
+      if (emitCallback) {
+        emitCallback({
+          status: 'error',
+          message: 'Error performing search. Please try again.',
+        });
+      }
+
+      return {
+        query: sanitizedQuery,
+        sources: sources,
+        timestamp: timestamp,
         error: error.message,
-      });
-      throw error;
+      };
     }
   }
 }

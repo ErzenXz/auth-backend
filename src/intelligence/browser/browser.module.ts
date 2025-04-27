@@ -12,6 +12,8 @@ import { AiWrapperService } from '../providers/ai-wrapper.service';
 import { GroqProvider } from '../providers/Groq.provider';
 import { CrawlerService } from './crawler.service';
 import { AnthropicProvider } from '../providers/Anthropic.provider';
+import { UsageService } from '../usage/usage.service';
+import { UserService } from 'src/user/user.service';
 
 const AIProviders = [
   GoogleProvider,
@@ -22,7 +24,13 @@ const AIProviders = [
   AnthropicProvider,
 ];
 
-const Services = [BrowserService, AiWrapperService, CrawlerService];
+const Services = [
+  BrowserService,
+  AiWrapperService,
+  CrawlerService,
+  UserService,
+  UsageService,
+];
 
 @Module({
   imports: [ConfigModule, XCacheModule, NewsModule],

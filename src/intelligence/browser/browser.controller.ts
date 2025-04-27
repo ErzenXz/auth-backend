@@ -29,7 +29,7 @@ export class BrowserController {
 
   @Get('ai-search')
   async aiSearch(@Query('query') query: string) {
-    return this.browserService.aiSearch(query);
+    return this.browserService.aiSearch(query, 'guest');
   }
 
   @Get('ai-search/stream')
@@ -39,7 +39,7 @@ export class BrowserController {
     response.setHeader('Connection', 'keep-alive');
 
     try {
-      await this.browserService.aiSearchStream(query, (data) => {
+      await this.browserService.aiSearchStream(query, 'guest', (data) => {
         response.write(`data: ${JSON.stringify(data)}\n\n`);
       });
       response.end();

@@ -26,6 +26,7 @@ import {
 } from './dtos/project.dto';
 import { Prisma, AIProjectFile } from '@prisma/client';
 import { AgentResponse } from './models/ai-agent.types';
+import { UsageService } from './usage/usage.service';
 
 @Injectable()
 export class IntelligenceService {
@@ -33,6 +34,7 @@ export class IntelligenceService {
     private readonly prisma: PrismaService,
     private readonly browserService: BrowserService,
     private readonly aiWrapper: AiWrapperService,
+    private readonly usageService?: UsageService,
   ) {}
 
   async createDevInstruction(
@@ -589,15 +591,19 @@ Example Matching:
   // Chat processing methods
 
   async prepareUserChatResponse(userId: string, prompt: string) {
-    const userMemories = await this.chatGetUserMemories(prompt, userId);
-    const generalInfo = this.chatGetGeneralInfo();
-    const searchData = await this.chatGetSearchData(prompt);
+    // Get user memories
+    const memories = await this.chatGetUserMemories(prompt, userId);
+    // Get general information
+    const info = this.chatGetGeneralInfo();
+    // Get search data
+    const searchData = await this.chatGetSearchData(prompt, userId);
+    // Get user instructions
     const userInstructions = await this.chatGetUserInstructions(userId);
 
     const generatedPrompt = this.createUserChattingPrompt(
       prompt,
-      userMemories,
-      generalInfo,
+      memories,
+      info,
       searchData,
       userInstructions,
     );
@@ -692,99 +698,20 @@ Example Matching:
     model?: AIModels,
     reasoning?: boolean,
   ) {
-    // Create a new chat thread if no chatId is provided
-    if (!chatId) {
-      const newThread = await this.prisma.aIThread.create({
-        data: {
-          userId,
-        },
-      });
-      chatId = newThread.id;
+    try {
+      let chatThread: any;
+
+      // Get essential data
+      const userMemories = await this.chatGetUserMemories(message, userId);
+      const generalInfo = this.chatGetGeneralInfo();
+      const searchData = await this.chatGetSearchData(message, userId);
+      const userInstructions = await this.chatGetUserInstructions(userId);
+
+      // ... rest of the method ...
+    } catch (error) {
+      console.error('Failed to process chat:', error);
+      throw error;
     }
-
-    const userChatHistory: ChatHistory[] = (
-      await this.prisma.aIThreadMessage.findMany({
-        where: { chatId },
-        orderBy: { createdAt: 'asc' },
-      })
-    ).map((msg) => ({
-      role: msg.role,
-      message: msg.content,
-    }));
-
-    let thinkingContent = '';
-    const thinkingMessagePrompt = `
-    Previous Messages:
-    ${userChatHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
-
-    ____________________________________
-    CURRENT MESSAGE:
-    ____________________________________
-    ${message}
-    ____________________________________
-    `;
-
-    if (reasoning) {
-      const response = await this.processChainOfThoughts(
-        thinkingMessagePrompt,
-        userId,
-        model,
-      );
-      thinkingContent = response.reasoning;
-    }
-
-    const userMemories = await this.chatGetUserMemories(message, userId);
-    const generalInfo = this.chatGetGeneralInfo();
-    const searchData = await this.chatGetSearchData(message);
-    const userInstructions = await this.chatGetUserInstructions(userId);
-
-    this.extractAndSaveMemory(message, userId, userMemories).catch((error) => {
-      console.error('Failed to save user memory:', error);
-    });
-
-    const generatedPrompt = this.createUserChattingPrompt(
-      message,
-      userMemories,
-      generalInfo,
-      searchData,
-      userInstructions,
-      thinkingContent,
-    );
-
-    // Validate and use default model if needed
-    const selectedModel = Object.values(AIModels).includes(model)
-      ? model
-      : AIModels.Gemini;
-
-    const result = await this.aiWrapper.generateContentHistory(
-      selectedModel,
-      generatedPrompt,
-      userChatHistory,
-    );
-
-    result.thinking = thinkingContent;
-
-    const createdAtUtc = new Date();
-    await this.prisma.aIThreadMessage.createMany({
-      data: [
-        {
-          chatId: chatId,
-          content: message,
-          role: 'user',
-          createdAt: createdAtUtc,
-        },
-        {
-          chatId: chatId,
-          content: result.content,
-          role: 'model',
-          createdAt: new Date(createdAtUtc.getTime() + 1000),
-        },
-      ],
-    });
-
-    await this.chatGetThreadTitle(chatId, message);
-
-    return { result, chatId };
   }
 
   async processChatStream(
@@ -793,7 +720,19 @@ Example Matching:
     chatId?: string,
     model?: AIModels,
     reasoning?: boolean,
+    systemPrompt?: string,
   ): Promise<AsyncIterable<string>> {
+    // Check usage limits before proceeding
+    if (userId && this.usageService) {
+      const hasAvailableUsage =
+        await this.usageService.checkAndIncrementUsage(userId);
+      if (!hasAvailableUsage) {
+        return (async function* () {
+          yield `__ERROR__{"message":"You have reached your monthly message limit. Please upgrade your plan for more messages.","code":"USAGE_LIMIT_REACHED"}`;
+        })();
+      }
+    }
+
     // Existing setup code
 
     if (!chatId) {
@@ -812,7 +751,7 @@ Example Matching:
           orderBy: { createdAt: 'asc' },
         }),
         this.chatGetUserMemories(message, userId),
-        this.chatGetSearchData(message),
+        this.chatGetSearchData(message, userId),
         this.chatGetUserInstructions(userId),
       ]);
 
@@ -880,22 +819,30 @@ Example Matching:
         }
       }
 
-      // Generate final prompt with thinking content
-      const generatedPrompt = this.createUserChattingPrompt(
-        message,
-        userMemories,
-        generalInfo,
-        searchData,
-        userInstructions,
-        thinkingContent,
-      );
+      // If system prompt is provided, use it directly
+      let promptToUse = message;
+      let systemPromptToUse = systemPrompt;
+
+      // If no system prompt is provided, generate one with our tools
+      if (!systemPromptToUse) {
+        promptToUse = this.createUserChattingPrompt(
+          message,
+          userMemories,
+          generalInfo,
+          searchData,
+          userInstructions,
+          thinkingContent,
+        );
+        systemPromptToUse = undefined;
+      }
 
       // Generate and stream final answer
       const [streamResponse] = await Promise.all([
         this.aiWrapper.generateContentStreamHistory(
           selectedModel,
-          generatedPrompt,
+          promptToUse,
           formattedHistory,
+          systemPromptToUse,
         ),
         this.prisma.aIThreadMessage.create({
           data: { chatId, content: message, role: 'user' },
@@ -986,7 +933,19 @@ Example Matching:
     userId: string,
     chatId?: string,
     model?: AIModels,
+    systemPrompt?: string,
   ): Promise<AsyncIterable<string>> {
+    // Check usage limits before proceeding
+    if (userId && this.usageService) {
+      const hasAvailableUsage =
+        await this.usageService.checkAndIncrementUsage(userId);
+      if (!hasAvailableUsage) {
+        return (async function* () {
+          yield `__ERROR__{"message":"You have reached your monthly message limit. Please upgrade your plan for more messages.","code":"USAGE_LIMIT_REACHED"}`;
+        })();
+      }
+    }
+
     // Create chat thread if not provided
     if (!chatId) {
       const threadData = await this.prisma.aIThread.create({
@@ -1012,13 +971,42 @@ Example Matching:
 
     this.chatGetThreadTitle(chatId, message);
 
+    // Fetch the same context data that processChatStream uses
+    const [userMemories, searchData, userInstructions] = await Promise.all([
+      this.chatGetUserMemories(message, userId),
+      this.chatGetSearchData(message),
+      this.chatGetUserInstructions(userId),
+    ]);
+
+    const generalInfo = this.chatGetGeneralInfo();
+    this.extractAndSaveMemory(message, userId, userMemories).catch(
+      console.error,
+    );
+
     // Create combined generator without buffering the entire response
     const combinedGenerator = async function* () {
+      // If system prompt is provided, use it directly
+      let promptToUse = message;
+      let systemPromptToUse = systemPrompt;
+
+      // If no system prompt is provided, generate one with our tools
+      if (!systemPromptToUse) {
+        promptToUse = this.createUserChattingPrompt(
+          message,
+          userMemories,
+          generalInfo,
+          searchData,
+          userInstructions,
+        );
+        systemPromptToUse = undefined;
+      }
+
       // Start generating and streaming final answer right away
       const streamResponse = this.aiWrapper.generateContentStreamHistory(
         selectedModel,
-        message,
+        promptToUse,
         formattedHistory,
+        systemPromptToUse,
       );
 
       // First yield the chatId
@@ -1297,9 +1285,12 @@ Example Matching:
     `;
   }
 
-  private async chatGetSearchData(message: string): Promise<string> {
+  private async chatGetSearchData(
+    message: string,
+    userId?: string,
+  ): Promise<string> {
     if (!message || message.length < 10) {
-      return 'no';
+      return JSON.stringify({ searchResults: [] });
     }
 
     const prompt = `You are an expert in evaluating whether a user's message calls for a web search. Your task is to decide—based on the user's intent and the conversation context—if you should output "no" or generate up to 3 concise search queries using only relevant keywords.
@@ -1328,7 +1319,7 @@ Ensure each search query is concise and strictly composed of keywords relevant t
 Omit any personal or sensitive details from the queries.
 Always consider the full conversation context and chat history to accurately capture the user's intent.
 
-    User Message: "${message}"`;
+  User Message: "${message}"`;
 
     const aiResult = await this.aiWrapper.generateContent(
       AIModels.Llama_4_Scout,
@@ -1349,9 +1340,12 @@ Always consider the full conversation context and chat history to accurately cap
       const allSearchResults: any[] = [];
 
       for (const query of queries) {
-        const searchResult = await this.browserService.aiSearch(query);
-
         try {
+          const searchResult = await this.browserService.aiSearch(
+            query,
+            userId,
+          );
+
           let parsedResults;
           if (typeof searchResult === 'string') {
             parsedResults = JSON.parse(searchResult);
@@ -1364,9 +1358,24 @@ Always consider the full conversation context and chat history to accurately cap
             Array.isArray(parsedResults.searchResults)
           ) {
             allSearchResults.push(...parsedResults.searchResults);
+          } else if (
+            parsedResults.sources &&
+            Array.isArray(parsedResults.sources)
+          ) {
+            // Map the sources to match expected format
+            allSearchResults.push(
+              ...parsedResults.sources.map((source) => ({
+                title: source.title || 'Unknown title',
+                url: source.url,
+                content: source.content,
+              })),
+            );
           }
         } catch (e) {
-          console.error('Failed to parse search results:', e);
+          console.error(
+            `Failed to search or parse results for query "${query}":`,
+            e,
+          );
         }
       }
 
@@ -1393,66 +1402,74 @@ Always consider the full conversation context and chat history to accurately cap
     const userInstructions = instructions.length
       ? instructions.map((ui) => ui.job).join(', ')
       : 'None';
+
     const externalContent = external
       ? typeof external === 'object'
         ? JSON.stringify(external)
         : external
       : 'No external content available';
+
     const thinkingCtx = thinking
       ? thinking
       : "Processing the user's message for a direct and friendly answer.";
 
     return `
-  SYSTEM PROMPT:
-  -----------------------------------------------------------
-  OVERVIEW
-  You are an AI assistant. Use the provided fields below plus the user's message 
-  to craft a clear, concise, and on‐point reply. Cite any external text, URLs, or 
-  images in Markdown so the user can see exactly what you used.
-  
-  TEMPLATE VARIABLES
-  1. user_instructions:
-     ${userInstructions}
-  
-  2. external_content:
-     ${externalContent}
-  
-  3. general_info:
-     ${info}
-  
-  4. user_memories:
-     ${memories}
-  
-  5. thinking_context:
-     <think>
-     ${thinkingCtx}
-     </think>
-  
-  6. user_message:
-     ${message}
-  
-  GUIDELINES
-  - Answer clearly and directly.
-  - When you incorporate any external_content:
-    • Cite text or data inline: “According to [1], …”
-    • Embed images with Markdown:
-      ![Alt text][img1]
-    • At the end, include a References section:
-      References:
-      [1] “Title,” Source, YYYY‑MM‑DD. URL  
-      [img1] https://example.com/image.png
-  - Omit any external content that doesn’t add value.
-  - Do not invent sources—use only what’s provided.
-  - The thinking_context is private; do NOT expose it in your final reply.
-  
-  RESPONSE FORMAT
-  1. Brief answer or solution.
-  2. Code snippets in Markdown code blocks (if any).
-  3. A “References” section for all cited text, URLs, or images (if used).
-  
-  Begin your response now to the user_message above.
-  -----------------------------------------------------------
-  `.trim();
+SYSTEM PROMPT:
+-----------------------------------------------------------
+OVERVIEW
+You are a highly advanced AI assistant. Use all the provided context data to deliver accurate, 
+well-informed responses that precisely address the user's needs. Your goal is to provide 
+the most helpful and correct information possible.
+
+TEMPLATE VARIABLES
+1. user_instructions:
+   ${userInstructions}
+
+2. external_content:
+   ${externalContent}
+
+3. general_info:
+   ${info}
+
+4. user_memories:
+   ${memories}
+
+5. thinking_context:
+   <think>
+   ${thinkingCtx}
+   </think>
+
+6. user_message:
+   ${message}
+
+CAPABILITIES
+- Search results are provided in external_content. Use these to access up-to-date information.
+- User memories contain personal context. Reference these appropriately.
+- Your thinking context shows your reasoning process. This is private to you.
+- You can incorporate multimedia including code, tables, and citations.
+
+GUIDELINES
+- Prioritize accuracy and relevance in your responses.
+- Be comprehensive but concise - avoid unnecessary verbosity.
+- When using external content:
+  • Cite sources inline: "According to [1], ..."
+  • Use Markdown formatting for all content types.
+  • Include a References section with numbered sources.
+  • For images: ![Description][img1]
+- Format code in appropriate language-specific blocks.
+- Do not reveal your thinking context in your response.
+- Do not invent or hallucinate information not provided in the context.
+- When you don't have sufficient information, acknowledge limitations.
+
+RESPONSE FORMAT
+1. Direct answer addressing the user's question or request.
+2. Supporting details, explanations, or examples as appropriate.
+3. Code snippets in proper Markdown blocks (if relevant).
+4. A "References" section listing all cited sources (if any).
+
+Begin your response now to the user_message above.
+-----------------------------------------------------------
+`.trim();
   }
 
   private async extractAndSaveMemory(
@@ -1741,7 +1758,7 @@ Always consider the full conversation context and chat history to accurately cap
   async *streamChainOfDrafts(
     message: string,
     userId: string,
-    model: AIModels = AIModels.Llama_3_3_70B_speed,
+    model: AIModels = AIModels.Llama_3_3_70B_vers,
   ): AsyncGenerator<any> {
     let MAX_DRAFTS = 8;
     let currentDraft = 0;
@@ -3702,11 +3719,98 @@ STRICT FORMATTING RULES:
     filePath: string,
   ): Promise<any> {
     const file = await this.prisma.aIProjectFile.findFirst({
-      where: { projectId, path: filePath },
+      where: {
+        projectId,
+        path: filePath,
+      },
     });
-    if (!file) {
-      throw new NotFoundException(`File not found at path: ${filePath}`);
+
+    if (file) {
+      return file;
     }
-    return file;
+
+    return null; // Return null if no file is found
+  }
+
+  // Add this new method for extracting research queries from a message
+  async extractResearchQueries(message: string): Promise<string[]> {
+    const prompt = `You are an expert researcher. Generate 2-3 distinct, specific search queries to thoroughly research the following user question. Focus on diverse aspects of the question to gather comprehensive information.
+    
+    Your queries should:
+    1. Be specific enough to yield precise results
+    2. Cover different aspects of the user's question
+    3. Use different keywords and phrasings
+    4. NOT include any sensitive or personal data
+    
+    Output ONLY the search queries, each on a separate line.
+    
+    User question: "${message}"`;
+
+    // Use direct AI call instead of potentially creating DB records
+    const aiResult = await this.aiWrapper.generateContent(
+      AIModels.Llama_4_Scout,
+      prompt,
+    );
+
+    return aiResult.content
+      .split('\n')
+      .map((q) => q.trim())
+      .filter((q) => q.length > 0)
+      .slice(0, 3); // Limit to 3 queries max
+  }
+
+  // Find the performBrowsing method
+  async performBrowsing(
+    query: string,
+    emitCallback?: Function,
+    userId?: string,
+  ): Promise<any> {
+    try {
+      // Call aiSearchStream with userId
+      return await this.browserService.aiSearchStream(
+        query,
+        userId,
+        emitCallback,
+      );
+    } catch (error) {
+      console.error('Error in performBrowsing:', error);
+      throw error;
+    }
+  }
+
+  // Find the performDirectSearch method
+  async performDirectSearch(query: string, userId?: string): Promise<any> {
+    try {
+      // Call aiSearch with userId
+      return await this.browserService.aiSearch(query, userId);
+    } catch (error) {
+      console.error('Error in performDirectSearch:', error);
+      throw error;
+    }
+  }
+
+  // Add this method to expose aiSearchStream functionality
+  async generateDirectContent(
+    model: AIModels,
+    prompt: string,
+  ): Promise<AIResponse> {
+    return this.aiWrapper.generateContent(model, prompt);
+  }
+
+  /**
+   * Get remaining messages for a user
+   */
+  async getUserRemainingSearches(userId: string) {
+    if (this.usageService) {
+      return await this.usageService.getRemainingRequests(userId);
+    }
+
+    // Default fallback if usage service isn't available
+    return {
+      used: 0,
+      total: 100,
+      remaining: 100,
+      resetDate: new Date(),
+    };
   }
 }

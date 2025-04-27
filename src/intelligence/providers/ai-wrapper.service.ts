@@ -109,9 +109,25 @@ export class AiWrapperService {
     model: AIModels,
     prompt: string,
     history: ChatHistory[],
+    systemPrompt?: string,
     options?: any,
   ): Promise<AIStreamResponse> {
     const provider = this.getProviderForModel(model);
+    let enhancedOptions = options || {};
+
+    // Process options to include systemPrompt if provided
+    // Special handling for providers that don't support systemPrompt
+    const providerName = provider.constructor.name;
+    if (systemPrompt) {
+      if (providerName === 'GroqProvider') {
+        // For Groq, modify the prompt to include the system prompt at the beginning
+        // since they don't support system messages directly
+        prompt = `${systemPrompt}\n\n${prompt}`;
+      } else {
+        // For other providers, add it to options
+        enhancedOptions = { ...enhancedOptions, systemPrompt };
+      }
+    }
 
     if (!provider.generateContentStreamHistory) {
       this.logger.warn(
@@ -121,7 +137,7 @@ export class AiWrapperService {
         prompt,
         history,
         model,
-        options,
+        enhancedOptions,
       );
       return {
         content: (async function* () {
@@ -135,7 +151,7 @@ export class AiWrapperService {
       prompt,
       history,
       model,
-      options,
+      enhancedOptions,
     );
   }
 

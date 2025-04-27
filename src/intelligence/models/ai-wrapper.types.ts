@@ -45,6 +45,10 @@ export interface AIProviderBase {
     prompt: string,
     history: ChatHistory[],
     model: AIModels,
-    options?: any,
+    options?:
+      | any
+      | {
+          systemPrompt?: string;
+        },
   ): Promise<AIStreamResponse>;
 }

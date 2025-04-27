@@ -75,6 +75,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Reka_Flash_3]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekV3_0324]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Gemini2_5_Pro_Open]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.DeepseekR1T]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,
@@ -82,13 +83,14 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   // Groq Models
   [AIModels.Deepseek_R1_Groq]: AI_PROVIDERS.GROQ,
   [AIModels.Deepseek_R1_GroqQwen]: AI_PROVIDERS.GROQ,
-  [AIModels.Llama_3_3_70B_speed]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_3_70B_vers]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_2_90B_vision]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_3_70B]: AI_PROVIDERS.GROQ,
   [AIModels.QwQ_32_B]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_4_Scout]: AI_PROVIDERS.GROQ,
   [AIModels.Llama_4_Maverick]: AI_PROVIDERS.GROQ,
+  [AIModels.CompoundGroq]: AI_PROVIDERS.GROQ,
+  [AIModels.CompoundGroqMini]: AI_PROVIDERS.GROQ,
 
   // Anthropic Models
   [AIModels.Claude37Sonnet]: AI_PROVIDERS.ANTHROPIC,
