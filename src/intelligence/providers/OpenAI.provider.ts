@@ -121,11 +121,24 @@ export class OpenAiProvider implements AIProviderBase {
     options?: any,
   ): Promise<AIStreamResponse> {
     try {
+      // Check if systemPrompt is in options
+      const messages = [];
+
+      // Add system message if provided
+      if (options?.systemPrompt) {
+        messages.push({ role: 'system', content: options.systemPrompt });
+
+        // Remove from options to avoid passing it twice
+        const { systemPrompt, ...restOptions } = options;
+        options = restOptions;
+      }
+
+      // Add history and user message
+      messages.push(...this.convertHistory(history));
+      messages.push({ role: 'user', content: prompt });
+
       const stream = (await this.openai.chat.completions.create({
-        messages: [
-          ...this.convertHistory(history),
-          { role: 'user', content: prompt },
-        ],
+        messages,
         model,
         stream: true,
         ...options,

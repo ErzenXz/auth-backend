@@ -10,7 +10,7 @@ import { LocationModule } from './location/location.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { seconds, ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { StorageModule } from './storage/storage.module';
 import { AllExceptionsFilter } from './exception.filters';
 import * as winston from 'winston';

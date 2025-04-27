@@ -74,6 +74,7 @@ model User {
   AIProjectCollaborator AIProjectCollaborator[]
   AIProject             AIProject[]             @relation("ProjectOwner")
   Agent                 Agent[]
+  searchUsage           UserSearchUsage[]
 
   @@index([email])
   @@index([username])
@@ -765,4 +766,17 @@ model AgentExecution {
   @@index([userId])
   @@index([status])
   @@index([startTime])
+}
+
+model UserSearchUsage {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  usedRequests  Int      @default(0)
+  totalRequests Int      @default(100)
+  resetDate     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
