@@ -42,6 +42,55 @@ export class IntelligenceGateway
 
   async handleDisconnect(client: Socket) {}
 
+  private async handleStreamOutput(client: Socket, stream: any) {
+    try {
+      for await (const chunk of stream) {
+        if (typeof chunk === 'string') {
+          if (chunk.startsWith('__ERROR__')) {
+            try {
+              const errorContent = JSON.parse(chunk.replace('__ERROR__', ''));
+              client.emit('chatError', errorContent);
+              break; // Stop processing after error
+            } catch (e) {
+              console.error('Error parsing error data:', e);
+              client.emit('chatError', { error: chunk });
+              break;
+            }
+          } else if (chunk.startsWith('__THINKING__')) {
+            try {
+              const thinkingContent = JSON.parse(
+                chunk.replace('__THINKING__', ''),
+              );
+              client.emit('chatThinking', {
+                content: thinkingContent.content,
+              });
+            } catch (e) {
+              console.error('Error parsing thinking data:', e);
+            }
+          } else if (
+            chunk.includes('__STEP_COMPLETE__') ||
+            chunk.includes('__COMPLEXITY__')
+          ) {
+            // Skip emitting these special messages
+          } else {
+            client.emit('chatChunk', { content: chunk });
+          }
+        } else {
+          client.emit('chatChunk', { content: chunk });
+        }
+      }
+
+      client.emit('chatComplete', { status: 'done' });
+      return true;
+    } catch (error) {
+      console.error('Stream processing error:', error);
+      client.emit('chatError', {
+        error: `Stream processing failed: ${error.message}`,
+      });
+      return false;
+    }
+  }
+
   @SubscribeMessage('chatStreaming')
   async handleChatStreaming(
     @ConnectedSocket() client: Socket,
@@ -176,44 +225,7 @@ export class IntelligenceGateway
               enhancedSystemPrompt,
             );
 
-            // Process stream as usual
-            for await (const chunk of stream) {
-              if (typeof chunk === 'string') {
-                if (chunk.startsWith('__ERROR__')) {
-                  try {
-                    const errorContent = JSON.parse(
-                      chunk.replace('__ERROR__', ''),
-                    );
-                    client.emit('chatError', errorContent);
-                    break; // Stop processing after error
-                  } catch (e) {
-                    console.error('Error parsing error data:', e);
-                    client.emit('chatError', { error: chunk });
-                    break;
-                  }
-                } else if (chunk.startsWith('__THINKING__')) {
-                  try {
-                    const thinkingContent = JSON.parse(
-                      chunk.replace('__THINKING__', ''),
-                    );
-                    client.emit('chatThinking', {
-                      content: thinkingContent.content,
-                    });
-                  } catch (e) {
-                    console.error('Error parsing thinking data:', e);
-                  }
-                } else if (
-                  chunk.includes('__STEP_COMPLETE__') ||
-                  chunk.includes('__COMPLEXITY__')
-                ) {
-                  // Skip emitting these special messages
-                } else {
-                  client.emit('chatChunk', { content: chunk });
-                }
-              } else {
-                client.emit('chatChunk', { content: chunk });
-              }
-            }
+            await this.handleStreamOutput(client, stream);
           } catch (researchError) {
             console.error('Research error:', researchError);
             client.emit('chatResearching', {
@@ -240,47 +252,13 @@ export class IntelligenceGateway
                     selectedModel,
                   );
 
-            for await (const chunk of stream) {
-              if (typeof chunk === 'string') {
-                if (chunk.startsWith('__ERROR__')) {
-                  try {
-                    const errorContent = JSON.parse(
-                      chunk.replace('__ERROR__', ''),
-                    );
-                    client.emit('chatError', errorContent);
-                    break; // Stop processing after error
-                  } catch (e) {
-                    console.error('Error parsing error data:', e);
-                    client.emit('chatError', { error: chunk });
-                    break;
-                  }
-                } else if (chunk.startsWith('__THINKING__')) {
-                  try {
-                    const thinkingContent = JSON.parse(
-                      chunk.replace('__THINKING__', ''),
-                    );
-                    client.emit('chatThinking', {
-                      content: thinkingContent.content,
-                    });
-                  } catch (e) {
-                    console.error('Error parsing thinking data:', e);
-                  }
-                } else if (
-                  chunk.includes('__STEP_COMPLETE__') ||
-                  chunk.includes('__COMPLEXITY__')
-                ) {
-                  // Skip emitting these special messages
-                } else {
-                  client.emit('chatChunk', { content: chunk });
-                }
-              } else {
-                client.emit('chatChunk', { content: chunk });
-              }
-            }
+            await this.handleStreamOutput(client, stream);
           }
         }
         // Process with standard browsing if enabled
         else if (data.tools?.browsing) {
+          let browsingSuccessful = false;
+
           // Start the browsing process, with or without reasoning
           try {
             // First emit we're starting the browsing process
@@ -361,6 +339,8 @@ export class IntelligenceGateway
                   emitBrowsingUpdates,
                   userId,
                 );
+
+                browsingSuccessful = true;
               } catch (browsingError) {
                 console.error('Browsing error:', browsingError);
                 client.emit('chatBrowsing', {
@@ -370,158 +350,29 @@ export class IntelligenceGateway
                   error: browsingError.message,
                   timestamp: new Date().toISOString(),
                 });
-
-                // Fall back to standard processing with reasoning if enabled
-                const stream = await this.intelligenceService.processChatStream(
-                  data.message,
-                  userId,
-                  data.chatId,
-                  selectedModel,
-                  data.tools.reasoning,
-                );
-
-                for await (const chunk of stream) {
-                  if (typeof chunk === 'string') {
-                    if (chunk.startsWith('__ERROR__')) {
-                      try {
-                        const errorContent = JSON.parse(
-                          chunk.replace('__ERROR__', ''),
-                        );
-                        client.emit('chatError', errorContent);
-                        break; // Stop processing after error
-                      } catch (e) {
-                        console.error('Error parsing error data:', e);
-                        client.emit('chatError', { error: chunk });
-                        break;
-                      }
-                    } else if (chunk.startsWith('__THINKING__')) {
-                      try {
-                        const thinkingContent = JSON.parse(
-                          chunk.replace('__THINKING__', ''),
-                        );
-                        client.emit('chatThinking', {
-                          content: thinkingContent.content,
-                        });
-                      } catch (e) {
-                        console.error('Error parsing thinking data:', e);
-                      }
-                    } else if (
-                      chunk.includes('__STEP_COMPLETE__') ||
-                      chunk.includes('__COMPLEXITY__')
-                    ) {
-                      // Skip emitting these special messages
-                    } else {
-                      client.emit('chatChunk', { content: chunk });
-                    }
-                  } else {
-                    client.emit('chatChunk', { content: chunk });
-                  }
-                }
               }
             }
-
-            // Now process with the enhanced chat stream and reasoning if enabled
-            const stream = await this.intelligenceService.processChatStream(
-              data.message,
-              userId,
-              data.chatId,
-              selectedModel,
-              data.tools.reasoning,
-            );
-
-            for await (const chunk of stream) {
-              if (typeof chunk === 'string') {
-                if (chunk.startsWith('__ERROR__')) {
-                  try {
-                    const errorContent = JSON.parse(
-                      chunk.replace('__ERROR__', ''),
-                    );
-                    client.emit('chatError', errorContent);
-                    break; // Stop processing after error
-                  } catch (e) {
-                    console.error('Error parsing error data:', e);
-                    client.emit('chatError', { error: chunk });
-                    break;
-                  }
-                } else if (chunk.startsWith('__THINKING__')) {
-                  try {
-                    const thinkingContent = JSON.parse(
-                      chunk.replace('__THINKING__', ''),
-                    );
-                    client.emit('chatThinking', {
-                      content: thinkingContent.content,
-                    });
-                  } catch (e) {
-                    console.error('Error parsing thinking data:', e);
-                  }
-                } else if (
-                  chunk.includes('__STEP_COMPLETE__') ||
-                  chunk.includes('__COMPLEXITY__')
-                ) {
-                  // Skip emitting these special messages
-                } else {
-                  client.emit('chatChunk', { content: chunk });
-                }
-              } else {
-                client.emit('chatChunk', { content: chunk });
-              }
-            }
-          } catch (browsingError) {
-            console.error('Browsing error:', browsingError);
+          } catch (browsingSetupError) {
+            console.error('Browsing setup error:', browsingSetupError);
             client.emit('chatBrowsing', {
               status: 'error',
-              message: 'Browsing failed, continuing with standard processing',
-              error: browsingError.message,
+              message:
+                'Browsing setup failed, continuing with standard processing',
+              error: browsingSetupError.message,
               timestamp: new Date().toISOString(),
             });
-
-            // Fall back to standard processing with reasoning if enabled
-            const stream = await this.intelligenceService.processChatStream(
-              data.message,
-              userId,
-              data.chatId,
-              selectedModel,
-              data.tools.reasoning,
-            );
-
-            for await (const chunk of stream) {
-              if (typeof chunk === 'string') {
-                if (chunk.startsWith('__ERROR__')) {
-                  try {
-                    const errorContent = JSON.parse(
-                      chunk.replace('__ERROR__', ''),
-                    );
-                    client.emit('chatError', errorContent);
-                    break; // Stop processing after error
-                  } catch (e) {
-                    console.error('Error parsing error data:', e);
-                    client.emit('chatError', { error: chunk });
-                    break;
-                  }
-                } else if (chunk.startsWith('__THINKING__')) {
-                  try {
-                    const thinkingContent = JSON.parse(
-                      chunk.replace('__THINKING__', ''),
-                    );
-                    client.emit('chatThinking', {
-                      content: thinkingContent.content,
-                    });
-                  } catch (e) {
-                    console.error('Error parsing thinking data:', e);
-                  }
-                } else if (
-                  chunk.includes('__STEP_COMPLETE__') ||
-                  chunk.includes('__COMPLEXITY__')
-                ) {
-                  // Skip emitting these special messages
-                } else {
-                  client.emit('chatChunk', { content: chunk });
-                }
-              } else {
-                client.emit('chatChunk', { content: chunk });
-              }
-            }
           }
+
+          // After browsing completes (successful or not), process with the enhanced chat stream
+          const stream = await this.intelligenceService.processChatStream(
+            data.message,
+            userId,
+            data.chatId,
+            selectedModel,
+            data.tools.reasoning,
+          );
+
+          await this.handleStreamOutput(client, stream);
         }
         // If only reasoning is enabled (no browsing or research)
         else if (data.tools?.reasoning) {
@@ -533,43 +384,7 @@ export class IntelligenceGateway
             true,
           );
 
-          for await (const chunk of stream) {
-            if (typeof chunk === 'string') {
-              if (chunk.startsWith('__ERROR__')) {
-                try {
-                  const errorContent = JSON.parse(
-                    chunk.replace('__ERROR__', ''),
-                  );
-                  client.emit('chatError', errorContent);
-                  break; // Stop processing after error
-                } catch (e) {
-                  console.error('Error parsing error data:', e);
-                  client.emit('chatError', { error: chunk });
-                  break;
-                }
-              } else if (chunk.startsWith('__THINKING__')) {
-                try {
-                  const thinkingContent = JSON.parse(
-                    chunk.replace('__THINKING__', ''),
-                  );
-                  client.emit('chatThinking', {
-                    content: thinkingContent.content,
-                  });
-                } catch (e) {
-                  console.error('Error parsing thinking data:', e);
-                }
-              } else if (
-                chunk.includes('__STEP_COMPLETE__') ||
-                chunk.includes('__COMPLEXITY__')
-              ) {
-                // Skip emitting these special messages
-              } else {
-                client.emit('chatChunk', { content: chunk });
-              }
-            } else {
-              client.emit('chatChunk', { content: chunk });
-            }
-          }
+          await this.handleStreamOutput(client, stream);
         } else {
           // Use plain chat stream if no tools are enabled
           const stream = await this.intelligenceService.processChatPlainStream(
@@ -579,12 +394,8 @@ export class IntelligenceGateway
             selectedModel,
           );
 
-          for await (const chunk of stream) {
-            client.emit('chatChunk', { content: chunk });
-          }
+          await this.handleStreamOutput(client, stream);
         }
-
-        client.emit('chatComplete', { status: 'done' });
       } catch (innerError) {
         console.error('Stream processing error:', innerError);
         client.emit('chatError', {
@@ -857,23 +668,7 @@ The user's question is: "${userQuestion}"
           createChatDto.model,
         );
 
-        for await (const chunk of stream) {
-          if (typeof chunk === 'string' && chunk.startsWith('__ERROR__')) {
-            try {
-              const errorContent = JSON.parse(chunk.replace('__ERROR__', ''));
-              client.emit('chatError', errorContent);
-              break; // Stop processing after error
-            } catch (e) {
-              console.error('Error parsing error data:', e);
-              client.emit('chatError', { error: chunk });
-              break;
-            }
-          } else {
-            client.emit('chatChunk', { content: chunk });
-          }
-        }
-
-        client.emit('chatComplete', { status: 'done' });
+        await this.handleStreamOutput(client, stream);
       } catch (innerError) {
         console.error('Stream processing error:', innerError);
         client.emit('chatError', {
@@ -910,43 +705,7 @@ The user's question is: "${userQuestion}"
           createChatDto.reasoning,
         );
 
-        for await (const chunk of stream) {
-          if (typeof chunk === 'string') {
-            if (chunk.startsWith('__ERROR__')) {
-              try {
-                const errorContent = JSON.parse(chunk.replace('__ERROR__', ''));
-                client.emit('chatError', errorContent);
-                break; // Stop processing after error
-              } catch (e) {
-                console.error('Error parsing error data:', e);
-                client.emit('chatError', { error: chunk });
-                break;
-              }
-            } else if (chunk.startsWith('__THINKING__')) {
-              try {
-                const thinkingContent = JSON.parse(
-                  chunk.replace('__THINKING__', ''),
-                );
-                client.emit('chatThinking', {
-                  content: thinkingContent.content,
-                });
-              } catch (e) {
-                console.error('Error parsing thinking data:', e);
-              }
-            } else if (
-              chunk.includes('__STEP_COMPLETE__') ||
-              chunk.includes('__COMPLEXITY__')
-            ) {
-              // Skip emitting these special messages
-            } else {
-              client.emit('chatChunk', { content: chunk });
-            }
-          } else {
-            client.emit('chatChunk', { content: chunk });
-          }
-        }
-
-        client.emit('chatComplete', { status: 'done' });
+        await this.handleStreamOutput(client, stream);
       } catch (innerError) {
         console.error('Stream processing error:', innerError);
         client.emit('chatError', {

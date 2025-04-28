@@ -748,12 +748,16 @@ Example Matching:
       await Promise.all([
         this.prisma.aIThreadMessage.findMany({
           where: { chatId },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
         }),
         this.chatGetUserMemories(message, userId),
         this.chatGetSearchData(message, userId),
         this.chatGetUserInstructions(userId),
       ]);
+
+    // Reverse to get chronological order
+    userChatHistory.reverse();
 
     const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
       role: msg.role,
@@ -761,8 +765,9 @@ Example Matching:
     }));
 
     const generalInfo = this.chatGetGeneralInfo();
-    this.extractAndSaveMemory(message, userId, userMemories).catch(
-      console.error,
+    // Run memory extraction in background without awaiting or blocking the response
+    this.extractAndSaveMemory(message, userId, userMemories).catch((error) =>
+      console.error('Memory extraction error:', error),
     );
 
     const selectedModel = Object.values(AIModels).includes(model)
@@ -774,10 +779,11 @@ Example Matching:
       let thinkingContent = '';
 
       if (reasoning) {
-        // Build thinking prompt with chat history
+        // Build thinking prompt with chat history - limit to last 10 messages only for reasoning
+        const recentHistory = formattedHistory.slice(-10);
         const thinkingMessagePrompt = `
           Previous Messages:
-          ${formattedHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
+          ${recentHistory.map((msg) => `${msg.role}: ${msg.message}`).join('\n')}
       
           ____________________________________
           CURRENT MESSAGE:
@@ -954,11 +960,15 @@ Example Matching:
       chatId = threadData.id;
     }
 
-    // Get chat history after chatId is guaranteed to exist
+    // Get chat history - limit to last 20 messages to prevent context bloat
     const userChatHistory = await this.prisma.aIThreadMessage.findMany({
       where: { chatId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
     });
+
+    // Reverse to get chronological order
+    userChatHistory.reverse();
 
     const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
       role: msg.role,
@@ -971,7 +981,7 @@ Example Matching:
 
     this.chatGetThreadTitle(chatId, message);
 
-    // Fetch the same context data that processChatStream uses
+    // Only fetch what's needed - simplify context for better performance
     const [userMemories, searchData, userInstructions] = await Promise.all([
       this.chatGetUserMemories(message, userId),
       this.chatGetSearchData(message),
@@ -979,8 +989,9 @@ Example Matching:
     ]);
 
     const generalInfo = this.chatGetGeneralInfo();
-    this.extractAndSaveMemory(message, userId, userMemories).catch(
-      console.error,
+    // Run memory extraction in background without awaiting or blocking the response
+    this.extractAndSaveMemory(message, userId, userMemories).catch((error) =>
+      console.error('Memory extraction error:', error),
     );
 
     // Create combined generator without buffering the entire response
@@ -1000,6 +1011,9 @@ Example Matching:
         );
         systemPromptToUse = undefined;
       }
+
+      console.log(promptToUse);
+      console.log(formattedHistory);
 
       // Start generating and streaming final answer right away
       const streamResponse = this.aiWrapper.generateContentStreamHistory(
@@ -1119,7 +1133,11 @@ Example Matching:
   async duplicateChatThread(userId: string, threadId: string) {
     const originalThread = await this.prisma.aIThread.findFirst({
       where: { id: threadId, userId },
-      include: { messages: true },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
 
     if (!originalThread) {
@@ -1139,7 +1157,7 @@ Example Matching:
           chatId: newThread.id,
           content: msg.content,
           role: msg.role,
-          createdAt: new Date(),
+          createdAt: new Date(msg.createdAt.getTime()), // Preserve original timestamps
         })),
       });
     }
@@ -1293,33 +1311,20 @@ Example Matching:
       return JSON.stringify({ searchResults: [] });
     }
 
-    const prompt = `You are an expert in evaluating whether a user's message calls for a web search. Your task is to decide—based on the user's intent and the conversation context—if you should output "no" or generate up to 3 concise search queries using only relevant keywords.
+    // Shortened prompt to reduce token usage
+    const prompt = `Evaluate if this message needs a web search: "${message}"
+    
+Output "no" if:
+- It's a greeting, small talk, or opinion
+- It's hypothetical or non-factual
+- It's a follow-up without new content
 
-When to respond with "no":
+Output 1-2 search queries (only keywords) if:
+- User asks about facts, events, or data
+- The question requires verification
+- It explicitly asks for a search
 
-The message consists of casual greetings, small talk, or pleasantries.
-It shares personal opinions, emotions, or subjective experiences.
-It discusses hypothetical scenarios or general topics that do not require real-time or verified information.
-It is a follow-up message that does not introduce new, search-relevant content.
-
-When to generate search queries:
-
-The user asks about current events, news, or real-world data.
-The message requests factual, technical, or tutorial information.
-It includes specific names, places, or events that warrant verification.
-The query explicitly asks for a search or implies that up-to-date information is needed.
-The conversation lacks sufficient context or data, making a web search necessary.
-The user affirms a previous prompt to search (e.g., "Yes, please").
-
-Guidelines:
-
-Output ONLY either "no" or up to 2 search queries separated by newlines—nothing else.
-For complex questions, generate multiple queries (maximum 3) that cover different aspects.
-Ensure each search query is concise and strictly composed of keywords relevant to the user's request.
-Omit any personal or sensitive details from the queries.
-Always consider the full conversation context and chat history to accurately capture the user's intent.
-
-  User Message: "${message}"`;
+Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
 
     const aiResult = await this.aiWrapper.generateContent(
       AIModels.Llama_4_Scout,
@@ -1328,61 +1333,57 @@ Always consider the full conversation context and chat history to accurately cap
 
     let response = aiResult.content.trim();
 
-    // Validate response
-    if (response !== 'no' && response.length > 0) {
-      // Split into multiple queries (max 3)
-      const queries = response
-        .split('\n')
-        .filter((q) => q.trim().length > 0)
-        .slice(0, 3);
-
-      // Execute each search query and combine results
-      const allSearchResults: any[] = [];
-
-      for (const query of queries) {
-        try {
-          const searchResult = await this.browserService.aiSearch(
-            query,
-            userId,
-          );
-
-          let parsedResults;
-          if (typeof searchResult === 'string') {
-            parsedResults = JSON.parse(searchResult);
-          } else {
-            parsedResults = searchResult;
-          }
-
-          if (
-            parsedResults.searchResults &&
-            Array.isArray(parsedResults.searchResults)
-          ) {
-            allSearchResults.push(...parsedResults.searchResults);
-          } else if (
-            parsedResults.sources &&
-            Array.isArray(parsedResults.sources)
-          ) {
-            // Map the sources to match expected format
-            allSearchResults.push(
-              ...parsedResults.sources.map((source) => ({
-                title: source.title || 'Unknown title',
-                url: source.url,
-                content: source.content,
-              })),
-            );
-          }
-        } catch (e) {
-          console.error(
-            `Failed to search or parse results for query "${query}":`,
-            e,
-          );
-        }
-      }
-
-      return JSON.stringify({ searchResults: allSearchResults });
+    // Early return if no search needed
+    if (response === 'no' || response.toLowerCase().includes('no search')) {
+      return JSON.stringify({ searchResults: [] });
     }
 
-    return JSON.stringify({ searchResults: [] });
+    try {
+      // Extract search queries (one per line)
+      const queries = response
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && line !== 'no');
+
+      // Limit to max 2 queries
+      const limitedQueries = queries.slice(0, 2);
+
+      // If we have queries, perform the search
+      if (limitedQueries.length > 0) {
+        const results = [];
+
+        // Only use the first query (most important one)
+        const mainQuery = limitedQueries[0];
+
+        try {
+          // Perform search via browser service if available
+          if (this.browserService && userId) {
+            const searchResult = await this.browserService.aiSearch(
+              mainQuery,
+              userId,
+            );
+
+            // Only keep the top 3 results to reduce context size
+            if (
+              searchResult &&
+              searchResult.sources &&
+              searchResult.sources.length > 0
+            ) {
+              results.push(...searchResult.sources.slice(0, 3));
+            }
+          }
+        } catch (error) {
+          console.error('Error performing search:', error.message);
+        }
+
+        return JSON.stringify({ searchResults: results });
+      }
+
+      return JSON.stringify({ searchResults: [] });
+    } catch (error) {
+      console.error('Error processing search data:', error.message);
+      return JSON.stringify({ searchResults: [] });
+    }
   }
 
   private async chatGetUserInstructions(userId: string) {
@@ -1403,23 +1404,44 @@ Always consider the full conversation context and chat history to accurately cap
       ? instructions.map((ui) => ui.job).join(', ')
       : 'None';
 
-    const externalContent = external
-      ? typeof external === 'object'
-        ? JSON.stringify(external)
-        : external
-      : 'No external content available';
+    // Optimize external content
+    let externalContent = 'No relevant external content';
+    if (external) {
+      if (typeof external === 'object') {
+        try {
+          // For JSON objects, only include if they have search results
+          const parsed =
+            typeof external === 'string' ? JSON.parse(external) : external;
+          if (parsed.searchResults && parsed.searchResults.length > 0) {
+            externalContent = JSON.stringify(parsed);
+          } else {
+            externalContent = 'No relevant search results found';
+          }
+        } catch (e) {
+          externalContent = 'Error processing external content';
+        }
+      } else if (external.length > 2000) {
+        // Truncate lengthy external content
+        externalContent =
+          external.substring(0, 2000) + '... [content truncated]';
+      } else {
+        externalContent = external;
+      }
+    }
 
+    // Truncate thinking context if too long
     const thinkingCtx = thinking
-      ? thinking
+      ? thinking.length > 1500
+        ? thinking.substring(0, 1500) + '... [truncated]'
+        : thinking
       : "Processing the user's message for a direct and friendly answer.";
 
     return `
 SYSTEM PROMPT:
 -----------------------------------------------------------
 OVERVIEW
-You are a highly advanced AI assistant. Use all the provided context data to deliver accurate, 
-well-informed responses that precisely address the user's needs. Your goal is to provide 
-the most helpful and correct information possible.
+You are a highly advanced AI assistant. Use the provided context to deliver accurate, 
+concise responses that address the user's needs.
 
 TEMPLATE VARIABLES
 1. user_instructions:
@@ -1442,30 +1464,14 @@ TEMPLATE VARIABLES
 6. user_message:
    ${message}
 
-CAPABILITIES
-- Search results are provided in external_content. Use these to access up-to-date information.
-- User memories contain personal context. Reference these appropriately.
-- Your thinking context shows your reasoning process. This is private to you.
-- You can incorporate multimedia including code, tables, and citations.
-
 GUIDELINES
 - Prioritize accuracy and relevance in your responses.
 - Be comprehensive but concise - avoid unnecessary verbosity.
-- When using external content:
-  • Cite sources inline: "According to [1], ..."
-  • Use Markdown formatting for all content types.
-  • Include a References section with numbered sources.
-  • For images: ![Description][img1]
+- When using external content, cite sources inline: "According to [1], ..."
 - Format code in appropriate language-specific blocks.
-- Do not reveal your thinking context in your response.
-- Do not invent or hallucinate information not provided in the context.
+- Don't reveal your thinking context in your response.
+- Don't invent information not provided in the context.
 - When you don't have sufficient information, acknowledge limitations.
-
-RESPONSE FORMAT
-1. Direct answer addressing the user's question or request.
-2. Supporting details, explanations, or examples as appropriate.
-3. Code snippets in proper Markdown blocks (if relevant).
-4. A "References" section listing all cited sources (if any).
 
 Begin your response now to the user_message above.
 -----------------------------------------------------------
@@ -1477,114 +1483,100 @@ Begin your response now to the user_message above.
     userId: string,
     memories: string,
   ): Promise<void> {
-    const extractionPrompt = `
-    You are an intelligent assistant with advanced human-like memory capabilities. Your task is to extract essential personal information from user messages and manage the user's memory efficiently.
-
-    User Memories: \n ${memories}
-    Message to ANALYZE: "${message}"
-
-    Instructions:
-
-    1. **Extraction**:
-       - Extract new information explicitly mentioned in the message.
-       - Use clear and specific keys for each piece of information.
-       - Limit each value to 50 characters.
-
-    2. **Memory Management**:
-       - **Add**:
-         - Include new, useful, and relevant information.
-         - Prioritize recent information over older entries.
-       - **Remove**:
-         - Identify and remove outdated or irrelevant memories.
-         - Remove information that the user indicates is no longer valid or has been updated.
-         - Do not remove core information like the user's name, age, or birthday unless explicitly changed by the user.
-
-    3. **Context Awareness**:
-       - Use timestamps or context to determine the relevance of information.
-       - Recognize when tasks are completed and remove related pending task memories.
-       - Avoid over-persisting short-term or time-sensitive information.
-
-    4. **Rules**:
-       - Only extract explicitly mentioned information; do not infer or assume details.
-       - Ensure keys are consistent and descriptive.
-       - Limit each value to 50 characters.
-
-    5. **Output Format**:
-       - Return the results as a JSON object with two arrays:
-
-    \`\`\`json
-    {
-      "add": [
-        {"key": "Profession", "value": "Software Engineer"}
-      ],
-      "remove": [
-        "OldProfession"
-      ]
+    // Skip processing for very short messages
+    if (message.length < 15) {
+      return;
     }
-    \`\`\`
 
-    **Examples**:
+    const extractionPrompt = `
+You are extracting key facts from a user's message to maintain their memory. 
+Current memories: ${memories}
 
-    - If the user mentions completing a project:
-      - **Add**: \`{"key": "RecentAchievements", "value": "Completed project X"}\`
-      - **Remove**: \`"PendingProjectX"\`
+User message: "${message}"
 
-    - If the user updates their status:
-      - **Add**: \`{"key": "CurrentStatus", "value": "API is now fast"}\`
-      - **Remove**: \`"WorkingToMakeAPIFaster"\`
+Extract only NEW explicitly mentioned information in JSON format:
+{
+  "add": [
+    {"key": "KeyName", "value": "Concise value (max 40 chars)"}
+  ],
+  "remove": ["KeyToRemove"]
+}
 
-    Remember to act like a sophisticated AI assistant with human-like memory management, continually learning from the user and keeping their information accurate and up-to-date.
-    `;
+Rules:
+- Only extract facts EXPLICITLY stated (not implied)
+- Keep values under 40 characters
+- Only return valid JSON (no explanation text)
+- Only include memory updates if present
+- For outdated information, include the old key in "remove" array
+`;
 
     try {
       const aiResponse = await this.aiWrapper.generateContent(
-        AIModels.Gemini,
+        AIModels.Llama_4_Scout, // Use a faster model
         extractionPrompt,
       );
+
       let aiText = aiResponse.content.trim();
+      // Remove markdown code blocks if present
       aiText = aiText.replace(/```json\s?|\s?```/g, '').trim();
 
       let parsed;
       try {
         parsed = JSON.parse(aiText);
       } catch (parseError) {
-        console.error('Failed to parse AI response:', aiText);
-        parsed = { add: [], remove: [] };
+        console.error(
+          'Failed to parse AI memory response:',
+          parseError.message,
+        );
+        return; // Exit early if parsing fails
       }
 
       const { add = [], remove = [] } = parsed;
 
-      const upsertOperations = add.map((item) =>
-        this.prisma.userMemory.upsert({
-          where: {
-            userId_key: {
-              userId,
-              key: item.key,
-            },
-          },
-          update: { value: item.value },
-          create: {
-            userId,
-            key: item.key,
-            value: item.value,
-          },
-        }),
-      );
+      // Skip DB operations if nothing to add or remove
+      if (add.length === 0 && remove.length === 0) {
+        return;
+      }
+
+      // Process database operations
+      const promises = [];
 
       if (remove.length > 0) {
-        await this.prisma.userMemory.deleteMany({
-          where: {
-            userId,
-            key: { in: remove },
-          },
-        });
+        promises.push(
+          this.prisma.userMemory.deleteMany({
+            where: {
+              userId,
+              key: { in: remove },
+            },
+          }),
+        );
       }
 
-      if (upsertOperations.length > 0) {
-        await this.prisma.$transaction(upsertOperations);
+      if (add.length > 0) {
+        const upsertOperations = add.map((item) =>
+          this.prisma.userMemory.upsert({
+            where: {
+              userId_key: {
+                userId,
+                key: item.key,
+              },
+            },
+            update: { value: item.value },
+            create: {
+              userId,
+              key: item.key,
+              value: item.value,
+            },
+          }),
+        );
+
+        promises.push(this.prisma.$transaction(upsertOperations));
       }
+
+      // Execute all DB operations in parallel
+      await Promise.all(promises);
     } catch (error) {
-      console.error('AI Memory Extraction Failed:', error);
+      console.error('Memory extraction failed:', error.message);
     }
   }
 
