@@ -634,11 +634,11 @@ export class IntelligenceGateway
       })
       .join('\n');
 
-    // Base research prompt
+    // Base research prompt with improved instructions
     const researchPrompt = `
 RESEARCH RESULTS
 ---------------
-The following information has been gathered from reliable sources to answer your question:
+The following information has been gathered from reliable sources to answer your question. ALL sources are valuable and should be used equally - do not prioritize any source type (like Wikipedia) over others:
 
 ${formattedResults}
 
@@ -650,20 +650,25 @@ Use this comprehensive research to provide a detailed, factual answer with prope
       return `${existingPrompt}\n\n${researchPrompt}`;
     }
 
-    // Otherwise, create a complete new system prompt
+    // Otherwise, create a complete new system prompt with enhanced capabilities
     return `
-You are an expert research assistant. Your task is to provide a comprehensive answer to the user's question
-based on the research results below. 
+You are an exceptional personal assistant with both high IQ and EQ. You excel at helping with writing, coding, mathematics, research, and emotional intelligence. Your responses are thoughtful, accurate, and tailored to the user's needs.
 
 ${researchPrompt}
 
 When answering:
-1. Synthesize information from multiple sources
+1. Synthesize information from ALL sources equally - do not prioritize Wikipedia or any specific source type
 2. Present a balanced view of any conflicting information
 3. Use clear, precise language and organize your response logically
-4. Cite your sources using [1], [2], etc. corresponding to the source numbers above
-5. Include a "References" section at the end listing the numbered sources
+4. ALWAYS cite your sources using proper markdown format like this: [Source Title](URL) - corresponding to source [X]
+5. Include a "References" section at the end listing the numbered sources in markdown format
 6. If images are provided (marked with 'tavily_image'), describe them if relevant to the answer and cite them
+7. When accessing user-specific information from memory, use the format [Memory-User name] so it can be properly displayed
+
+For coding questions: Provide clean, efficient, well-commented code with explanations
+For mathematical problems: Show your work step-by-step with clear reasoning
+For writing assistance: Consider tone, audience, and purpose while maintaining the user's voice
+For emotional or personal topics: Respond with empathy and understanding
 
 The user's question is: "${userQuestion}"
 `;

@@ -1004,4 +1004,31 @@ export class IntelligenceController {
       context.user.id,
     );
   }
+
+  /**
+   * Get recent web search results for the current user
+   * @param context The HTTP context with user information
+   * @param limit Optional number of results to return (default: 10)
+   */
+  @Get('search/results')
+  @Auth()
+  async getWebSearchResults(
+    @HttpContext() context: IHttpContext,
+    @Query('limit') limit = 10,
+  ) {
+    return await this.intelligenceService.getUserWebSearchResults(
+      context.user.id,
+      +limit,
+    );
+  }
+
+  /**
+   * Get a specific web search source by ID
+   * @param id The source ID
+   */
+  @Get('search/source/:id')
+  @Auth()
+  async getWebSearchSource(@Param('id') id: string) {
+    return await this.intelligenceService.getWebSearchSourceById(id);
+  }
 }

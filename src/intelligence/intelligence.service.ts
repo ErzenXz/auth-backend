@@ -1127,13 +1127,68 @@ Example Matching:
 
     const skip = (page - 1) * limit;
 
-    return await this.prisma.aIThreadMessage.findMany({
+    // Get the messages for this chat thread
+    const messages = await this.prisma.aIThreadMessage.findMany({
       where: { chatId },
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: skip,
     });
+
+    // Get recent search results for this user
+    const searchResults = await this.prisma.webSearchResult.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        sources: {
+          select: {
+            id: true,
+            title: true,
+            url: true,
+            sourceType: true,
+            isImage: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    // Enhance messages with search results
+    // For each message, find search results created around the same time (within 1 minute)
+    const messagesWithSearchResults = messages.map((message) => {
+      const messageTime = message.createdAt.getTime();
+
+      // Find search results created within a minute of this message
+      const relatedSearchResults = searchResults.filter((result) => {
+        const resultTime = result.createdAt.getTime();
+        // Within 1 minute (60000 milliseconds) before or after the message
+        return Math.abs(messageTime - resultTime) < 60000;
+      });
+
+      return {
+        ...message,
+        searchResults: relatedSearchResults.map((result) => ({
+          id: result.id,
+          query: result.query,
+          createdAt: result.createdAt,
+          sources: result.sources.map((source) => ({
+            id: source.id,
+            title: source.title || 'Untitled',
+            url: source.url,
+            sourceType: source.sourceType,
+            isImage: source.isImage,
+          })),
+        })),
+      };
+    });
+
+    return messagesWithSearchResults;
   }
+
   async deleteChatThread(userId: string, threadId: string) {
     const thread = await this.prisma.aIThread.findFirst({
       where: { id: threadId, userId },
@@ -1339,7 +1394,7 @@ Example Matching:
 
     // Shortened prompt to reduce token usage
     const prompt = `Evaluate if this message needs a web search: "${message}"
-    
+     
 Output "no" if:
 - It's a greeting, small talk, or opinion
 - It's hypothetical or non-factual
@@ -1439,7 +1494,14 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
           const parsed =
             typeof external === 'string' ? JSON.parse(external) : external;
           if (parsed.searchResults && parsed.searchResults.length > 0) {
-            externalContent = JSON.stringify(parsed);
+            // Format search results with markdown links for better readability
+            const formattedResults = parsed.searchResults
+              .map((result, index) => {
+                return `[${index + 1}] [${result.title || 'Source'}](${result.url})`;
+              })
+              .join('\n');
+
+            externalContent = `Web Search Results:\n${formattedResults}`;
           } else {
             externalContent = 'No relevant search results found';
           }
@@ -1466,8 +1528,10 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
 SYSTEM PROMPT:
 -----------------------------------------------------------
 OVERVIEW
-You are a highly advanced AI assistant. Use the provided context to deliver accurate, 
-concise responses that address the user's needs.
+You are an exceptional personal assistant with both high IQ and high EQ. You provide helpful, accurate, 
+and thoughtful responses tailored to the user's specific needs. Your goal is to be the most useful 
+assistant possible, whether that requires deep technical explanations, creative suggestions, 
+or empathetic understanding.
 
 TEMPLATE VARIABLES
 1. user_instructions:
@@ -1490,16 +1554,21 @@ TEMPLATE VARIABLES
 6. user_message:
    ${message}
 
-GUIDELINES
-- Prioritize accuracy and relevance in your responses.
-- Be comprehensive but concise - avoid unnecessary verbosity.
-- When using external content, cite sources inline: "According to [1], ..."
-- Format code in appropriate language-specific blocks.
-- Don't reveal your thinking context in your response.
-- Don't invent information not provided in the context.
-- When you don't have sufficient information, acknowledge limitations.
+RESPONSE GUIDELINES
+- Be helpful, relevant, and tailored to the user's specific query
+- When citing external sources, always use proper markdown format: [Source Title](URL)
+- When accessing user-specific information from memory, use the format [Memory-User name]
+- For coding: Provide clean, well-structured solutions with appropriate explanations
+- For creative tasks: Offer thoughtful, original ideas and suggestions
+- For technical content: Ensure accuracy and clarity in your explanations
+- For emotional topics: Respond with empathy and understanding
+- Adapt your tone and level of detail to what's appropriate for the query
+- Always attribute information from web results with proper citations
+- When using information from web search results, cite using: [Source from search result #X](URL)
+- Format your response with clear structure for optimal readability
+- Never invent information not present in the provided context
 
-Begin your response now to the user_message above.
+Begin your response to the user_message now.
 -----------------------------------------------------------
 `.trim();
   }
@@ -1844,21 +1913,29 @@ MEMORY GUIDELINES:
     complexity?: 'low' | 'medium' | 'high',
   ): string {
     return `
-      Generate 3-8 distinct approaches for: "${message}"
+      Generate comprehensive drafts and approaches for: "${message}"
       
-      Requirements:
-      - Each response must be ≤15 words
-      - Number each response (1., 2., 3. etc.)
-      - Variety in responses/approaches/perspectives/methods
-      ${complexity === 'high' ? '- Include unconventional solutions' : '- Maintain practical answers'}
+      REQUIREMENTS:
+      - Produce 3-8 distinct, high-quality approaches or solutions
+      - Each response should be clear, concise yet thorough (up to 30 words)
+      - Number each response clearly (1., 2., 3., etc.)
+      - Ensure significant diversity in perspectives, methodologies, and frameworks
+      - Consider both practical implementation and theoretical foundations
+      ${
+        complexity === 'high'
+          ? '- Include innovative, unconventional solutions that challenge traditional approaches'
+          : complexity === 'medium'
+            ? '- Balance conventional best practices with creative alternatives'
+            : '- Prioritize practical, implementable solutions with proven effectiveness'
+      }
       
-      ${previousDrafts ? `Previous answers:\n${previousDrafts}` : ''}
+      ${previousDrafts ? `PREVIOUS SOLUTION DRAFTS:\n${previousDrafts}` : ''}
   
-      Format exactly:
+      FORMAT PRECISELY:
       DRAFT_BATCH: ${previousDrafts.split('\n').length + 1}
-      1. [First concise solution]
-      2. [Second contrasting answer]
-      3. [Third innovative solution]
+      1. [First comprehensive approach with clear implementation strategy]
+      2. [Second contrasting solution using different methodology]
+      3. [Third innovative approach considering unique constraints/opportunities]
       ${step === 'INITIAL_DRAFT' ? 'COMPLEXITY: [low|medium|high]' : 'IMPROVE_NEEDED: [yes/no]'}
     `
       .replace(/^ {4}/gm, '')
@@ -2017,22 +2094,34 @@ MEMORY GUIDELINES:
     complexity?: 'low' | 'medium' | 'high' | 'very-high',
   ): string {
     return `
-      Provide a chain-of-thought for: "${message}"
+      Provide a sophisticated chain-of-thought analysis for: "${message}"
 
-      Requirements:
-      - Generate 3-20 distinct reasoning steps
-      - Each step must be ≤150 words
-      - Number each step (1., 2., 3., etc.)
-      - Ensure each step builds upon the previous insights
-      ${complexity === 'high' ? '- Include unconventional insights' : '- Maintain practical reasoning'}
+      REQUIREMENTS:
+      - Generate 3-20 comprehensive, insightful reasoning steps
+      - Each step should be thorough but not exceed 200 words
+      - Number each step clearly (1., 2., 3., etc.)
+      - Ensure logical progression where each step builds meaningfully upon previous insights
+      - Demonstrate expert-level critical thinking with nuanced analysis
+      - Consider multiple perspectives, potential counterarguments, and edge cases
+      - For complex topics, include theoretical frameworks and established methodologies
+      ${
+        complexity === 'high' || complexity === 'very-high'
+          ? '- Incorporate interdisciplinary insights and unconventional approaches'
+          : '- Balance theoretical depth with practical application'
+      }
+      ${
+        complexity === 'very-high'
+          ? '- Explore advanced theoretical concepts and their implications'
+          : ''
+      }
 
-      ${previousThoughts ? `Previous reasoning steps:\n${previousThoughts}` : ''}
+      ${previousThoughts ? `PREVIOUS REASONING STEPS:\n${previousThoughts}` : ''}
 
-      Format exactly:
+      FORMAT PRECISELY:
       THOUGHT_BATCH: ${previousThoughts.split('\n').length + 1}
-      1. [First concise thought]
-      2. [Second contrasting insight]
-      3. [Third innovative step]
+      1. [First detailed reasoning step with clear logic]
+      2. [Second step that advances the analysis further]
+      3. [Third step exploring deeper implications or alternative perspectives]
       ${step === 'INITIAL_THOUGHT' ? 'COMPLEXITY: [low|medium|high|very-high]' : 'IMPROVE_NEEDED: [yes/no]'}
     `
       .replace(/^ {4}/gm, '')
@@ -3857,5 +3946,115 @@ query 5`;
       remaining: 100,
       resetDate: new Date(),
     };
+  }
+
+  /**
+   * Get recent web search results for a user (links only, not full content)
+   * @param userId The user ID
+   * @param limit Number of recent search results to return
+   * @returns Recent search results with source links
+   */
+  async getUserWebSearchResults(userId: string, limit = 10) {
+    // Get the most recent searches for this user
+    const searchResults = await this.prisma.webSearchResult.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      include: {
+        sources: {
+          select: {
+            id: true,
+            title: true,
+            url: true,
+            sourceType: true,
+            isImage: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    return searchResults.map((result) => ({
+      id: result.id,
+      query: result.query,
+      createdAt: result.createdAt,
+      sources: result.sources.map((source) => ({
+        id: source.id,
+        title: source.title || 'Untitled',
+        url: source.url,
+        sourceType: source.sourceType,
+        isImage: source.isImage,
+      })),
+    }));
+  }
+
+  /**
+   * Get a specific web search source by ID
+   * @param sourceId The source ID
+   * @returns The web search source with full content
+   */
+  async getWebSearchSourceById(sourceId: string) {
+    const source = await this.prisma.webSearchSource.findUnique({
+      where: {
+        id: sourceId,
+      },
+    });
+
+    if (!source) {
+      throw new Error('Source not found');
+    }
+
+    return source;
+  }
+
+  /**
+   * Determines if a message requires web search and extracts query
+   * @param message User message to analyze
+   * @returns Search query string or "no" if search not needed
+   */
+  private async getSearchQueryFromMessage(message: string): Promise<string> {
+    if (!message || message.length < 10) {
+      return 'no';
+    }
+
+    // Shortened prompt to reduce token usage
+    const prompt = `Evaluate if this message needs a web search: "${message}"
+     
+Output "no" if:
+- It's a greeting, small talk, or opinion
+- It's hypothetical or non-factual
+- It's a follow-up without new content
+
+Output 1-2 search queries (only keywords) if:
+- User asks about facts, events, or data
+- The question requires verification
+- It explicitly asks for a search
+
+Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
+
+    const aiResult = await this.aiWrapper.generateContent(
+      AIModels.Llama_4_Scout,
+      prompt,
+    );
+
+    let response = aiResult.content.trim();
+
+    // Early return if no search needed
+    if (response === 'no' || response.toLowerCase().includes('no search')) {
+      return 'no';
+    }
+
+    // Extract search queries (one per line)
+    const queries = response
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && line !== 'no');
+
+    // Return first query or "no" if none found
+    return queries.length > 0 ? queries[0] : 'no';
   }
 }
