@@ -76,6 +76,10 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.DeepseekV3_0324]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Gemini2_5_Pro_Open]: AI_PROVIDERS.OPENROUTER,
   [AIModels.DeepseekR1T]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Qwen3_32B]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Llama3_Ultra]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Qwen3_Mini]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.Qwen3_Ultra]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,

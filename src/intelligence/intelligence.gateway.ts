@@ -44,6 +44,9 @@ export class IntelligenceGateway
 
   private async handleStreamOutput(client: Socket, stream: any) {
     try {
+      let thinkingContents = []; // Create an array to collect thinking content
+      let messageContent = []; // Create an array to collect message content
+
       for await (const chunk of stream) {
         if (typeof chunk === 'string') {
           if (chunk.startsWith('__ERROR__')) {
@@ -61,6 +64,9 @@ export class IntelligenceGateway
               const thinkingContent = JSON.parse(
                 chunk.replace('__THINKING__', ''),
               );
+              // Store the thinking content for later
+              thinkingContents.push(thinkingContent.content);
+              // Still emit the thinking event for real-time display
               client.emit('chatThinking', {
                 content: thinkingContent.content,
               });
@@ -73,14 +79,33 @@ export class IntelligenceGateway
           ) {
             // Skip emitting these special messages
           } else {
+            // Add to the message content array
+            messageContent.push(chunk);
+            // Emit the chunk as normal
             client.emit('chatChunk', { content: chunk });
           }
         } else {
+          // Handle non-string chunks
+          messageContent.push(chunk);
           client.emit('chatChunk', { content: chunk });
         }
       }
 
-      client.emit('chatComplete', { status: 'done' });
+      // If we've collected thinking content, prepend it to the final message when complete
+      if (thinkingContents.length > 0) {
+        const completeThinking = thinkingContents.join('\n');
+        const formattedThinking = `<think>\n${completeThinking}\n</think>\n\n`;
+
+        // Emit the complete message with thinking prepended
+        client.emit('chatComplete', {
+          status: 'done',
+          thinking: completeThinking,
+          completeMessage: formattedThinking + messageContent.join(''),
+        });
+      } else {
+        client.emit('chatComplete', { status: 'done' });
+      }
+
       return true;
     } catch (error) {
       console.error('Stream processing error:', error);

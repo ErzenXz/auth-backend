@@ -24,6 +24,10 @@ export enum AIModels {
   Gemma_3_27B = 'google/gemma-3-27b-it:free',
   Reka_Flash_3 = 'rekaai/reka-flash-3:free',
   Gemini2_5_Pro_Open = 'google/gemini-2.5-pro-exp-03-25:free',
+  Qwen3_Ultra = 'qwen/qwen3-235b-a22b:free',
+  Qwen3_Mini = 'qwen/qwen3-30b-a3b:free',
+  Qwen3_32B = 'qwen/qwen3-32b:free',
+  Llama3_Ultra = 'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
 
   // Llama Models
   Mistral_Small_3_Instruct = 'accounts/fireworks/models/mistral-small-24b-instruct-2501',
