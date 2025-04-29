@@ -3699,6 +3699,45 @@ MEMORY GUIDELINES:
           };
         }
       },
+
+      thinking: async (thoughts: string) => {
+        try {
+          // Log the thinking process to the thread history
+          await this.prisma.aIThreadMessage.create({
+            data: {
+              chatId: currentThreadId,
+              role: 'system',
+              content: JSON.stringify({
+                type: 'thinking',
+                thoughts,
+                timestamp: new Date().toISOString(),
+              }),
+            },
+          });
+
+          functionExecutionResults.push({
+            tool: 'thinking',
+            success: true,
+          });
+
+          return {
+            status: 'success',
+            message: 'Thinking process recorded',
+            timestamp: new Date().toISOString(),
+          };
+        } catch (error) {
+          console.error(`Error recording thinking process:`, error);
+          functionExecutionResults.push({
+            tool: 'thinking',
+            error: String(error),
+          });
+          return {
+            status: 'error',
+            message: 'Failed to record thinking process',
+            error: String(error),
+          };
+        }
+      },
     };
 
     // 7. Build the system prompt with enhanced context
@@ -3754,6 +3793,9 @@ You can use the following tools by calling them exactly as shown:
 
 - **web_search**: Research information online
   Example: web_search("tailwind css responsive design")
+
+- **thinking**: Record your reasoning about what the user might want to do
+  Example: thinking("The user wants to build a portfolio site, so I should start by creating an HTML structure with key sections like header, about, projects, and contact")
 
 ## Guidelines
 - Understand the user's request thoroughly before taking action
@@ -4026,7 +4068,7 @@ Use your available tools to help solve the task efficiently.
 
     // Shortened prompt to reduce token usage
     const prompt = `Evaluate if this message needs a web search: "${message}"
-      
+     
 Output "no" if:
 - It's a greeting, small talk, or opinion
 - It's hypothetical or non-factual
