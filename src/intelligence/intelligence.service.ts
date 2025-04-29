@@ -3095,7 +3095,8 @@ MEMORY GUIDELINES:
     }
 
     // 2. Get or create a thread for conversation context
-    if (!threadId) {
+    let currentThreadId = threadId;
+    if (!currentThreadId) {
       const newThread = await this.prisma.aIThread.create({
         data: {
           title: `${message.split('\n')[0].slice(0, 50)}...`,
@@ -3103,10 +3104,10 @@ MEMORY GUIDELINES:
           projectId,
         },
       });
-      threadId = newThread.id;
+      currentThreadId = newThread.id;
     } else {
       const thread = await this.prisma.aIThread.findFirst({
-        where: { id: threadId, projectId },
+        where: { id: currentThreadId, projectId },
       });
       if (!thread) {
         throw new NotFoundException(
@@ -3115,820 +3116,711 @@ MEMORY GUIDELINES:
       }
     }
 
-    // 3. Retrieve conversation history to maintain context
+    // 3. Retrieve conversation history for context
     const previousMessages = await this.prisma.aIThreadMessage.findMany({
-      where: { chatId: threadId },
+      where: { chatId: currentThreadId },
       orderBy: { createdAt: 'asc' },
+      take: 100, // Limit history to recent messages
     });
-    const conversationHistory: ChatHistory[] = previousMessages.map((msg) => ({
+
+    const conversationHistory = previousMessages.map((msg) => ({
       role: msg.role,
       message: msg.content,
     }));
 
     const startTime = new Date().getTime();
 
-    // 4. Build project context from existing project data
-    const projectContext = {
-      projectName: project.name,
-      projectDescription: project.description,
-      files: project.files.map((file) => ({
-        name: file.name,
-        path: file.path,
-        content: file.currentVersion?.content,
-      })),
-    };
-
-    // 5. Initialize the state that will be updated at each agent step
-    let currentState: any = {
-      requirements: message,
-      projectContext,
-      plan: {},
-      generatedFiles: [],
-      validationErrors: [],
-      executionPlan: [],
-    };
-
-    // 6. Register the agent pipeline in strict order:
-    // Project Architecture -> File Generator -> File Validator -> Improvements -> Execution
-    const agentPipeline: Array<{
-      name: string;
-      execute: (
-        state: any,
-        history: ChatHistory[],
-        errorContext?: string,
-      ) => Promise<any>;
-    }> = [
-      {
-        name: 'project-architect',
-        execute: this.executeProjectArchitect.bind(this),
-      },
-      { name: 'file-generator', execute: this.executeFileGenerator.bind(this) },
-      { name: 'code-validator', execute: this.executeCodeValidator.bind(this) },
-      {
-        name: 'file-improvement',
-        execute: this.executeFileImprovement.bind(this),
-      },
-      {
-        name: 'execution-agent',
-        execute: this.executeExecutionAgent.bind(this),
-      },
-      // Optionally, add an image-generator agent here
-    ];
-
-    // 7. Process each agent in the pipeline sequentially
-    for (const agent of agentPipeline) {
-      let retries = 3;
-      let agentResponse: any;
-      let errorContext = '';
-
-      while (retries > 0) {
-        try {
-          agentResponse = await agent.execute(
-            currentState,
-            conversationHistory,
-            errorContext,
-          );
-          break;
-        } catch (e: any) {
-          retries--;
-          errorContext = e.message;
-          if (retries === 0) {
-            throw new Error(`Agent ${agent.name} failed: ${e.message}`);
-          }
-          await this.delay(1000);
-        }
-      }
-
-      // Update state based on agent response and log the step
-      currentState = this.processAgentResponse(
-        agent.name,
-        agentResponse,
-        currentState,
-      );
-      await this.saveAgentStep(threadId, agent.name, agentResponse);
-    }
-
-    // 8. Execute the final validated/improved plan
-    if (currentState.executionPlan && currentState.executionPlan.length > 0) {
-      await this.executeDevelopmentPlan(
-        projectId,
-        currentState.executionPlan,
-        userId,
-      );
-    }
-
-    // Add the user's message to the conversation history
+    // 4. Add the user's message to the conversation history
     await this.prisma.aIThreadMessage.create({
       data: {
-        chatId: threadId,
+        chatId: currentThreadId,
         role: 'user',
         content: message,
         createdAt: new Date(startTime),
       },
     });
 
-    return {
-      response: this.formatFinalResponse(currentState),
-      threadId,
-      actions: currentState.executionPlan,
-    };
-  }
+    // 5. Initialize agent state with project context
+    const projectFiles = project.files.map((file) => ({
+      id: file.id,
+      name: file.name,
+      path: file.path,
+      content: file.currentVersion?.content || '',
+      lastModified: file.currentVersion?.createdAt || new Date(),
+    }));
 
-  // Helper to create delays
-  private async delay(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+    // Model selection based on task complexity
+    const defaultModel = AIModels.GeminiFlash_2_5; // Default to Gemini Flash 2.5
 
-  // ---------- Agent Execution Functions ----------
-  private async executeProjectArchitect(
-    state: any,
-    history: ChatHistory[],
-    errorContext: string = '',
-    model?: AIModels,
-  ): Promise<any> {
-    const agentType = 'project-architect';
-    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
-    const result = await this.executeAgentWithRetry(
-      agentType,
-      agentPrompt,
-      history,
-      3,
-      model,
-    );
-    return this.parseStructuredResponse(result.content, agentType);
-  }
+    // Track function execution results
+    const functionExecutionResults = [];
 
-  private async executeFileGenerator(
-    state: any,
-    history: ChatHistory[],
-    errorContext: string = '',
-    model?: AIModels,
-  ): Promise<any> {
-    const agentType = 'file-generator';
-    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
-    const result = await this.executeAgentWithRetry(
-      agentType,
-      agentPrompt,
-      history,
-      3,
-      model,
-    );
-    return this.parseStructuredResponse(result.content, agentType);
-  }
+    // 6. Define function call schemas that our AI agent can use
+    const toolFunctions = {
+      codebase_search: async (query: string, targetDirs: string[] = []) => {
+        try {
+          // Implement semantic search across project files
+          const relevantFiles = projectFiles
+            .filter((file) => {
+              if (targetDirs.length === 0) return true;
+              return targetDirs.some((dir) => file.path.startsWith(dir));
+            })
+            .map((file) => ({
+              path: file.path,
+              content: file.content,
+              relevance: this.calculateRelevance(query, file.content),
+            }))
+            .sort((a, b) => b.relevance - a.relevance)
+            .slice(0, 5);
 
-  private async executeCodeValidator(
-    state: any,
-    history: ChatHistory[],
-    errorContext: string = '',
-    model?: AIModels,
-  ): Promise<any> {
-    const agentType = 'code-validator';
-    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
-    const result = await this.executeAgentWithRetry(
-      agentType,
-      agentPrompt,
-      history,
-      3,
-      model,
-    );
-    return this.parseStructuredResponse(result.content, agentType);
-  }
-
-  private async executeFileImprovement(
-    state: any,
-    history: ChatHistory[],
-    errorContext: string = '',
-    model?: AIModels,
-  ): Promise<any> {
-    const agentType = 'file-improvement';
-    // Only run file improvement if there are validation errors;
-    // otherwise, simply pass through the current generated files.
-    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
-    const result = await this.executeAgentWithRetry(
-      agentType,
-      agentPrompt,
-      history,
-      3,
-      model,
-    );
-    return this.parseStructuredResponse(result.content, agentType);
-  }
-
-  private async executeExecutionAgent(
-    state: any,
-    history: ChatHistory[],
-    errorContext: string = '',
-    model?: AIModels,
-  ): Promise<any> {
-    const agentType = 'execution-agent';
-    const agentPrompt = this.buildAgentPrompt(agentType, state, errorContext);
-    const result = await this.executeAgentWithRetry(
-      agentType,
-      agentPrompt,
-      history,
-      3,
-      model,
-    );
-    return this.parseStructuredResponse(result.content, agentType);
-  }
-
-  // ---------- Agent Communication & Validation ----------
-
-  /**
-   * Executes an agent call with retries. Uses your AI wrapper to generate content.
-   */
-  private async executeAgentWithRetry(
-    agent: string,
-    prompt: string,
-    history: ChatHistory[],
-    retriesLeft: number,
-    model?: AIModels,
-  ): Promise<AgentResponse> {
-    let attempt = 1;
-    const maxAttempts = 3;
-    // Use the provided model or fall back to Gemini
-    const selectedModel = model || AIModels.GeminiFlash_2_5;
-
-    while (attempt <= maxAttempts) {
-      try {
-        const result = await this.aiWrapper.generateContentHistory(
-          selectedModel,
-          `${prompt}\n\nAttempt ${attempt}/${maxAttempts}:`,
-          history,
-        );
-        // Validate response structure before returning
-        this.validateAgentResponse(agent, result.content);
-        return result;
-      } catch (error: any) {
-        if (attempt === maxAttempts) {
-          throw new Error(`Final attempt failed: ${error.message}`);
+          const result = { results: relevantFiles };
+          functionExecutionResults.push({
+            tool: 'codebase_search',
+            query,
+            result,
+          });
+          return result;
+        } catch (error) {
+          console.error('Error in codebase search:', error);
+          const errorResult = { error: String(error), results: [] };
+          functionExecutionResults.push({
+            tool: 'codebase_search',
+            query,
+            error: String(error),
+          });
+          return errorResult;
         }
-        // Provide corrective context for the next attempt
-        history.push({
-          role: 'system',
-          message: `Format correction needed: ${error.message}`,
-        });
-        attempt++;
-        await this.delay(500 * attempt);
-      }
-    }
-    throw new Error('Max retries exceeded');
-  }
+      },
 
-  // Validate agent response based on its type
-  private validateAgentResponse(agent: string, response: string) {
-    const parsed = this.parseStructuredResponse(response, agent);
-    switch (agent) {
-      case 'project-architect':
-        if (!parsed.plan || !parsed.plan.structure) {
-          throw new Error('Missing project structure in response');
+      read_file: async (
+        filePath: string,
+        startLine: number = 1,
+        endLine?: number,
+      ) => {
+        try {
+          const file = projectFiles.find((f) => f.path === filePath);
+          if (!file) {
+            const error = `File not found: ${filePath}`;
+            functionExecutionResults.push({
+              tool: 'read_file',
+              filePath,
+              error,
+            });
+            throw new NotFoundException(error);
+          }
+
+          const lines = file.content.split('\n');
+          const start = Math.max(0, startLine - 1);
+          const end = endLine ? Math.min(lines.length, endLine) : lines.length;
+
+          const content = lines.slice(start, end).join('\n');
+          const result = {
+            content,
+            totalLines: lines.length,
+            readLines: `${startLine}-${end}`,
+          };
+
+          functionExecutionResults.push({
+            tool: 'read_file',
+            filePath,
+            lines: `${startLine}-${end}`,
+            success: true,
+          });
+
+          return result;
+        } catch (error) {
+          console.error(`Error reading file ${filePath}:`, error);
+          functionExecutionResults.push({
+            tool: 'read_file',
+            filePath,
+            error: String(error),
+          });
+          throw error;
         }
-        break;
-      case 'file-generator':
-        if (!parsed.files || parsed.files.length === 0) {
-          throw new Error('No files generated in response');
+      },
+
+      run_terminal_cmd: async (
+        command: string,
+        isBackground: boolean = false,
+      ) => {
+        try {
+          // Log command execution (in production you'd implement actual execution)
+          const executionData = {
+            type: 'terminal',
+            command,
+            isBackground,
+            status: 'proposed',
+            timestamp: new Date().toISOString(),
+          };
+
+          await this.prisma.aIThreadMessage.create({
+            data: {
+              chatId: currentThreadId,
+              role: 'system',
+              content: JSON.stringify(executionData),
+            },
+          });
+
+          functionExecutionResults.push({
+            tool: 'run_terminal_cmd',
+            command,
+            status: 'proposed',
+          });
+
+          return {
+            status: 'proposed',
+            message: 'Command proposed for execution',
+            details: executionData,
+          };
+        } catch (error) {
+          console.error(`Error proposing terminal command:`, error);
+          functionExecutionResults.push({
+            tool: 'run_terminal_cmd',
+            command,
+            error: String(error),
+          });
+          return {
+            status: 'error',
+            message: `Failed to propose command: ${String(error)}`,
+          };
         }
-        break;
-      case 'code-validator':
-        if (!parsed.validation) {
-          throw new Error('Missing validation results');
+      },
+
+      list_dir: async (relativePath: string = '') => {
+        try {
+          // Group files by directories
+          const directoryMap = new Map<
+            string,
+            Array<{ name: string; type: 'file' | 'directory' }>
+          >();
+
+          projectFiles.forEach((file) => {
+            const parts = file.path.split('/');
+            const fileName = parts.pop() || '';
+            const dirPath = parts.join('/');
+
+            if (!directoryMap.has(dirPath)) {
+              directoryMap.set(dirPath, []);
+            }
+
+            directoryMap.get(dirPath)?.push({
+              name: fileName,
+              type: 'file',
+            });
+
+            // Add directories recursively
+            let currentPath = '';
+            for (const part of parts) {
+              const parentPath = currentPath;
+              currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+              if (!directoryMap.has(parentPath)) {
+                directoryMap.set(parentPath, []);
+              }
+
+              const parent = directoryMap.get(parentPath);
+              if (parent && !parent.some((item) => item.name === part)) {
+                parent.push({
+                  name: part,
+                  type: 'directory',
+                });
+              }
+            }
+          });
+
+          // Get contents for the requested path
+          const contents = directoryMap.get(relativePath) || [];
+          const result = {
+            path: relativePath,
+            contents,
+            timestamp: new Date().toISOString(),
+          };
+
+          functionExecutionResults.push({
+            tool: 'list_dir',
+            path: relativePath,
+            count: contents.length,
+          });
+
+          return result;
+        } catch (error) {
+          console.error(`Error listing directory ${relativePath}:`, error);
+          functionExecutionResults.push({
+            tool: 'list_dir',
+            path: relativePath,
+            error: String(error),
+          });
+          return {
+            path: relativePath,
+            contents: [],
+            error: String(error),
+          };
         }
-        break;
-      case 'file-improvement':
-        if (!parsed.files || parsed.files.length === 0) {
-          throw new Error('No file improvements provided');
+      },
+
+      grep_search: async (
+        query: string,
+        caseSensitive: boolean = false,
+        includePattern?: string,
+        excludePattern?: string,
+      ) => {
+        try {
+          const results: Array<{
+            path: string;
+            lineNumber: number;
+            line: string;
+          }> = [];
+          const regex = new RegExp(query, caseSensitive ? 'g' : 'gi');
+
+          for (const file of projectFiles) {
+            // Apply include/exclude patterns
+            if (includePattern && !new RegExp(includePattern).test(file.path))
+              continue;
+            if (excludePattern && new RegExp(excludePattern).test(file.path))
+              continue;
+
+            const lines = file.content.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+              if (regex.test(lines[i])) {
+                results.push({
+                  path: file.path,
+                  lineNumber: i + 1,
+                  line: lines[i],
+                });
+
+                if (results.length >= 50) break; // Cap at 50 results
+              }
+              regex.lastIndex = 0; // Reset regex state
+            }
+
+            if (results.length >= 50) break;
+          }
+
+          functionExecutionResults.push({
+            tool: 'grep_search',
+            query,
+            pattern: includePattern,
+            matchCount: results.length,
+          });
+
+          return {
+            matches: results,
+            count: results.length,
+            limitReached: results.length >= 50,
+          };
+        } catch (error) {
+          console.error(`Error in grep search:`, error);
+          functionExecutionResults.push({
+            tool: 'grep_search',
+            query,
+            error: String(error),
+          });
+          return {
+            matches: [],
+            error: String(error),
+          };
         }
-        break;
-      case 'execution-agent':
-        if (!parsed.actions || parsed.actions.length === 0) {
-          throw new Error('No execution actions provided');
-        }
-        break;
-      default:
-        throw new Error(`Unknown agent type: ${agent}`);
-    }
-  }
+      },
 
-  /**
-   * Builds an agent prompt based on the agent type and current state.
-   */
-  private buildAgentPrompt(
-    agentType: string,
-    state: any,
-    errorContext: string = '',
-  ): string {
-    // For file-improvement, use validation errors to guide corrections.
-    if (
-      agentType === 'file-improvement' &&
-      state.validationErrors &&
-      state.validationErrors.length > 0
-    ) {
-      return `
-        CORRECT THESE FILES:
-        ${state.validationErrors
-          .map(
-            (v: any) => `
-          File: ${v.filePath}
-          Issues:
-          ${v.issues.map((i: any) => `- [${i.type}] ${i.message}`).join('\n')}
-        `,
-          )
-          .join('\n')}
-  
-        INSTRUCTIONS:
-        1. Fix all reported errors while preserving the existing structure.
-        2. Enhance code readability and maintain style consistency.
-  
-        RESPONSE FORMAT:
-        {
-          "files": [{
-            "path": "string",
-            "content": "string",
-            "changesMade": ["string"]
-          }]
-        }
-      `;
-    }
+      edit_file: async (
+        filePath: string,
+        content: string,
+        description: string,
+      ) => {
+        try {
+          // Find existing file or create a new one
+          let existingFile = projectFiles.find((f) => f.path === filePath);
+          let fileId = existingFile?.id;
 
-    // For file-generator, instruct the agent to generate the full file content update
-    // whether creating new files or updating existing ones.
-    if (agentType === 'file-generator') {
-      return `
-        For each file defined in the project architecture:
-        - If the file does NOT exist in the Existing Files list, generate the full file content.
-        - If the file already exists, generate the full updated file content (do NOT output a diff).
-  
-        Respond with JSON in the following format:
-        {
-          "files": [{
-            "path": "string",
-            "content": "string", // Full file content update.
-            "action": "create|update", // "create" if file is new, "update" if file exists.
-            "dependencies": ["string"],
-            "validationChecks": ["html5", "css3", "responsive"]
-          }]
-        }
-      `;
-    }
-
-    // For project-architect, instruct the agent to produce a detailed project plan.
-    // In particular, for documentation files like readme.md, include detailed instructions.
-    if (agentType === 'project-architect') {
-      return `
-        You are an experienced project architect with a deep understanding of software engineering best practices. Your job is to analyze project requirements and provide a comprehensive, actionable development plan tailored to the request. Follow these instructions carefully:
-
-1. **Project Requirement Analysis:**  
-   - **Current Requirement:** "${state.requirements}"  
-   - **Example Context:** For instance, if the requirement is to build a notes app using React, identify key features (e.g., note creation, editing, deletion, tagging, and search), relevant UI/UX considerations, important dependencies (such as React libraries, state management tools, or routing frameworks), and any anticipated implementation challenges.
-
-2. **Context and File Handling:**  
-   - **Project Context Assessment:**  
-     $$
-     state.projectContext.files.length > 0 
-       ? '- Existing files are present: modify or update them as required.' 
-       : '- No existing files: propose a full project structure from scratch.'
-     $$
-   - **File Deletion or Modification Requests:**  
-     • For deletion or updates, first verify that the target files exist before planning file removal or changes.
-
-3. **Detailed Development Plan:**  
-   - **Structure:** Outline a file and folder structure plan where each entry includes:  
-     • A file or folder path  
-     • The type (file/folder)  
-     • The intended action (create/modify/delete)  
-     • A short description justifying the decision  
-   - **Dependencies:** List any libraries, frameworks, or external modules required.  
-   - **Challenges:** Identify any potential issues or challenges that might arise during development.
-
-4. **Handling Updates:**  
-   - For update requests, clearly define what requires updating. Analyze the current setup and explain what modifications will be made, including rationale.
-   
-5. **Response Format:**  
-   Your output must be in the following JSON format:
-   
-   $$
-   {
-     "plan": {
-       "structure": [
-         {
-           "path": "string",
-           "type": "file/folder",
-           "action": "create/modify/delete",
-           "description": "string"
-         }
-       ],
-       "dependencies": ["string"],
-       "challenges": ["string"]
-     }
-   }
-   $$
-   
-   Ensure that you strictly adhere to this JSON structure in your response.
-
-Remember, your goal is to offer clear and detailed guidance as if instructing another engineer, ensuring that each step of your plan is actionable and well-justified. Whether this is a new project or an update to an existing one, provide insight into exactly what needs to be done and why.
-
-      `;
-    }
-
-    const filePaths =
-      state.plan?.structure
-        ?.filter((f: any) => f?.type === 'file')
-        ?.map((f: any) => f.path) || [];
-
-    const baseContext = `
-      ${errorContext ? `ERROR CONTEXT: ${errorContext}` : ''}
-      Project: ${state.projectContext.projectName}
-      Existing Files: ${state.projectContext.files.map((f: any) => f.path).join(', ')}
-      Requirements: ${state.requirements}
-    `;
-
-    const agentPrompts: Record<string, string> = {
-      'code-validator': `
-        Validate all files using industry-standard best practices and conventions:
-          1. For HTML files:
-             - Ensure valid structure and semantic usage.
-             - Check for accessibility compliance.
-             - Verify responsive design principles.
-          2. For CSS files:
-             - Validate against latest CSS standards.
-             - Check for efficient and maintainable styling.
-             - Ensure cross-browser compatibility.
-          3. For JavaScript/TypeScript and any other code files:
-             - Verify adherence to modern standards.
-             - Check for proper error handling and code organization.
-             - Ensure performance optimization techniques are applied.
-          4. For documentation files (e.g., README.md):
-             - Verify completeness of project information.
-             - Check for clear and concise explanations.
-          5. For all other files not covered above:
-             - Ensure consistent code style and formatting.
-             - Check for potential security vulnerabilities.
-             - Verify proper commenting and documentation.
-  
-        Respond with:
-        {
-          "validation": [{
-            "filePath": "string",
-            "issues": [{
-              "type": "error/warning",
-              "line": "number",
-              "column": "number",
-              "rule": "string",
-              "message": "string",
-              "suggestion": "string"
-            }]
-          }]
-        }
-      `,
-      'execution-agent': `
-        Create an execution plan based on the improved files and validation results.
-        Format:
-        {
-          "actions": [{
-            "type": "create|update|revert|delete",
-            "filePath": "string",
-            "content": "string",
-            "commitMsg": "string"
-          }]
-        }
-      `,
-    };
-
-    return `${baseContext}
-    
-STRICT FORMATTING RULES:
-- Respond ONLY with valid JSON.
-- No additional text outside JSON.
-- Use exactly the specified structure.
-- Escape special characters properly.
-
-${agentPrompts[agentType] || ''}
-    
-STRICT FORMATTING RULES:
-- Respond ONLY with valid JSON.
-- No additional text outside JSON.
-- Use exactly the specified structure.
-- Escape special characters properly.
-`;
-  }
-
-  // ---------- Execution Plan & File Operations ----------
-
-  /**
-   * Executes the development plan by iterating through file actions.
-   * In a production system, these operations should be wrapped in a transaction.
-   */
-  private async executeDevelopmentPlan(
-    projectId: string,
-    actions: any[],
-    userId: string,
-  ) {
-    try {
-      for (const action of actions) {
-        switch (action.type) {
-          case 'create':
-            await this.createProjectFile(
-              projectId,
-              {
-                name: action.filePath.split('/').pop(),
-                path: action.filePath,
-                content: action.content,
-                commitMsg: action.commitMsg,
-              },
-              userId,
-            );
-            break;
-          case 'update':
-            const fileToUpdate = await this.getFileByPath(
-              projectId,
-              action.filePath,
-            );
+          if (existingFile) {
+            // Update existing file
             await this.updateProjectFile(
               projectId,
-              fileToUpdate.id,
+              fileId,
               {
-                content: action.content,
-                commitMsg: action.commitMsg,
+                content,
+                commitMsg: description,
               },
               userId,
             );
-            break;
-          case 'revert':
-            const fileToRevert = await this.getFileByPath(
+          } else {
+            // Create new file
+            const fileName = filePath.split('/').pop() || 'unnamed';
+            const result = await this.createProjectFile(
               projectId,
-              action.filePath,
-            );
-            await this.revertProjectFile(
-              projectId,
-              fileToRevert.id,
-              action.version,
-              action.commitMsg,
+              {
+                name: fileName,
+                path: filePath,
+                content,
+                commitMsg: description,
+              },
               userId,
             );
-            break;
-          case 'delete':
-            const fileToDelete = await this.getFileByPath(
-              projectId,
-              action.filePath,
-            );
-            await this.deleteProjectFile(projectId, fileToDelete.id, userId);
-            break;
-          default:
-            throw new Error(`Unknown action type: ${action.type}`);
-        }
-      }
-    } catch (e: any) {
-      // In production, consider rolling back the transaction here.
-      throw new Error(`Execution plan failed: ${e.message}`);
-    }
-  }
+            fileId = result.id;
+          }
 
-  // ---------- Response Parsing and Validation ----------
+          // Add the edit to the thread history
+          await this.prisma.aIThreadMessage.create({
+            data: {
+              chatId: currentThreadId,
+              role: 'system',
+              content: JSON.stringify({
+                type: 'file_edit',
+                path: filePath,
+                description,
+                timestamp: new Date().toISOString(),
+              }),
+            },
+          });
 
-  /**
-   * Parses and validates the JSON response returned by agents.
-   */
-  private parseStructuredResponse(response: string, agent: string): any {
-    try {
-      const cleaned = response
-        .replace(/```json/g, '')
-        .replace(/```/g, '')
-        .trim();
-      const parsed = JSON.parse(cleaned);
-      this.validateResponseStructure(agent, parsed);
-      return parsed;
-    } catch (e: any) {
-      throw new Error(`Invalid response format: ${e.message}`);
-    }
-  }
-
-  /**
-   * Validates that the JSON response adheres to the expected structure for each agent.
-   */
-  private validateResponseStructure(agent: string, response: any) {
-    const validators: Record<string, (res: any) => void> = {
-      'project-architect': (res) => {
-        if (!res.plan || !Array.isArray(res.plan.structure)) {
-          throw new Error('Invalid project structure format');
-        }
-      },
-      'file-generator': (res) => {
-        if (!Array.isArray(res.files) || res.files.some((f: any) => !f?.path)) {
-          throw new Error('Files array missing or invalid file paths');
-        }
-      },
-      'code-validator': (res) => {
-        if (!Array.isArray(res.validation)) {
-          throw new Error('Validation results must be an array');
-        }
-      },
-      'file-improvement': (res) => {
-        if (!Array.isArray(res.files) || res.files.some((f: any) => !f?.path)) {
-          throw new Error(
-            'Files array missing or invalid file paths in improvement response',
+          // Update our in-memory representation
+          const updatedFile = await this.getProjectFile(
+            projectId,
+            fileId,
+            userId,
           );
+          if (existingFile) {
+            const fileIndex = projectFiles.findIndex((f) => f.id === fileId);
+            if (fileIndex >= 0) {
+              projectFiles[fileIndex] = {
+                id: updatedFile.id,
+                name: updatedFile.name,
+                path: updatedFile.path,
+                content: updatedFile.currentVersion?.content || '',
+                lastModified:
+                  updatedFile.currentVersion?.createdAt || new Date(),
+              };
+            }
+          } else {
+            projectFiles.push({
+              id: updatedFile.id,
+              name: updatedFile.name,
+              path: updatedFile.path,
+              content: updatedFile.currentVersion?.content || '',
+              lastModified: updatedFile.currentVersion?.createdAt || new Date(),
+            });
+          }
+
+          const action = existingFile ? 'updated' : 'created';
+          functionExecutionResults.push({
+            tool: 'edit_file',
+            filePath,
+            action,
+            success: true,
+          });
+
+          return {
+            status: 'success',
+            path: filePath,
+            fileId,
+            action,
+          };
+        } catch (error) {
+          console.error(`Error editing file ${filePath}:`, error);
+          functionExecutionResults.push({
+            tool: 'edit_file',
+            filePath,
+            error: String(error),
+          });
+          return {
+            status: 'error',
+            path: filePath,
+            error: String(error),
+          };
         }
       },
-      'execution-agent': (res) => {
-        if (!Array.isArray(res.actions)) {
-          throw new Error('Actions must be an array');
+
+      file_search: async (query: string) => {
+        try {
+          const fuzzyResults = projectFiles
+            .map((file) => ({
+              path: file.path,
+              score: this.calculateFuzzyScore(query, file.path),
+            }))
+            .filter((result) => result.score > 0.3) // Minimum similarity threshold
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10); // Limit to 10 results
+
+          functionExecutionResults.push({
+            tool: 'file_search',
+            query,
+            matchCount: fuzzyResults.length,
+          });
+
+          return {
+            results: fuzzyResults,
+            count: fuzzyResults.length,
+          };
+        } catch (error) {
+          console.error(`Error in file search:`, error);
+          functionExecutionResults.push({
+            tool: 'file_search',
+            query,
+            error: String(error),
+          });
+          return {
+            results: [],
+            error: String(error),
+          };
+        }
+      },
+
+      delete_file: async (filePath: string) => {
+        try {
+          const fileToDelete = projectFiles.find((f) => f.path === filePath);
+          if (!fileToDelete) {
+            const error = `File not found: ${filePath}`;
+            functionExecutionResults.push({
+              tool: 'delete_file',
+              filePath,
+              error,
+            });
+            return {
+              status: 'error',
+              message: error,
+            };
+          }
+
+          await this.deleteProjectFile(projectId, fileToDelete.id, userId);
+
+          // Update our in-memory representation
+          const fileIndex = projectFiles.findIndex(
+            (f) => f.id === fileToDelete.id,
+          );
+          if (fileIndex >= 0) {
+            projectFiles.splice(fileIndex, 1);
+          }
+
+          // Log deletion in thread
+          await this.prisma.aIThreadMessage.create({
+            data: {
+              chatId: currentThreadId,
+              role: 'system',
+              content: JSON.stringify({
+                type: 'file_delete',
+                path: filePath,
+                timestamp: new Date().toISOString(),
+              }),
+            },
+          });
+
+          functionExecutionResults.push({
+            tool: 'delete_file',
+            filePath,
+            success: true,
+          });
+
+          return {
+            status: 'success',
+            path: filePath,
+          };
+        } catch (error) {
+          console.error(`Error deleting file ${filePath}:`, error);
+          functionExecutionResults.push({
+            tool: 'delete_file',
+            filePath,
+            error: String(error),
+          });
+          return {
+            status: 'error',
+            path: filePath,
+            error: String(error),
+          };
+        }
+      },
+
+      web_search: async (query: string) => {
+        try {
+          const results = await this.browserService.aiSearch(query, userId);
+
+          functionExecutionResults.push({
+            tool: 'web_search',
+            query,
+            success: true,
+          });
+
+          return {
+            results,
+            timestamp: new Date().toISOString(),
+          };
+        } catch (error) {
+          console.error(`Error in web search:`, error);
+          functionExecutionResults.push({
+            tool: 'web_search',
+            query,
+            error: String(error),
+          });
+          return {
+            status: 'error',
+            message: 'Web search failed or is unavailable',
+            error: String(error),
+          };
         }
       },
     };
 
-    if (validators[agent]) {
-      validators[agent](response);
-    }
-  }
+    // 7. Build the system prompt with enhanced context
+    const systemPrompt = `
+# AI Coding Agent
 
-  /**
-   * Updates the system state based on an agent's response.
-   */
-  private processAgentResponse(
-    agent: string,
-    agentResponse: any,
-    currentState: any,
-  ): any {
-    const newState = { ...currentState };
-    switch (agent) {
-      case 'project-architect':
-        newState.plan = agentResponse.plan || { structure: [] };
-        break;
-      case 'file-generator':
-        newState.generatedFiles = agentResponse.files || [];
-        break;
-      case 'code-validator':
-        newState.validationErrors = Array.isArray(agentResponse.validation)
-          ? agentResponse.validation.filter(
-              (v: any) => v.issues && v.issues.length > 0,
-            )
-          : [];
-        break;
-      case 'file-improvement':
-        newState.generatedFiles =
-          agentResponse.files || newState.generatedFiles;
-        break;
-      case 'execution-agent':
-        newState.executionPlan = agentResponse.actions || [];
-        break;
-    }
-    return newState;
-  }
+You are an advanced AI coding agent that helps users build software projects. Your capabilities include:
 
-  // ---------- Logging & Storage Helpers ----------
+1. Reading and understanding project files
+2. Creating new files or modifying existing ones 
+3. Proposing terminal commands to compile, test, or run the code
+4. Searching the web for relevant information
+5. Using semantic and regex search to navigate the codebase
 
-  /**
-   * Saves the agent's response to the thread for auditing purposes.
-   */
-  private async saveAgentStep(
-    threadId: string,
-    agent: string,
-    response: any,
-  ): Promise<void> {
-    await this.prisma.aIThreadMessage.create({
-      data: {
-        chatId: threadId,
-        content: JSON.stringify({
-          agent,
-          response: this.sanitizeForStorage(response),
-        }),
-        role: 'system',
-        createdAt: new Date(),
-      },
-    });
-  }
+## Project Context
+Project Name: ${project.name}
+Description: ${project.description || 'No description provided'}
+Files: ${project.files.length} file(s)
 
-  /**
-   * Sanitizes the response before storing to avoid saving sensitive data.
-   */
-  private sanitizeForStorage(response: any): any {
-    const clone = { ...response };
-    if (clone.files) {
-      clone.files = clone.files.map((f: any) => ({
-        ...f,
-        content: f.content ? `<content length=${f.content.length}>` : null,
-      }));
-    }
-    return clone;
-  }
+## Available Tools
+- **codebase_search**: Find relevant code snippets using semantic search
+- **read_file**: View contents of a specific file
+- **run_terminal_cmd**: Propose terminal commands to execute
+- **list_dir**: List contents of a directory
+- **grep_search**: Search for patterns across files
+- **edit_file**: Create or modify files
+- **file_search**: Find files by name
+- **delete_file**: Remove files from the project
+- **web_search**: Research information online
 
-  /**
-   * Formats a final response message summarizing the execution outcome.
-   */
-  private formatFinalResponse(currentState: any): string {
-    const allIssues = currentState.validationErrors.flatMap(
-      (v: any) => v.issues?.map((i: any) => i.message) || [],
-    );
+## Guidelines
+- Understand the user's request thoroughly before taking action
+- Take a strategic, step-by-step approach to solving problems
+- When editing code, maintain consistent style with the existing codebase
+- Provide clear explanations of your actions
+- Never execute terminal commands without user approval
+- Always validate your code changes for correctness
 
-    return `✅ Successfully executed ${currentState.executionPlan.length} actions:\n${currentState.executionPlan
-      .map((a: any) => `• ${a.type} ${a.filePath}`)
-      .join('\n')}`;
-  }
+Please respond to the user's request: "${message}"
 
-  // ---------- Project File Operation Helpers ----------
+Use your available tools to help solve the task efficiently.
+`;
 
-  private async getFileByPath(
-    projectId: string,
-    filePath: string,
-  ): Promise<any> {
-    const file = await this.prisma.aIProjectFile.findFirst({
-      where: {
-        projectId,
-        path: filePath,
-      },
-    });
-
-    if (file) {
-      return file;
-    }
-
-    return null; // Return null if no file is found
-  }
-
-  // Add this new method for extracting research queries from a message
-  async extractResearchQueries(message: string): Promise<string[]> {
-    const prompt = `SYSTEM: You are a search query generator. Generate exactly 5 search queries for researching the user's question.
-
-INSTRUCTIONS:
-1. Output ONLY the search queries
-2. DO NOT include any explanatory text, lists, numbers, or quotes
-3. DO NOT use phrases like "here are" or "search for"
-4. Each query must be on a separate line
-5. Each query must be distinct and specific
-6. Cover different aspects of the user's question
-7. Make each query 3-8 words long for optimal search results
-
-USER QUESTION: "${message}"
-
-RESPONSE FORMAT:
-query 1
-query 2
-query 3
-query 4
-query 5`;
-
-    // Use direct AI call instead of potentially creating DB records
-    const aiResult = await this.aiWrapper.generateContent(
-      AIModels.Llama_4_Scout,
-      prompt,
-    );
-
-    // Process the response to extract only the queries
-    const queries = aiResult.content
-      .split('\n')
-      .map((q) => q.trim())
-      // Remove any lines that aren't actual queries
-      .filter(
-        (q) =>
-          q.length > 0 &&
-          !q.startsWith('query') &&
-          !q.startsWith('Search') &&
-          !q.startsWith('Here') &&
-          !q.includes('"') && // Remove any lines with quotes
-          !q.match(/^\d+\./), // Remove numbered list items
-      )
-      .slice(0, 5); // Limit to 5 queries max
-
-    // If we got fewer than 5 queries, still return what we have
-    return queries;
-  }
-
-  // Find the performBrowsing method
-  async performBrowsing(
-    query: string,
-    emitCallback?: Function,
-    userId?: string,
-  ): Promise<any> {
     try {
-      // Call aiSearchStream with userId
-      return await this.browserService.aiSearchStream(
-        query,
-        userId,
-        emitCallback,
+      // 8. Process user's request using the AI model with function calling
+      const response = await this.aiWrapper.generateContent(
+        defaultModel,
+        systemPrompt,
+        conversationHistory,
       );
-    } catch (error) {
-      console.error('Error in performBrowsing:', error);
-      throw error;
+
+      // Process response and extract function calls
+      // In a real implementation, you would parse function calls from the response
+      // For now, we'll use a simplified approach
+      const processedResponse = {
+        content: response.content,
+        functionCalls: [],
+      };
+
+      // Log executed functions for context tracking
+      if (functionExecutionResults.length > 0) {
+        await this.prisma.aIThreadMessage.create({
+          data: {
+            chatId: currentThreadId,
+            role: 'system',
+            content: JSON.stringify({
+              type: 'function_execution_log',
+              executions: functionExecutionResults,
+            }),
+            createdAt: new Date(),
+          },
+        });
+      }
+
+      // 9. Save AI response to thread
+      await this.prisma.aIThreadMessage.create({
+        data: {
+          chatId: currentThreadId,
+          role: 'assistant',
+          content: response.content,
+          createdAt: new Date(),
+        },
+      });
+
+      // 10. Return the processed response with detailed contextual information
+      return {
+        response: response.content,
+        threadId: currentThreadId,
+        functionCalls: processedResponse.functionCalls,
+        executedFunctions: functionExecutionResults,
+        projectContext: {
+          name: project.name,
+          description: project.description,
+          fileCount: projectFiles.length,
+        },
+      };
+    } catch (error: any) {
+      // Enhanced error logging and handling
+      console.error('Agent pipeline error:', error);
+      const errorDetails = {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.prisma.aIThreadMessage.create({
+        data: {
+          chatId: currentThreadId,
+          role: 'system',
+          content: JSON.stringify({
+            type: 'error',
+            details: errorDetails,
+          }),
+          createdAt: new Date(),
+        },
+      });
+
+      return {
+        response:
+          "I encountered an error while processing your request. Please try again or provide more details about what you're trying to accomplish.",
+        threadId: currentThreadId,
+        error: errorDetails,
+        executedFunctions: functionExecutionResults,
+      };
     }
   }
 
-  // Find the performDirectSearch method
-  async performDirectSearch(query: string, userId?: string): Promise<any> {
-    try {
-      // Call aiSearch with userId
-      return await this.browserService.aiSearch(query, userId);
-    } catch (error) {
-      console.error('Error in performDirectSearch:', error);
-      throw error;
+  // Helper to calculate fuzzy search relevance
+  private calculateFuzzyScore(query: string, text: string): number {
+    query = query.toLowerCase();
+    text = text.toLowerCase();
+
+    // Simple fuzzy matching algorithm
+    let score = 0;
+    let lastFoundIndex = -1;
+
+    for (const char of query) {
+      const index = text.indexOf(char, lastFoundIndex + 1);
+      if (index === -1) continue;
+
+      score += 1;
+      lastFoundIndex = index;
     }
+
+    return score / Math.max(query.length, text.length);
   }
 
-  // Add this method to expose aiSearchStream functionality
-  async generateDirectContent(
-    model: AIModels,
-    prompt: string,
-  ): Promise<AIResponse> {
-    return this.aiWrapper.generateContent(model, prompt);
+  // Helper to calculate semantic search relevance
+  private calculateRelevance(query: string, content: string): number {
+    // Simple TF-IDF style relevance calculation
+    const queryTerms = query.toLowerCase().split(/\s+/);
+    let score = 0;
+
+    for (const term of queryTerms) {
+      if (term.length < 3) continue; // Skip short terms
+
+      const regex = new RegExp(term, 'gi');
+      const matches = content.match(regex);
+      if (matches) {
+        score += matches.length * (term.length / 10); // Longer term matches are more significant
+      }
+    }
+
+    return (score / content.length) * 10000; // Normalize by content length
   }
 
   /**
@@ -4012,6 +3904,50 @@ query 5`;
   }
 
   /**
+   * Find the performBrowsing method
+   */
+  async performBrowsing(
+    query: string,
+    emitCallback?: Function,
+    userId?: string,
+  ): Promise<any> {
+    try {
+      // Call aiSearchStream with userId
+      return await this.browserService.aiSearchStream(
+        query,
+        userId,
+        emitCallback,
+      );
+    } catch (error) {
+      console.error('Error in performBrowsing:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find the performDirectSearch method
+   */
+  async performDirectSearch(query: string, userId?: string): Promise<any> {
+    try {
+      // Call aiSearch with userId
+      return await this.browserService.aiSearch(query, userId);
+    } catch (error) {
+      console.error('Error in performDirectSearch:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add this method to expose aiSearchStream functionality
+   */
+  async generateDirectContent(
+    model: AIModels,
+    prompt: string,
+  ): Promise<AIResponse> {
+    return this.aiWrapper.generateContent(model, prompt);
+  }
+
+  /**
    * Determines if a message requires web search and extracts query
    * @param message User message to analyze
    * @returns Search query string or "no" if search not needed
@@ -4023,7 +3959,7 @@ query 5`;
 
     // Shortened prompt to reduce token usage
     const prompt = `Evaluate if this message needs a web search: "${message}"
-     
+      
 Output "no" if:
 - It's a greeting, small talk, or opinion
 - It's hypothetical or non-factual
@@ -4037,7 +3973,7 @@ Output 1-2 search queries (only keywords) if:
 Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
 
     const aiResult = await this.aiWrapper.generateContent(
-      AIModels.Llama_4_Scout,
+      AIModels.GeminiFlash_2_5,
       prompt,
     );
 
@@ -4056,5 +3992,53 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
 
     // Return first query or "no" if none found
     return queries.length > 0 ? queries[0] : 'no';
+  }
+
+  // Add this new method for extracting research queries from a message
+  async extractResearchQueries(message: string): Promise<string[]> {
+    const prompt = `SYSTEM: You are a search query generator. Generate exactly 5 search queries for researching the user's question.
+
+INSTRUCTIONS:
+1. Output ONLY the search queries
+2. DO NOT include any explanatory text, lists, numbers, or quotes
+3. DO NOT use phrases like "here are" or "search for"
+4. Each query must be on a separate line
+5. Each query must be distinct and specific
+6. Cover different aspects of the user's question
+7. Make each query 3-8 words long for optimal search results
+
+USER QUESTION: "${message}"
+
+RESPONSE FORMAT:
+query 1
+query 2
+query 3
+query 4
+query 5`;
+
+    // Use direct AI call instead of potentially creating DB records
+    const aiResult = await this.aiWrapper.generateContent(
+      AIModels.GeminiFlash_2_5,
+      prompt,
+    );
+
+    // Process the response to extract only the queries
+    const queries = aiResult.content
+      .split('\n')
+      .map((q) => q.trim())
+      // Remove any lines that aren't actual queries
+      .filter(
+        (q) =>
+          q.length > 0 &&
+          !q.startsWith('query') &&
+          !q.startsWith('Search') &&
+          !q.startsWith('Here') &&
+          !q.includes('"') && // Remove any lines with quotes
+          !q.match(/^\d+\./), // Remove numbered list items
+      )
+      .slice(0, 5); // Limit to 5 queries max
+
+    // If we got fewer than 5 queries, still return what we have
+    return queries;
   }
 }
