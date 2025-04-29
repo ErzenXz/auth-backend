@@ -7,11 +7,19 @@ import { AiWrapperService } from '../providers/ai-wrapper.service';
 import { AIResponse } from '../models/ai-wrapper.types';
 import { AIModels } from '../enums/models.enum';
 import { UsageService } from '../usage/usage.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
 
 @Injectable()
 export class BrowserService {
   private readonly concurrencyLimit = 25;
   private activeRequests = 0;
+  // Content limits to prevent excessive data
+  private readonly MAX_CONTENT_LENGTH = 10000; // 10k chars per source
+  private readonly MAX_TOTAL_CONTENT_LENGTH = 50000; // 50k chars total across all sources
+  private readonly MAX_SOURCES = 10; // Max number of sources to process
+
   private readonly userAgents = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -28,6 +36,7 @@ export class BrowserService {
     private readonly cacheService: XCacheService,
     private readonly aiWrapperService: AiWrapperService,
     private readonly usageService: UsageService,
+    private readonly prisma: PrismaService, // Added PrismaService for DB operations
   ) {}
 
   private getRandomUserAgent(): string {
@@ -46,6 +55,472 @@ export class BrowserService {
     }
   }
 
+  // Improved text extraction using both Cheerio and Readability
+  private extractText(html: string, url: string): string {
+    try {
+      // First try Mozilla's Readability for high-quality article extraction
+      const dom = new JSDOM(html, { url });
+      const reader = new Readability(dom.window.document);
+      const article = reader.parse();
+
+      if (article && article.textContent) {
+        // Clean and trim readability content to our max size
+        const readabilityContent = article.textContent
+          .replace(/\s+/g, ' ')
+          .trim()
+          .substring(0, this.MAX_CONTENT_LENGTH);
+
+        if (readabilityContent.length > 500) {
+          // If we got substantial content, use that
+          const title = article.title ? `# ${article.title}\n\n` : '';
+          return title + readabilityContent;
+        }
+      }
+
+      // Fallback to our custom cheerio extraction if readability didn't work well
+      const $ = cheerio.load(html);
+
+      // Remove unwanted elements that clutter content
+      $(
+        'script, style, nav, header, footer, form, iframe, aside, .ads, #ads, .advertisement, .popup, .modal, .overlay, .cookie-banner, .newsletter, .sidebar, .social-share, .comments, .related-posts, noscript',
+      ).remove();
+
+      // Priority content selectors from most to least specific
+      const contentSelectors = [
+        'article',
+        'main',
+        '[role="main"]',
+        '.post-content',
+        '.article-content',
+        '.entry-content',
+        '.content',
+        '#content',
+        'section.content',
+        '.article-body',
+        '.story-body',
+        '.post-body',
+        '.page-content',
+        '.main-content',
+        '.story',
+      ];
+
+      // Extract structured content with headings preserved
+      let structuredContent = '';
+      let mainContent = '';
+      let fallbackContent = '';
+
+      // Try to find the main content container
+      for (const selector of contentSelectors) {
+        const elements = $(selector);
+        if (elements.length) {
+          // Process each matching element
+          elements.each((_, element) => {
+            // Preserve heading hierarchy
+            $(element)
+              .find('h1, h2, h3, h4, h5, h6')
+              .each((_, heading) => {
+                const tagName = $(heading).prop('tagName').toLowerCase();
+                const level = parseInt(tagName.substring(1));
+                const headingText = $(heading).text().trim();
+                if (headingText.length > 0) {
+                  structuredContent += `${'#'.repeat(level)} ${headingText}\n\n`;
+                }
+              });
+
+            // Process paragraphs
+            $(element)
+              .find('p')
+              .each((_, para) => {
+                const text = $(para).text().trim();
+                if (text.length > 0) {
+                  structuredContent += `${text}\n\n`;
+                }
+              });
+
+            // Process lists
+            $(element)
+              .find('ul, ol')
+              .each((_, list) => {
+                $(list)
+                  .find('li')
+                  .each((idx, item) => {
+                    const text = $(item).text().trim();
+                    if (text.length > 0) {
+                      structuredContent += `- ${text}\n`;
+                    }
+                  });
+                structuredContent += '\n';
+              });
+
+            // If we didn't get structured content, get all text as fallback
+            if (structuredContent.length === 0) {
+              const text = $(element).text().replace(/\s+/g, ' ').trim();
+              mainContent += `${text}\n\n`;
+            }
+          });
+
+          // If we found content in this selector, break the loop
+          if (structuredContent.length > 0 || mainContent.length > 0) {
+            break;
+          }
+        }
+      }
+
+      // If we didn't find content in specific selectors, extract from body as fallback
+      if (structuredContent.length === 0 && mainContent.length === 0) {
+        fallbackContent = $('body').text().replace(/\s+/g, ' ').trim();
+      }
+
+      // Extract images with alt text and captions
+      const images = [];
+      $('img').each((_, img) => {
+        const src = $(img).attr('src');
+        let alt = $(img).attr('alt') || '';
+        const title = $(img).attr('title') || '';
+
+        // Use title as alt if alt is empty but title exists
+        if (!alt && title) alt = title;
+
+        // Only include images with source and some description
+        if (src && (alt || title) && this.isValidUrl(src)) {
+          images.push(`![${alt || 'Image'}](${src})`);
+        }
+      });
+
+      // Combine all content, prioritizing structured content
+      let finalContent = structuredContent || mainContent || fallbackContent;
+
+      // If we have images, add them (but limit to 5)
+      if (images.length > 0) {
+        finalContent += '\n\n### Images\n\n' + images.slice(0, 5).join('\n\n');
+      }
+
+      // Truncate to maximum content length
+      return finalContent.substring(0, this.MAX_CONTENT_LENGTH);
+    } catch (error) {
+      console.error('Error extracting text from HTML:', error);
+      return 'Error extracting content from webpage';
+    }
+  }
+
+  // Improved search function that executes searches in parallel
+  async aiSearchStream(
+    query: string,
+    userId: string,
+    emitCallback?: Function,
+  ): Promise<any> {
+    // Check usage limits before proceeding
+    if (userId) {
+      const hasAvailableUsage =
+        await this.usageService.checkAndIncrementUsage(userId);
+      if (!hasAvailableUsage) {
+        if (emitCallback) {
+          emitCallback({
+            status: 'error',
+            message:
+              'You have reached your monthly search limit. Please upgrade your plan for more searches.',
+            code: 'USAGE_LIMIT_REACHED',
+          });
+        }
+
+        throw new HttpException(
+          'You have reached your monthly search limit. Please upgrade your plan for more searches.',
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
+
+    // Sanitize the query by removing quotes to prevent JSON parsing issues
+    const sanitizedQuery = query.replace(/^["']|["']$/g, '');
+    let sources = [];
+    let contents = [];
+    const timestamp = new Date().toISOString();
+
+    try {
+      // Emit status updates if a callback is provided
+      if (emitCallback) {
+        emitCallback({
+          status: 'searching',
+          message: `Searching for "${sanitizedQuery}"...`,
+        });
+      }
+
+      // Execute all search methods in parallel for better performance
+      const searchPromises = [
+        // Tavily search for high-quality AI-optimized results
+        this.searchTavily(sanitizedQuery).catch((error) => {
+          console.error('Tavily search error:', error);
+          return null;
+        }),
+
+        // Wikipedia search for factual information
+        this.searchWikipedia(sanitizedQuery).catch((error) => {
+          console.error('Wikipedia search error:', error);
+          return [];
+        }),
+
+        // DuckDuckGo search for web results
+        this.searchDuckDuckGo(sanitizedQuery).catch((error) => {
+          console.error('DuckDuckGo search error:', error);
+          return [];
+        }),
+      ];
+
+      // Start all search operations in parallel
+      const [tavilyResponse, wikipediaResults, duckDuckGoResults] =
+        await Promise.all(searchPromises);
+
+      // Process Tavily results with status updates
+      if (emitCallback) {
+        emitCallback({
+          status: 'tavily_search',
+          message: 'Processing Tavily results...',
+        });
+      }
+
+      // Process Tavily response if available
+      if (tavilyResponse) {
+        // Process Tavily text results
+        if (tavilyResponse.results && Array.isArray(tavilyResponse.results)) {
+          tavilyResponse.results.forEach((result) => {
+            if (result && result.url) {
+              // Add to sources for the final response
+              sources.push({
+                title: result.title || 'Tavily Result',
+                url: result.url,
+                content: result.content || '',
+                source: 'tavily',
+                isImage: false,
+              });
+
+              // Add to contents for processing
+              contents.push({
+                url: result.url,
+                title: result.title || 'Tavily Result',
+                content: result.content || '',
+                source: 'tavily',
+                isImage: false,
+              });
+            }
+          });
+        }
+
+        // Process Tavily image results
+        if (tavilyResponse.images && Array.isArray(tavilyResponse.images)) {
+          tavilyResponse.images.forEach((imageUrl) => {
+            if (imageUrl) {
+              // Add to sources for the final response
+              sources.push({
+                title: 'Image from Tavily',
+                url: imageUrl,
+                content: `![Image](${imageUrl})`,
+                source: 'tavily_image',
+                isImage: true,
+              });
+            }
+          });
+        }
+
+        // Notify client about Tavily search completion
+        if (emitCallback) {
+          emitCallback({
+            status: 'tavily_complete',
+            message: `Found ${tavilyResponse?.results?.length || 0} results and ${tavilyResponse?.images?.length || 0} images.`,
+            rawTavilyData: tavilyResponse,
+          });
+        }
+      }
+
+      // Process Wikipedia and DuckDuckGo results
+      if (emitCallback) {
+        emitCallback({
+          status: 'additional_search',
+          message: 'Processing additional sources...',
+        });
+      }
+
+      // Combine all search results
+      const additionalResults = [
+        ...(wikipediaResults || []),
+        ...(duckDuckGoResults || []),
+      ].filter(Boolean);
+
+      // Get unique URLs from the additional results (limit to MAX_SOURCES)
+      const uniqueUrls = Array.from(
+        new Set(additionalResults.map((r) => r.url)),
+      ).slice(0, this.MAX_SOURCES);
+
+      // Fetch and process URL content in parallel with timeouts
+      const fetchPromises = uniqueUrls.map((url) => {
+        return this.dynamicTimeout(
+          this.fetchContentForAI(url),
+          15000,
+          `Timeout fetching ${url}`,
+        )
+          .then((content) => {
+            const sourceType = wikipediaResults.some((r) => r.url === url)
+              ? 'wikipedia'
+              : 'duckduckgo';
+
+            // Stream fetched content as it completes
+            if (emitCallback) {
+              emitCallback({
+                status: 'fetched',
+                message: `Fetched content from ${url}`,
+                source: sourceType,
+                content: {
+                  title: content.title || 'Search Result',
+                  url: url,
+                  content: content.content || '',
+                  source: sourceType,
+                  isImage: false,
+                },
+              });
+            }
+
+            // Add to the sources array
+            sources.push({
+              title: content.title || 'Search Result',
+              url: url,
+              content: content.content || '',
+              source: sourceType,
+              isImage: false,
+            });
+
+            return {
+              url,
+              ...content,
+              source: sourceType,
+              isImage: false,
+            };
+          })
+          .catch((error) => {
+            console.error(`Error fetching content for ${url}:`, error.message);
+            return null;
+          });
+      });
+
+      // Execute all fetch operations in parallel
+      const additionalContents = await Promise.allSettled(fetchPromises);
+
+      // Process results and add valid contents
+      additionalContents.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          contents.push(result.value);
+        }
+      });
+
+      // Complete the additional search phase
+      if (emitCallback) {
+        emitCallback({
+          status: 'additional_search_complete',
+          message: `Found ${contents.filter(Boolean).length} total sources.`,
+        });
+      }
+
+      // Save search results to database
+      if (userId) {
+        try {
+          // Use transaction to ensure both records get created
+          const dbResult = await this.prisma.$transaction(async (prisma) => {
+            // Create the main search result record
+            const searchResult = await prisma.webSearchResult.create({
+              data: {
+                query: sanitizedQuery,
+                userId: userId,
+                searchResults:
+                  sources.length > 0
+                    ? { sources: sources }
+                    : { noResults: true },
+              },
+            });
+
+            // Create individual source records
+            if (sources.length > 0) {
+              await Promise.all(
+                sources.slice(0, this.MAX_SOURCES).map((source) => {
+                  // Limit content to prevent database issues
+                  const limitedContent =
+                    source.content?.substring(0, this.MAX_CONTENT_LENGTH) || '';
+
+                  return prisma.webSearchSource.create({
+                    data: {
+                      searchResultId: searchResult.id,
+                      title: source.title || null,
+                      url: source.url,
+                      sourceType: source.source || 'unknown',
+                      content: limitedContent,
+                      isImage: source.isImage || false,
+                    },
+                  });
+                }),
+              );
+            }
+
+            return searchResult;
+          });
+
+          console.log(
+            `Saved search results to database with ID: ${dbResult.id}`,
+          );
+        } catch (dbError) {
+          console.error('Error saving search results to database:', dbError);
+          // Don't fail the search if database saving fails
+        }
+      }
+
+      // Ensure the total content size doesn't exceed our max
+      let totalContentLength = 0;
+      const prunedSources = sources.filter((source) => {
+        // Skip images from the content length calculation
+        if (source.isImage) return true;
+
+        // Calculate the new total including this source
+        const newTotal = totalContentLength + (source.content?.length || 0);
+
+        // If adding this source would exceed our maximum, skip it
+        if (newTotal > this.MAX_TOTAL_CONTENT_LENGTH) return false;
+
+        // Otherwise include it and update our total
+        totalContentLength = newTotal;
+        return true;
+      });
+
+      // Return the final result with all sources
+      const result = {
+        query: sanitizedQuery,
+        sources: prunedSources,
+        timestamp: timestamp,
+      };
+
+      if (emitCallback) {
+        emitCallback({
+          status: 'completed',
+          message: 'Search completed.',
+          result: result,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error in aiSearchStream:', error);
+
+      if (emitCallback) {
+        emitCallback({
+          status: 'error',
+          message: 'Error performing search. Please try again.',
+        });
+      }
+
+      return {
+        query: sanitizedQuery,
+        sources: sources,
+        timestamp: timestamp,
+        error: error.message,
+      };
+    }
+  }
+
   async fetchAndProcessUrl(url: string): Promise<AIResponse> {
     const cacheKey = `url:${url}`;
     const cachedResponse = await this.cacheService.getCache(cacheKey);
@@ -61,7 +536,7 @@ export class BrowserService {
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
         },
       });
-      const text = this.extractText(data);
+      const text = this.extractText(data, url);
       const aiResponse = await this.processWithAI(text);
 
       await this.cacheService.setCache(cacheKey, JSON.stringify(aiResponse));
@@ -93,7 +568,7 @@ export class BrowserService {
           },
           timeout: 8777,
         });
-        return this.extractText(data);
+        return this.extractText(data, url);
       } catch (urlError) {}
     });
 
@@ -108,70 +583,6 @@ export class BrowserService {
     const aiResponse = await this.processWithAI(combinedText, query);
     await this.cacheService.setCache(cacheKey, JSON.stringify(aiResponse));
     return aiResponse;
-  }
-
-  private extractText(html: string): string {
-    const $ = cheerio.load(html);
-
-    const contentSelectors = [
-      'article',
-      'main',
-      '.content',
-      '#content',
-      'section',
-      '.post-content',
-      '.entry-content',
-      '.article-body',
-    ];
-
-    let content = '';
-    let mediaContent = [];
-
-    for (const selector of contentSelectors) {
-      const elements = $(selector);
-      if (elements.length) {
-        elements.each((_, element) => {
-          // Remove unwanted elements
-          $(element)
-            .find(
-              'script, style, nav, header, footer, form, iframe, .ads, #ads, .advertisement, .popup, .modal, .overlay, .cookie-banner, .newsletter, .sidebar, .social-share, .comments, .related-posts',
-            )
-            .remove();
-
-          // Extract images
-          $(element)
-            .find('img')
-            .each((_, img) => {
-              const src = $(img).attr('src');
-              const alt = $(img).attr('alt') || 'image';
-              if (src) mediaContent.push(`![${alt}](${src})`);
-            });
-
-          // Extract links
-          $(element)
-            .find('a')
-            .each((_, link) => {
-              const href = $(link).attr('href');
-              const text = $(link).text().trim();
-              if (href && text) mediaContent.push(`[${text}](${href})`);
-            });
-
-          // Extract text
-          const text = $(element).text().replace(/\s+/g, ' ').trim();
-          content += `${text} `;
-
-          if (content.length > 5000) return false;
-        });
-        if (content) break;
-      }
-    }
-
-    // Combine text and media content
-    const finalContent = [content.trim(), ...mediaContent.slice(0, 10)].join(
-      '\n',
-    );
-
-    return finalContent;
   }
 
   private async performSearch(query: string): Promise<string[]> {
@@ -454,7 +865,7 @@ ${text}
     ).remove();
 
     const title = $('title').text().trim();
-    const mainContent = this.extractText(data);
+    const mainContent = this.extractText(data, url);
     const summary = mainContent.split(' ').slice(0, 400).join(' ') + '...';
 
     return {
@@ -567,7 +978,7 @@ ${text}
       keywords: $('meta[name="keywords"]').attr('content') || '',
     };
 
-    const content = this.extractText(html);
+    const content = this.extractText(html, '');
     const links = this.extractLinks($);
     const images = this.extractImages($);
 
@@ -612,246 +1023,13 @@ ${text}
     }
   }
 
-  async aiSearchStream(
-    query: string,
-    userId: string,
-    emitCallback?: Function,
-  ): Promise<any> {
-    // Check usage limits before proceeding
-    if (userId) {
-      const hasAvailableUsage =
-        await this.usageService.checkAndIncrementUsage(userId);
-      if (!hasAvailableUsage) {
-        if (emitCallback) {
-          emitCallback({
-            status: 'error',
-            message:
-              'You have reached your monthly search limit. Please upgrade your plan for more searches.',
-            code: 'USAGE_LIMIT_REACHED',
-          });
-        }
-
-        throw new HttpException(
-          'You have reached your monthly search limit. Please upgrade your plan for more searches.',
-          HttpStatus.PAYMENT_REQUIRED,
-        );
-      }
-    }
-
-    // Sanitize the query by removing quotes to prevent JSON parsing issues
-    const sanitizedQuery = query.replace(/^["']|["']$/g, '');
-    let sources = [];
-    let contents = [];
-    const timestamp = new Date().toISOString();
-    let tavilyResponse = null;
-
-    try {
-      // Emit status updates if a callback is provided
-      if (emitCallback) {
-        emitCallback({
-          status: 'searching',
-          message: `Searching for "${sanitizedQuery}"...`,
-        });
-      }
-
-      // 1. Start with a Tavily search
-      if (emitCallback) {
-        emitCallback({
-          status: 'tavily_search',
-          message: 'Searching Tavily...',
-        });
-      }
-
-      try {
-        tavilyResponse = await this.searchTavily(sanitizedQuery);
-
-        // Debug logs for Tavily response
-        console.log(`Tavily search for "${sanitizedQuery}" returned:`);
-        console.log(`- Text results: ${tavilyResponse?.results?.length || 0}`);
-        console.log(`- Images: ${tavilyResponse?.images?.length || 0}`);
-
-        // Process Tavily text results
-        if (tavilyResponse?.results && Array.isArray(tavilyResponse.results)) {
-          tavilyResponse.results.forEach((result) => {
-            if (result && result.url) {
-              // Add to sources for the final response
-              sources.push({
-                title: result.title || 'Tavily Result',
-                url: result.url,
-                content: result.content || '',
-                source: 'tavily',
-              });
-
-              // Add to contents for processing
-              contents.push({
-                url: result.url,
-                title: result.title || 'Tavily Result',
-                content: result.content || '',
-                source: 'tavily',
-              });
-            }
-          });
-        }
-
-        // Process Tavily image results
-        if (tavilyResponse?.images && Array.isArray(tavilyResponse.images)) {
-          tavilyResponse.images.forEach((imageUrl) => {
-            if (imageUrl) {
-              // Add to sources for the final response
-              sources.push({
-                title: 'Image from Tavily',
-                url: imageUrl,
-                content: `![Image](${imageUrl})`,
-                source: 'tavily_image',
-              });
-            }
-          });
-        }
-
-        // Notify client about Tavily search completion
-        if (emitCallback) {
-          emitCallback({
-            status: 'tavily_complete',
-            message: `Found ${tavilyResponse?.results?.length || 0} results and ${tavilyResponse?.images?.length || 0} images.`,
-            rawTavilyData: tavilyResponse,
-          });
-        }
-      } catch (error) {
-        console.error('Tavily search error:', error);
-        if (emitCallback) {
-          emitCallback({
-            status: 'error',
-            message: 'Error during Tavily search.',
-          });
-        }
-      }
-
-      // 2. Continue with additional searches (Wikipedia and DuckDuckGo)
-      if (emitCallback) {
-        emitCallback({
-          status: 'additional_search',
-          message: 'Searching additional sources...',
-        });
-      }
-
-      try {
-        // Fetch results from DuckDuckGo and Wikipedia
-        const [duckDuckGoResults, wikipediaResults] = await Promise.all([
-          this.searchDuckDuckGo(sanitizedQuery),
-          this.searchWikipedia(sanitizedQuery),
-        ]);
-
-        // Combine all search results
-        const additionalResults = [
-          ...(duckDuckGoResults || []),
-          ...(wikipediaResults || []),
-        ].filter(Boolean);
-
-        // Get unique URLs from the additional results
-        const uniqueUrls = Array.from(
-          new Set(additionalResults.map((r) => r.url)),
-        ).slice(0, 5);
-
-        // Process content for these URLs
-        const additionalContents = await Promise.all(
-          uniqueUrls.map(async (url) => {
-            try {
-              const content = await this.fetchContentForAI(url);
-              const sourceType = wikipediaResults.some((r) => r.url === url)
-                ? 'wikipedia'
-                : 'duckduckgo';
-
-              // Add to the sources array
-              sources.push({
-                title: content.title || 'Search Result',
-                url: url,
-                content: content.content || '',
-                source: sourceType,
-              });
-
-              return {
-                url,
-                ...content,
-                source: sourceType,
-              };
-            } catch (error) {
-              console.error(`Error fetching content for ${url}:`, error);
-              return null;
-            }
-          }),
-        );
-
-        // Add valid additional contents to the contents array
-        contents.push(...additionalContents.filter(Boolean));
-
-        if (emitCallback) {
-          emitCallback({
-            status: 'additional_search_complete',
-            message: `Found ${additionalContents.filter(Boolean).length} additional results.`,
-          });
-        }
-      } catch (error) {
-        console.error('Error in additional searches:', error);
-        if (emitCallback) {
-          emitCallback({
-            status: 'warning',
-            message:
-              'Some additional searches failed, but continuing with available results.',
-          });
-        }
-      }
-
-      // Log the sources collected for debugging
-      console.log('Sources collected:');
-      console.log(
-        `- Tavily text results: ${sources.filter((s) => s.source === 'tavily').length}`,
-      );
-      console.log(
-        `- Tavily images: ${sources.filter((s) => s.source === 'tavily_image').length}`,
-      );
-      console.log(
-        `- Wikipedia: ${sources.filter((s) => s.source === 'wikipedia').length}`,
-      );
-      console.log(
-        `- DuckDuckGo: ${sources.filter((s) => s.source === 'duckduckgo').length}`,
-      );
-      console.log(
-        `- Other: ${sources.filter((s) => !['tavily', 'tavily_image', 'wikipedia', 'duckduckgo'].includes(s.source)).length}`,
-      );
-      console.log(`Total sources: ${sources.length}`);
-
-      // Return the final result with all sources
-      const result = {
-        query: sanitizedQuery,
-        sources: sources,
-        timestamp: timestamp,
-      };
-
-      if (emitCallback) {
-        emitCallback({
-          status: 'completed',
-          message: 'Search completed.',
-          result: result,
-        });
-      }
-
-      return result;
-    } catch (error) {
-      console.error('Error in aiSearchStream:', error);
-
-      if (emitCallback) {
-        emitCallback({
-          status: 'error',
-          message: 'Error performing search. Please try again.',
-        });
-      }
-
-      return {
-        query: sanitizedQuery,
-        sources: sources,
-        timestamp: timestamp,
-        error: error.message,
-      };
-    }
+  // Add this helper method to dynamically import and use p-timeout
+  private async dynamicTimeout<T>(
+    promise: Promise<T>,
+    milliseconds: number,
+    message: string,
+  ): Promise<T> {
+    const pTimeout = (await import('p-timeout')).default;
+    return pTimeout(promise, { milliseconds, message });
   }
 }

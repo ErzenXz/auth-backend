@@ -733,8 +733,7 @@ Example Matching:
       }
     }
 
-    // Existing setup code
-
+    // Create thread if needed
     if (!chatId) {
       const newThread = await this.prisma.aIThread.create({
         data: {
@@ -744,38 +743,57 @@ Example Matching:
       chatId = newThread.id;
     }
 
-    const [userChatHistory, userMemories, searchData, userInstructions] =
-      await Promise.all([
-        this.prisma.aIThreadMessage.findMany({
-          where: { chatId },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        }),
-        this.chatGetUserMemories(message, userId),
-        this.chatGetSearchData(message, userId),
-        this.chatGetUserInstructions(userId),
-      ]);
+    // Start loading chat history first
+    const historyPromise = this.prisma.aIThreadMessage.findMany({
+      where: { chatId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
 
-    // Reverse to get chronological order
-    userChatHistory.reverse();
+    // Get memories first for immediate use
+    const userMemories = await this.chatGetUserMemories(message, userId);
 
-    const formattedHistory: ChatHistory[] = userChatHistory.map((msg) => ({
-      role: msg.role,
-      message: msg.content,
-    }));
-
-    const generalInfo = this.chatGetGeneralInfo();
-    // Run memory extraction in background without awaiting or blocking the response
-    this.extractAndSaveMemory(message, userId, userMemories).catch((error) =>
-      console.error('Memory extraction error:', error),
+    // Start thread title update in background without blocking
+    this.chatGetThreadTitle(chatId, message).catch((err) =>
+      console.error('Error updating thread title:', err),
     );
 
+    // Load other context data in parallel
+    const contextPromises = Promise.all([
+      this.chatGetSearchData(message, userId),
+      this.chatGetUserInstructions(userId),
+      historyPromise,
+    ]);
+
+    const generalInfo = this.chatGetGeneralInfo();
     const selectedModel = Object.values(AIModels).includes(model)
       ? model
       : AIModels.Gemini;
 
     // Create combined generator
     const combinedGenerator = async function* () {
+      // Start by yielding chatId immediately
+      yield `__CHATID__${chatId}__`;
+
+      // Wait for history and context data
+      const [searchData, userInstructions, userChatHistory] =
+        await contextPromises;
+
+      // Format chat history
+      const formattedHistory: ChatHistory[] = [...userChatHistory]
+        .reverse()
+        .map((msg) => ({
+          role: msg.role,
+          message: msg.content,
+        }));
+
+      // Schedule memory extraction for later - don't block response generation
+      setTimeout(() => {
+        this.extractAndSaveMemory(message, userId, userMemories).catch(
+          (error) => console.error('Memory extraction error:', error),
+        );
+      }, 100);
+
       let thinkingContent = '';
 
       if (reasoning) {
@@ -842,21 +860,21 @@ Example Matching:
         systemPromptToUse = undefined;
       }
 
-      // Generate and stream final answer
-      const [streamResponse] = await Promise.all([
-        this.aiWrapper.generateContentStreamHistory(
-          selectedModel,
-          promptToUse,
-          formattedHistory,
-          systemPromptToUse,
-        ),
-        this.prisma.aIThreadMessage.create({
+      // Create user message in database
+      this.prisma.aIThreadMessage
+        .create({
           data: { chatId, content: message, role: 'user' },
-        }),
-      ]);
+        })
+        .catch((err) => console.error('Error saving user message:', err));
 
-      // Yield chatId and response chunks
-      yield `__CHATID__${chatId}__`;
+      // Generate and stream final answer
+      const streamResponse = await this.aiWrapper.generateContentStreamHistory(
+        selectedModel,
+        promptToUse,
+        formattedHistory,
+        systemPromptToUse,
+      );
+
       let fullResponse = '';
       for await (const chunk of streamResponse.content) {
         fullResponse += chunk;
@@ -864,13 +882,12 @@ Example Matching:
         await new Promise((r) => setImmediate(r));
       }
 
-      // Save final response
-      await Promise.all([
-        this.prisma.aIThreadMessage.create({
+      // Save final response after streaming completes
+      this.prisma.aIThreadMessage
+        .create({
           data: { chatId, content: fullResponse, role: 'model' },
-        }),
-        this.chatGetThreadTitle(chatId, message),
-      ]);
+        })
+        .catch((err) => console.error('Error saving model response:', err));
     }.bind(this)();
 
     return combinedGenerator;
@@ -979,26 +996,34 @@ Example Matching:
       ? model
       : AIModels.Gemini;
 
-    this.chatGetThreadTitle(chatId, message);
+    // Start thread title generation in background - don't block
+    this.chatGetThreadTitle(chatId, message).catch((err) =>
+      console.error('Error generating thread title:', err),
+    );
 
     // Only fetch what's needed - simplify context for better performance
-    const [userMemories, searchData, userInstructions] = await Promise.all([
-      this.chatGetUserMemories(message, userId),
+    // Get user memories first for immediate use, but load other data in parallel
+    const userMemories = await this.chatGetUserMemories(message, userId);
+
+    // Trigger other context data loading in parallel
+    const contextPromises = Promise.all([
       this.chatGetSearchData(message),
       this.chatGetUserInstructions(userId),
     ]);
 
     const generalInfo = this.chatGetGeneralInfo();
-    // Run memory extraction in background without awaiting or blocking the response
-    this.extractAndSaveMemory(message, userId, userMemories).catch((error) =>
-      console.error('Memory extraction error:', error),
-    );
 
     // Create combined generator without buffering the entire response
     const combinedGenerator = async function* () {
+      // Start by yielding the chatId immediately
+      yield `__CHATID__${chatId}__`;
+
       // If system prompt is provided, use it directly
       let promptToUse = message;
       let systemPromptToUse = systemPrompt;
+
+      // Await context data (which should be loading while we set up)
+      const [searchData, userInstructions] = await contextPromises;
 
       // If no system prompt is provided, generate one with our tools
       if (!systemPromptToUse) {
@@ -1012,9 +1037,6 @@ Example Matching:
         systemPromptToUse = undefined;
       }
 
-      console.log(promptToUse);
-      console.log(formattedHistory);
-
       // Start generating and streaming final answer right away
       const streamResponse = this.aiWrapper.generateContentStreamHistory(
         selectedModel,
@@ -1023,8 +1045,12 @@ Example Matching:
         systemPromptToUse,
       );
 
-      // First yield the chatId
-      yield `__CHATID__${chatId}__`;
+      // Start memory extraction in background completely async - don't block or wait
+      setTimeout(() => {
+        this.extractAndSaveMemory(message, userId, userMemories).catch(
+          (error) => console.error('Memory extraction error:', error),
+        );
+      }, 100);
 
       let fullResponse = '';
       for await (const chunk of (await streamResponse).content) {
@@ -1489,25 +1515,31 @@ Begin your response now to the user_message above.
     }
 
     const extractionPrompt = `
-You are extracting key facts from a user's message to maintain their memory. 
+You are a robotic memory extraction system analyzing human messages to build a comprehensive user profile.
 Current memories: ${memories}
 
 User message: "${message}"
 
-Extract only NEW explicitly mentioned information in JSON format:
+As a robot optimized for memory storage:
+1. Extract ONLY factual information that would be valuable for future interactions
+2. Prioritize data about user preferences, facts, goals, and personal details
+3. PRESERVE all important memories, only suggest removal if directly contradicted
+
+Extract in this JSON format:
 {
   "add": [
-    {"key": "KeyName", "value": "Concise value (max 40 chars)"}
+    {"key": "CamelCaseKey", "value": "Concise value (max 40 chars)"}
   ],
-  "remove": ["KeyToRemove"]
+  "remove": ["OnlyRemoveIfExplicitlyOutdated"]
 }
 
-Rules:
-- Only extract facts EXPLICITLY stated (not implied)
-- Keep values under 40 characters
-- Only return valid JSON (no explanation text)
-- Only include memory updates if present
-- For outdated information, include the old key in "remove" array
+MEMORY GUIDELINES:
+- Only extract explicitly stated facts (not implications)
+- Format keys as CamelCase without spaces 
+- Keep values concise but informative (40 chars max)
+- NEVER discard valuable memories unless directly contradicted
+- Focus on preserving useful details about the user
+- Return only valid JSON, no explanation text
 `;
 
     try {
@@ -3726,17 +3758,25 @@ STRICT FORMATTING RULES:
 
   // Add this new method for extracting research queries from a message
   async extractResearchQueries(message: string): Promise<string[]> {
-    const prompt = `You are an expert researcher. Generate 2-3 distinct, specific search queries to thoroughly research the following user question. Focus on diverse aspects of the question to gather comprehensive information.
-    
-    Your queries should:
-    1. Be specific enough to yield precise results
-    2. Cover different aspects of the user's question
-    3. Use different keywords and phrasings
-    4. NOT include any sensitive or personal data
-    
-    Output ONLY the search queries, each on a separate line.
-    
-    User question: "${message}"`;
+    const prompt = `SYSTEM: You are a search query generator. Generate exactly 5 search queries for researching the user's question.
+
+INSTRUCTIONS:
+1. Output ONLY the search queries
+2. DO NOT include any explanatory text, lists, numbers, or quotes
+3. DO NOT use phrases like "here are" or "search for"
+4. Each query must be on a separate line
+5. Each query must be distinct and specific
+6. Cover different aspects of the user's question
+7. Make each query 3-8 words long for optimal search results
+
+USER QUESTION: "${message}"
+
+RESPONSE FORMAT:
+query 1
+query 2
+query 3
+query 4
+query 5`;
 
     // Use direct AI call instead of potentially creating DB records
     const aiResult = await this.aiWrapper.generateContent(
@@ -3744,11 +3784,24 @@ STRICT FORMATTING RULES:
       prompt,
     );
 
-    return aiResult.content
+    // Process the response to extract only the queries
+    const queries = aiResult.content
       .split('\n')
       .map((q) => q.trim())
-      .filter((q) => q.length > 0)
-      .slice(0, 3); // Limit to 3 queries max
+      // Remove any lines that aren't actual queries
+      .filter(
+        (q) =>
+          q.length > 0 &&
+          !q.startsWith('query') &&
+          !q.startsWith('Search') &&
+          !q.startsWith('Here') &&
+          !q.includes('"') && // Remove any lines with quotes
+          !q.match(/^\d+\./), // Remove numbered list items
+      )
+      .slice(0, 5); // Limit to 5 queries max
+
+    // If we got fewer than 5 queries, still return what we have
+    return queries;
   }
 
   // Find the performBrowsing method

@@ -75,12 +75,45 @@ model User {
   AIProject             AIProject[]             @relation("ProjectOwner")
   Agent                 Agent[]
   searchUsage           UserSearchUsage[]
+  searchResults         WebSearchResult[]       @relation("UserSearches")
 
   @@index([email])
   @@index([username])
   @@index([role])
   @@index([username, email])
   @@index([username, email, role])
+}
+
+// Add model for storing web search results
+model WebSearchResult {
+  id            String            @id @default(uuid())
+  query         String
+  userId        String
+  user          User              @relation("UserSearches", fields: [userId], references: [id])
+  searchResults Json              @db.JsonB // Stores all search results
+  createdAt     DateTime          @default(now())
+  sources       WebSearchSource[]
+
+  @@index([userId])
+  @@index([query])
+  @@index([createdAt])
+}
+
+// Model to store individual sources from search results
+model WebSearchSource {
+  id             String          @id @default(uuid())
+  searchResultId String
+  searchResult   WebSearchResult @relation(fields: [searchResultId], references: [id], onDelete: Cascade)
+  title          String?
+  url            String
+  sourceType     String // "tavily", "wikipedia", "duckduckgo", etc.
+  content        String          @db.Text // The extracted content
+  isImage        Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+
+  @@index([searchResultId])
+  @@index([sourceType])
+  @@index([url])
 }
 
 model RefreshToken {
