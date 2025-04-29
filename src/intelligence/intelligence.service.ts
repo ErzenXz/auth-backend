@@ -3425,38 +3425,81 @@ MEMORY GUIDELINES:
       edit_file: async (
         filePath: string,
         content: string,
-        description: string,
+        description: string = 'File edit',
       ) => {
         try {
           // Find existing file or create a new one
           let existingFile = projectFiles.find((f) => f.path === filePath);
           let fileId = existingFile?.id;
+          let action = '';
 
           if (existingFile) {
             // Update existing file
+            action = 'updated';
             await this.updateProjectFile(
               projectId,
               fileId,
               {
                 content,
-                commitMsg: description,
+                commitMsg: description || 'Updated by AI agent',
               },
               userId,
             );
           } else {
             // Create new file
+            action = 'created';
             const fileName = filePath.split('/').pop() || 'unnamed';
-            const result = await this.createProjectFile(
-              projectId,
-              {
-                name: fileName,
-                path: filePath,
-                content,
-                commitMsg: description,
-              },
-              userId,
-            );
-            fileId = result.id;
+            try {
+              const result = await this.createProjectFile(
+                projectId,
+                {
+                  name: fileName,
+                  path: filePath,
+                  content,
+                  commitMsg: description || 'Created by AI agent',
+                },
+                userId,
+              );
+              fileId = result.id;
+            } catch (createError) {
+              // If file already exists but wasn't in our in-memory cache
+              if (createError?.response?.message?.includes('already exists')) {
+                // Get the file from the database
+                const files = await this.listProjectFiles(projectId, userId);
+                const dbFile = files.find((f) => f.path === filePath);
+
+                if (dbFile) {
+                  fileId = dbFile.id;
+                  action = 'updated';
+                  // Update the existing file
+                  await this.updateProjectFile(
+                    projectId,
+                    fileId,
+                    {
+                      content,
+                      commitMsg: description || 'Updated by AI agent',
+                    },
+                    userId,
+                  );
+
+                  // Create a proper projectFile entry for our in-memory cache
+                  existingFile = {
+                    id: dbFile.id,
+                    name: dbFile.name,
+                    path: dbFile.path,
+                    content: dbFile.currentVersion?.content || '',
+                    lastModified:
+                      dbFile.currentVersion?.createdAt || new Date(),
+                  };
+                } else {
+                  // Still couldn't find the file, pass the original error
+                  throw createError;
+                }
+              } else {
+                // Other error, pass it through
+                throw createError;
+              }
+            }
           }
 
           // Add the edit to the thread history
@@ -3501,7 +3544,6 @@ MEMORY GUIDELINES:
             });
           }
 
-          const action = existingFile ? 'updated' : 'created';
           functionExecutionResults.push({
             tool: 'edit_file',
             filePath,
@@ -3677,15 +3719,41 @@ Description: ${project.description || 'No description provided'}
 Files: ${project.files.length} file(s)
 
 ## Available Tools
+You can use the following tools by calling them exactly as shown:
+
 - **codebase_search**: Find relevant code snippets using semantic search
+  Example: codebase_search("search query", ["optional/target/directory"])
+
 - **read_file**: View contents of a specific file
+  Example: read_file("path/to/file.js", 1, 100)
+
 - **run_terminal_cmd**: Propose terminal commands to execute
+  Example: run_terminal_cmd("npm install express", false)
+
 - **list_dir**: List contents of a directory
+  Example: list_dir("src/components")
+
 - **grep_search**: Search for patterns across files
+  Example: grep_search("function searchPattern", true)
+
 - **edit_file**: Create or modify files
+  To use this tool, format your response like:
+  \`\`\`tool_code
+  edit_file
+  \`\`\`
+  **File: filename.ext**
+  \`\`\`language
+  file content goes here
+  \`\`\`
+
 - **file_search**: Find files by name
+  Example: file_search("component")
+
 - **delete_file**: Remove files from the project
+  Example: delete_file("path/to/file.js")
+
 - **web_search**: Research information online
+  Example: web_search("tailwind css responsive design")
 
 ## Guidelines
 - Understand the user's request thoroughly before taking action
@@ -3702,18 +3770,17 @@ Use your available tools to help solve the task efficiently.
 
     try {
       // 8. Process user's request using the AI model with function calling
-      const response = await this.aiWrapper.generateContent(
+      const response = await this.aiWrapper.generateFunctionCallingContent(
         defaultModel,
         systemPrompt,
         conversationHistory,
+        toolFunctions,
       );
 
       // Process response and extract function calls
-      // In a real implementation, you would parse function calls from the response
-      // For now, we'll use a simplified approach
       const processedResponse = {
         content: response.content,
-        functionCalls: [],
+        functionCalls: response.functionCalls || [],
       };
 
       // Log executed functions for context tracking
