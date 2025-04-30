@@ -2702,6 +2702,43 @@
         ]
       }
     },
+    "/intelligence/search/results": {
+      "get": {
+        "operationId": "IntelligenceController_getWebSearchResults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/search/source/{id}": {
+      "get": {
+        "operationId": "IntelligenceController_getWebSearchSource",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
     "/tts/convert": {
       "get": {
         "operationId": "TextToSpeechController_convert",

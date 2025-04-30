@@ -3287,6 +3287,10 @@ MEMORY GUIDELINES:
       },
 
       list_dir: async (relativePath: string = '') => {
+        if (relativePath === '.') {
+          relativePath = '';
+        }
+
         try {
           // Group files by directories
           const directoryMap = new Map<
