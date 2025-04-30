@@ -7,7 +7,6 @@ import { EncryptionService } from './encryption.service';
 import { MessagingGateway } from './messaging.gateway';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { CustomEventEmitterModule } from 'src/services/event-emitter.module';
 
 @Module({
   imports: [
@@ -23,7 +22,6 @@ import { CustomEventEmitterModule } from 'src/services/event-emitter.module';
       }),
       inject: [ConfigService],
     }),
-    CustomEventEmitterModule,
   ],
   providers: [MessagingService, EncryptionService, MessagingGateway],
   controllers: [MessagingController],
