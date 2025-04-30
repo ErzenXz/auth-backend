@@ -1661,7 +1661,7 @@ MEMORY GUIDELINES:
 
     try {
       const aiResponse = await this.aiWrapper.generateContent(
-        AIModels.Llama_4_Scout, // Use a faster model
+        AIModels.Gemini, // Use a faster model
         extractionPrompt,
       );
 
