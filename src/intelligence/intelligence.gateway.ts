@@ -614,64 +614,134 @@ export class IntelligenceGateway
     }
   }
 
+  /**
+   * Creates a sophisticated system prompt incorporating research results to guide an AI
+   * towards generating a high-quality, comprehensive, and well-cited answer.
+   * Uses a generic type for research results as provided in the original context.
+   *
+   * @param existingPrompt - A potential existing prompt or conversation context. If provided, the research block is appended.
+   * @param researchResults - An array of objects (typed as any[]) containing the fetched research data. Each object is expected to potentially have `title`, `url`, `content`, `source`.
+   * @param userQuestion - The specific question the user asked, which the research aims to answer.
+   * @returns A string containing the complete system prompt for the AI.
+   */
   private createResearchPrompt(
     existingPrompt: string,
     researchResults: any[],
     userQuestion: string,
   ): string {
-    // Extract and format the research results
+    // --- 1. Format Research Results for Clarity ---
     const formattedResults = researchResults
       .map((result, index) => {
-        const sourceType = result.source ? ` (${result.source})` : '';
-        let resultContent = result.content || '';
+        // Access properties dynamically from the 'any' type object
+        const citationNumber = index + 1;
+        const source = result.source; // Get source to check type
+        const isImage = source === 'tavily_image';
 
-        // Special handling for image results
-        if (result.source === 'tavily_image') {
-          return `[${index + 1}] Image${sourceType}: ${result.url}\n${resultContent}\n`;
+        // Use a descriptive title, fallback if missing
+        const title =
+          result.title ||
+          (isImage
+            ? `Image Result ${citationNumber}`
+            : `Source ${citationNumber}`);
+        // Safely include URL
+        const urlPart = result.url ? ` (${result.url})` : '';
+        // Indicate if it's an image source clearly
+        const imageTag = isImage ? '[Image]' : '';
+        // Provide informative fallback for content
+        let content =
+          result.content ||
+          (isImage
+            ? `Visual information source.`
+            : 'Content snippet not available.');
+        // Avoid redundancy if content is just the URL for an image
+        if (isImage && result.content === result.url) {
+          content = `Visual information provided at the URL. Describe relevant aspects based on the URL or title if possible.`;
         }
 
-        return `[${index + 1}] ${result.title || 'Source'} - ${result.url}${sourceType}:\n${resultContent}\n`;
+        // Construct the entry for this source
+        // Using a distinct header for each source
+        return `
+### [${citationNumber}] ${imageTag} ${title}${urlPart}
+${content}
+`;
       })
-      .join('\n');
+      // Use a very clear separator between source entries
+      .join(
+        '\n\n==================== SOURCE SEPARATOR ====================\n\n',
+      );
 
-    // Base research prompt with improved instructions
-    const researchPrompt = `
-RESEARCH RESULTS
----------------
-The following information has been gathered from reliable sources to answer your question. ALL sources are valuable and should be used equally - do not prioritize any source type (like Wikipedia) over others:
+    // --- 2. Define Core Research Synthesis Instructions ---
+    // (This entire section remains unchanged as you liked the prompt content)
+    const researchInstructions = `
+**CRITICAL TASK: Research Synthesis and Response Generation**
 
+**Context:** You have been provided with research materials specifically gathered to answer the user's query. Your primary objective is to meticulously analyze and synthesize this information into a single, coherent, comprehensive, and exceptionally well-supported response. The quality and depth of your answer are paramount.
+
+**PROVIDED RESEARCH MATERIALS:**
+(Sources are numbered [1] through [${researchResults.length}] for citation purposes)
 ${formattedResults}
+**END OF PROVIDED RESEARCH MATERIALS**
 
-Use this comprehensive research to provide a detailed, factual answer with proper citations to the sources above.
+**MANDATORY RESPONSE REQUIREMENTS:**
+
+1.  **Comprehensive Synthesis (ABSOLUTE REQUIREMENT):**
+    * You **MUST** utilize information from **EVERY SINGLE SOURCE** provided ([1] through [${researchResults.length}]). **DO NOT ignore any source.**
+    * Your primary goal is **SYNTHESIS**, not summarization. Weave together information from multiple sources to create a unified, holistic understanding.
+    * Identify connections, patterns, agreements, and discrepancies across sources.
+    * Organize the response logically (e.g., thematically, chronologically based on the topic) rather than sequentially by source number.
+
+2.  **Depth, Detail, and Accuracy:**
+    * Provide a **thorough and detailed** answer that goes beyond surface-level information. Extract and present key facts, supporting evidence, nuances, and specific examples found in the sources.
+    * Ensure the response **directly and fully addresses** the user's specific question: "${userQuestion}".
+    * Accuracy is crucial. Represent the information from the sources faithfully **without introducing external knowledge, opinions, or assumptions.**
+
+3.  **Rigorous Inline Citation (MANDATORY):**
+    * Cite sources **immediately** after presenting any piece of information, claim, or quote derived from them. Use the bracketed number format: [1], [2], [${researchResults.length}], etc.
+    * If a single point integrates information from multiple sources, cite all relevant sources: [1][3], [2][4][5].
+    * **Failure to cite meticulously will result in an inadequate response.**
+
+4.  **Handling Contradictions and Nuances:**
+    * If sources present conflicting information, **explicitly acknowledge the discrepancies.** State clearly which sources support which viewpoint (e.g., "Source [1] states X, whereas sources [3] and [5] assert Y.").
+    * Present different perspectives fairly. **Do NOT attempt to resolve contradictions** unless the resolution is explicitly stated within the provided sources. Highlight nuances and complexities revealed by the sources.
+
+5.  **Effective Image Integration:**
+    * If image sources ([Image] [X]) are provided, analyze their potential relevance.
+    * If relevant, **describe the pertinent visual information** from the image (or infer based on title/URL if content is minimal) and **integrate this description meaningfully** into your response where it supports or illustrates a point.
+    * Cite image sources using their number [X] just like text sources.
+
+6.  **Structured and Professional Output:**
+    * **Introduction:** Briefly introduce the topic and the scope of the answer based on the user's question and the provided research.
+    * **Body Paragraphs:** Develop the main points through synthesized information, logical flow, and constant inline citations [X]. Use paragraphs to separate distinct themes or aspects.
+    * **Conclusion:** Provide a concise summary of the key findings based *strictly* on the synthesized information from the sources. Do not add new information or concluding opinions not supported by the research.
+    * **References Section (MANDATORY):** At the very end of your response, include a section titled "**References**". List all sources numerically, matching the citation numbers used inline. Use the following markdown format:
+        * \`[1] [Source Title](URL)\` (Use \`result.title\` and \`result.url\`)
+        * \`[2] [Image] [Image Title](URL)\` (Use \`result.title\` and \`result.url\` for image sources)
+        * ... and so on for all ${researchResults.length} sources. *(Self-correction: Added note about using result properties for clarity in the comment)*
+
+7.  **Clarity and Quality:**
+    * Use clear, precise, and objective language.
+    * Ensure the response is well-organized, coherent, and easy to follow.
+    * The final output should reflect a high level of analytical effort and attention to detail, justifying the time spent on research. Avoid overly brief or superficial answers.
 `;
 
-    // If there's an existing prompt, append the research to it
+    // --- 3. Construct the Final Prompt ---
+    // (This section remains unchanged)
     if (existingPrompt && existingPrompt.trim().length > 0) {
-      return `${existingPrompt}\n\n${researchPrompt}`;
-    }
+      // Append the specific research task instructions to the existing context.
+      // The user question context might be within existingPrompt.
+      return `${existingPrompt.trim()}\n\n${researchInstructions}\n\n**INSTRUCTION:** Now, focusing entirely on the provided research materials and adhering strictly to ALL the mandatory requirements outlined above, generate the comprehensive synthesized response to the user's query.`;
+    } else {
+      // Create a standalone system prompt when there's no prior context.
+      return `
+You are a highly intelligent AI assistant specialized in meticulous research analysis and synthesis. Your primary function in this instance is to process the provided research materials and generate a comprehensive, accurate, deeply synthesized, and impeccably cited response to the user's query. Adherence to the detailed instructions is paramount.
 
-    // Otherwise, create a complete new system prompt with enhanced capabilities
-    return `
-You are an exceptional personal assistant with both high IQ and EQ. You excel at helping with writing, coding, mathematics, research, and emotional intelligence. Your responses are thoughtful, accurate, and tailored to the user's needs.
+${researchInstructions}
 
-${researchPrompt}
+**The user's specific question is:** "${userQuestion}"
 
-When answering:
-1. Synthesize information from ALL sources equally - do not prioritize Wikipedia or any specific source type
-2. Present a balanced view of any conflicting information
-3. Use clear, precise language and organize your response logically
-4. ALWAYS cite your sources using proper markdown format like this: [Source Title](URL) - corresponding to source [X]
-5. Include a "References" section at the end listing the numbered sources in markdown format
-6. If images are provided (marked with 'tavily_image'), describe them if relevant to the answer and cite them
-7. When accessing user-specific information from memory, use the format [Memory-User name] so it can be properly displayed
-
-For coding questions: Provide clean, efficient, well-commented code with explanations
-For mathematical problems: Show your work step-by-step with clear reasoning
-For writing assistance: Consider tone, audience, and purpose while maintaining the user's voice
-For emotional or personal topics: Respond with empathy and understanding
-
-The user's question is: "${userQuestion}"
+**INSTRUCTION:** Proceed to generate the response based *solely* on the provided research materials, following all mandatory guidelines meticulously. Ensure the final output is detailed, well-structured, and demonstrates a thorough synthesis of all sources.
 `;
+    }
   }
 
   // Keep existing endpoints for backward compatibility

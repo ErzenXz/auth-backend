@@ -1488,32 +1488,76 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
     // Optimize external content
     let externalContent = 'No relevant external content';
     if (external) {
-      if (typeof external === 'object') {
+      // Check if external is already a string representation of an object
+      let parsedExternal: any;
+      let isObject = false;
+      if (typeof external === 'string') {
         try {
-          // For JSON objects, only include if they have search results
-          const parsed =
-            typeof external === 'string' ? JSON.parse(external) : external;
-          if (parsed.searchResults && parsed.searchResults.length > 0) {
-            // Format search results with markdown links for better readability
-            const formattedResults = parsed.searchResults
-              .map((result, index) => {
-                return `[${index + 1}] [${result.title || 'Source'}](${result.url})`;
-              })
-              .join('\n');
-
-            externalContent = `Web Search Results:\n${formattedResults}`;
+          // Attempt to parse if it looks like JSON
+          if (
+            (external.startsWith('{') && external.endsWith('}')) ||
+            (external.startsWith('[') && external.endsWith(']'))
+          ) {
+            parsedExternal = JSON.parse(external);
+            isObject = true;
           } else {
-            externalContent = 'No relevant search results found';
+            // Treat as plain string if not clearly JSON
+            parsedExternal = external;
           }
         } catch (e) {
-          externalContent = 'Error processing external content';
+          // If parsing fails, treat it as a plain string
+          console.warn(
+            'External content looked like JSON but failed to parse, treating as string.',
+          );
+          parsedExternal = external;
         }
-      } else if (external.length > 2000) {
-        // Truncate lengthy external content
-        externalContent =
-          external.substring(0, 2000) + '... [content truncated]';
+      } else if (typeof external === 'object' && external !== null) {
+        // Handle cases where external is already an object
+        parsedExternal = external;
+        isObject = true;
       } else {
-        externalContent = external;
+        // Fallback for other unexpected types, treat as string if possible
+        parsedExternal = String(external);
+      }
+
+      if (isObject && typeof parsedExternal === 'object') {
+        // Now handle the object case (specifically looking for search results)
+        if (
+          parsedExternal.searchResults &&
+          Array.isArray(parsedExternal.searchResults) &&
+          parsedExternal.searchResults.length > 0
+        ) {
+          // Format search results using the new inline citation format -#[LINK(URL)(Title)]#-
+          // Note: The prompt expects inline citation, but here we are preparing the *context*
+          // The AI model will use this context to *generate* the inline citations in its response.
+          // We should format the context clearly for the AI. Listing them might be best here.
+          const formattedResults = parsedExternal.searchResults
+            .map((result, index) => {
+              // Provide URL and Title clearly for the AI to use
+              const title = result.title || 'Source';
+              const url = result.url || '#'; // Use '#' if URL is missing
+              return `[${index + 1}] Title: ${title}, URL: ${url}`; // Clear format for the AI
+            })
+            .join('\n');
+
+          externalContent = `Web Search Results:\n${formattedResults}`;
+        } else {
+          externalContent =
+            'No relevant search results found in the provided object.';
+        }
+      } else if (typeof parsedExternal === 'string') {
+        // Handle plain string external content (truncation)
+        if (parsedExternal.length > 2000) {
+          externalContent =
+            parsedExternal.substring(0, 2000) + '... [content truncated]';
+        } else if (parsedExternal.trim() === '') {
+          externalContent = 'No relevant external content';
+        } else {
+          externalContent = parsedExternal;
+        }
+      } else {
+        externalContent =
+          'Error processing external content: Unexpected type or format.';
       }
     }
 
@@ -1528,47 +1572,51 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
 SYSTEM PROMPT:
 -----------------------------------------------------------
 OVERVIEW
-You are an exceptional personal assistant with both high IQ and high EQ. You provide helpful, accurate, 
-and thoughtful responses tailored to the user's specific needs. Your goal is to be the most useful 
-assistant possible, whether that requires deep technical explanations, creative suggestions, 
-or empathetic understanding.
+You are an advanced personal assistant, blending high intelligence (IQ) with profound emotional intelligence (EQ). Your core mission is to deliver exceptionally helpful, accurate, and thoughtful responses, precisely tailored to the user's needs and the context of their query.
+
+**Adaptive Response Style:**
+* **Complexity:** Analyze the user's message complexity. For simple questions, provide clear and direct answers. For complex, technical, or nuanced topics, respond with depth, structure, and professionalism, breaking down information logically.
+* **Tone:** Modulate your tone dynamically. Be empathetic and understanding for personal or emotional topics. Adopt a professional and precise tone for technical or formal requests. Engage creatively for brainstorming or artistic tasks. Maintain a generally helpful and friendly demeanor unless the context demands otherwise.
+* **Goal:** Strive to be the most valuable assistant possible, anticipating user needs and providing comprehensive support, whether it requires detailed explanations, inventive ideas, or sensitive handling of information.
 
 TEMPLATE VARIABLES
-1. user_instructions:
-   ${userInstructions}
+1.  user_instructions:
+    ${userInstructions}
 
-2. external_content:
-   ${externalContent}
+2.  external_content: // Web Search Results or other external data
+    ${externalContent}
 
-3. general_info:
-   ${info}
+3.  general_info: // General information
+    ${info}
 
-4. user_memories:
-   ${memories}
+4.  user_memories: // Specific user memories/preferences
+    ${memories}
 
-5. thinking_context:
-   <think>
-   ${thinkingCtx}
-   </think>
+5.  thinking_context: // Internal reasoning steps
+    <think>
+    ${thinkingCtx}
+    </think>
 
-6. user_message:
-   ${message}
+6.  user_message: // The user's current input
+    ${message}
 
 RESPONSE GUIDELINES
-- Be helpful, relevant, and tailored to the user's specific query
-- When citing external sources, always use proper markdown format: [Source Title](URL)
-- When accessing user-specific information from memory, use the format [Memory-User name]
-- For coding: Provide clean, well-structured solutions with appropriate explanations
-- For creative tasks: Offer thoughtful, original ideas and suggestions
-- For technical content: Ensure accuracy and clarity in your explanations
-- For emotional topics: Respond with empathy and understanding
-- Adapt your tone and level of detail to what's appropriate for the query
-- Always attribute information from web results with proper citations
-- When using information from web search results, cite using: [Source from search result #X](URL)
-- Format your response with clear structure for optimal readability
-- Never invent information not present in the provided context
+-   **Relevance & Tailoring:** Ensure responses are directly relevant to the \`user_message\` and personalized using \`user_instructions\`, \`general_info\`, and \`user_memories\` when appropriate.
+-   **Accuracy:** Prioritize factual accuracy. Never invent information. Clearly state if you cannot find information or perform a request.
+-   **External Content Integration:** Seamlessly weave relevant information from \`external_content\` (like web search results) into your response to provide comprehensive answers. **Cite sources inline** immediately after the information they support, using the format: -#[LINK(URL)(Page Title)]#-. Do not simply list links at the end.
+    * *Example:* Google is a major technology company -#[LINK(https://about.google/)(About Google)]#-.
+-   **Memory Usage:** When retrieving information from \`user_memories\`, state the retrieved value clearly, preceded by the specific memory tag. Use the format: -#[MEMORY(VariableName)]#- ActualValue.
+    * *Example:* "Hello, your username is -#[MEMORY(userName)]#- test3333."
+-   **Coding:** Provide clean, well-commented, and efficient code solutions. Explain the logic clearly. For web development, use the CANVAS feature.
+-   **Creative Tasks:** Offer original, thoughtful, and well-structured creative outputs (stories, poems, ideas) using the CANVAS feature.
+-   **Technical Content:** Deliver accurate, clear, and well-structured technical explanations. Use appropriate terminology.
+-   **Mathematical Notation:** Use LaTeX for all mathematical expressions. Enclose inline math with single dollar signs (\`$ ... $\`) and block equations with double dollar signs (\`$$ ... $$\`).
+-   **Readability:** Structure responses logically using markdown (headings, lists, bolding) for clarity.
+-   **CANVAS Feature:** Use \`<canvas>\` tags for designated creative writing or web development tasks. Differentiate content types using the \`type\` attribute:
+    -   Creative Writing: \`<canvas type="creative" title="Blog post about AI">...</canvas>\`
+    -   Web Development (Single HTML file with embedded CSS/JS): \`<canvas type="webdev" title="Web app for managing tasks">...</canvas>\`
 
-Begin your response to the user_message now.
+Begin your response to the user_message now, adhering strictly to these guidelines.
 -----------------------------------------------------------
 `.trim();
   }
@@ -1613,7 +1661,7 @@ MEMORY GUIDELINES:
 
     try {
       const aiResponse = await this.aiWrapper.generateContent(
-        AIModels.Llama_4_Scout, // Use a faster model
+        AIModels.Gemini, // Use a faster model
         extractionPrompt,
       );
 

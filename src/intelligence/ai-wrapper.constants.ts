@@ -80,6 +80,7 @@ export const MODEL_PROVIDER_MAPPING: Record<AIModels, AIProvider> = {
   [AIModels.Llama3_Ultra]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Qwen3_Mini]: AI_PROVIDERS.OPENROUTER,
   [AIModels.Qwen3_Ultra]: AI_PROVIDERS.OPENROUTER,
+  [AIModels.DeepseekProverV2]: AI_PROVIDERS.OPENROUTER,
 
   // Llama Models
   [AIModels.Mistral_Small_3_Instruct]: AI_PROVIDERS.LLAMA,

@@ -1,8 +1,9 @@
 // event-emitter.module.ts
-import { Module, Logger } from '@nestjs/common';
+import { Module, Logger, Global } from '@nestjs/common';
 import { EventEmitterModule, EventEmitter2 } from '@nestjs/event-emitter';
 import Redis from 'ioredis';
 
+@Global()
 @Module({
   imports: [
     EventEmitterModule.forRoot({
