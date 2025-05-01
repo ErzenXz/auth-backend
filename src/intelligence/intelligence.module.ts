@@ -20,6 +20,7 @@ import { AnthropicProvider } from './providers/Anthropic.provider';
 import { AgentModule } from './agent/agent.module';
 import { UsageModule } from './usage/usage.module';
 import { UserModule } from 'src/user/user.module';
+import { PostHogModule } from 'src/services/modules/posthog.module';
 
 /**
  * IntelligenceModule is the main module for the intelligence feature.
@@ -46,6 +47,7 @@ const Services = [BrowserService, AiWrapperService, CrawlerService];
     AgentModule,
     UserModule,
     UsageModule,
+    PostHogModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

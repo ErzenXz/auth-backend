@@ -12,8 +12,6 @@ import { AIResponse, ChatHistory } from './models/ai-wrapper.types';
 import {
   DraftStepType,
   ProcessResult,
-  ReasoningStepType,
-  STEP_ORDER,
   ThoughtStepType,
 } from './ai-wrapper.constants';
 import { randomBytes } from 'crypto';
@@ -24,8 +22,7 @@ import {
   CreateProjectFileDto,
   UpdateProjectFileDto,
 } from './dtos/project.dto';
-import { Prisma, AIProjectFile } from '@prisma/client';
-import { AgentResponse } from './models/ai-agent.types';
+import { Prisma } from '@prisma/client';
 import { UsageService } from './usage/usage.service';
 
 @Injectable()
@@ -1247,18 +1244,199 @@ Example Matching:
   }
 
   async renameChatThread(userId: string, threadId: string, newName: string) {
+    await this.prisma.aIThread.updateMany({
+      where: { id: threadId, userId },
+      data: { title: newName },
+    });
+    return { success: true };
+  }
+
+  /**
+   * Edit a message in a thread and delete all subsequent messages
+   * @param userId User ID
+   * @param threadId Thread ID
+   * @param messageId Message ID to edit
+   * @param content New content for the message
+   */
+  async editThreadMessage(
+    userId: string,
+    threadId: string,
+    messageId: string,
+    content: string,
+  ) {
+    // First verify the thread belongs to the user
     const thread = await this.prisma.aIThread.findFirst({
       where: { id: threadId, userId },
     });
 
     if (!thread) {
-      throw new NotFoundException('Chat thread not found');
+      throw new NotFoundException(`Thread not found or you don't have access`);
     }
 
-    return await this.prisma.aIThread.update({
-      where: { id: threadId },
-      data: { title: newName },
+    // Find the message and verify it belongs to the thread
+    const message = await this.prisma.aIThreadMessage.findFirst({
+      where: { id: messageId, chatId: threadId },
     });
+
+    if (!message) {
+      throw new NotFoundException(`Message not found in this thread`);
+    }
+
+    // Get all messages in the thread ordered by creation date
+    const messages = await this.prisma.aIThreadMessage.findMany({
+      where: { chatId: threadId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Find the index of the message to edit
+    const messageIndex = messages.findIndex((msg) => msg.id === messageId);
+
+    if (messageIndex === -1) {
+      throw new NotFoundException(`Message not found in this thread`);
+    }
+
+    // Start a transaction to update the message and delete subsequent messages
+    return await this.prisma.$transaction(async (tx) => {
+      // Update the message
+      await tx.aIThreadMessage.update({
+        where: { id: messageId },
+        data: { content },
+      });
+
+      // Delete all subsequent messages
+      if (messageIndex < messages.length - 1) {
+        const subsequentMessageIds = messages
+          .slice(messageIndex + 1)
+          .map((msg) => msg.id);
+
+        await tx.aIThreadMessage.deleteMany({
+          where: { id: { in: subsequentMessageIds } },
+        });
+      }
+
+      return { success: true };
+    });
+  }
+
+  /**
+   * Branch off from a message, creating a new thread with messages up to and including the specified message
+   * @param userId User ID
+   * @param threadId Original thread ID
+   * @param messageId Message ID to branch from
+   */
+  async branchThreadFromMessage(
+    userId: string,
+    threadId: string,
+    messageId: string,
+  ) {
+    // First verify the thread belongs to the user
+    const thread = await this.prisma.aIThread.findFirst({
+      where: { id: threadId, userId },
+    });
+
+    if (!thread) {
+      throw new NotFoundException(`Thread not found or you don't have access`);
+    }
+
+    // Find the message and verify it belongs to the thread
+    const message = await this.prisma.aIThreadMessage.findFirst({
+      where: { id: messageId, chatId: threadId },
+    });
+
+    if (!message) {
+      throw new NotFoundException(`Message not found in this thread`);
+    }
+
+    // Get all messages in the thread ordered by creation date
+    const messages = await this.prisma.aIThreadMessage.findMany({
+      where: { chatId: threadId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Find the index of the message to branch from
+    const messageIndex = messages.findIndex((msg) => msg.id === messageId);
+
+    if (messageIndex === -1) {
+      throw new NotFoundException(`Message not found in this thread`);
+    }
+
+    // Get messages up to and including the specified message
+    const messagesToCopy = messages.slice(0, messageIndex + 1);
+
+    // Create a new thread
+    const newThread = await this.prisma.aIThread.create({
+      data: {
+        userId,
+        title: `${thread.title} (branched)`,
+      },
+    });
+
+    // Copy messages to the new thread
+    await this.prisma.aIThreadMessage.createMany({
+      data: messagesToCopy.map((msg) => ({
+        chatId: newThread.id,
+        content: msg.content,
+        role: msg.role,
+        userId,
+      })),
+    });
+
+    return {
+      success: true,
+      newThreadId: newThread.id,
+      messageCount: messagesToCopy.length,
+    };
+  }
+
+  /**
+   * Retry from a message by removing it and all subsequent messages
+   * @param userId User ID
+   * @param threadId Thread ID
+   * @param messageId Message ID to retry from
+   */
+  async retryFromMessage(userId: string, threadId: string, messageId: string) {
+    // First verify the thread belongs to the user
+    const thread = await this.prisma.aIThread.findFirst({
+      where: { id: threadId, userId },
+    });
+
+    if (!thread) {
+      throw new NotFoundException(`Thread not found or you don't have access`);
+    }
+
+    // Find the message and verify it belongs to the thread
+    const message = await this.prisma.aIThreadMessage.findFirst({
+      where: { id: messageId, chatId: threadId },
+    });
+
+    if (!message) {
+      throw new NotFoundException(`Message not found in this thread`);
+    }
+
+    // Get all messages in the thread ordered by creation date
+    const messages = await this.prisma.aIThreadMessage.findMany({
+      where: { chatId: threadId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Find the index of the message to retry from
+    const messageIndex = messages.findIndex((msg) => msg.id === messageId);
+
+    if (messageIndex === -1) {
+      throw new NotFoundException(`Message not found in this thread`);
+    }
+
+    // Delete the specified message and all subsequent messages
+    const messagesToDelete = messages.slice(messageIndex).map((msg) => msg.id);
+
+    await this.prisma.aIThreadMessage.deleteMany({
+      where: { id: { in: messagesToDelete } },
+    });
+
+    return {
+      success: true,
+      deletedCount: messagesToDelete.length,
+    };
   }
 
   async getAllChatThreadsWithMessages(userId: string) {
@@ -1563,62 +1741,82 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
 
     // Truncate thinking context if too long
     const thinkingCtx = thinking
-      ? thinking.length > 1500
-        ? thinking.substring(0, 1500) + '... [truncated]'
+      ? thinking.length > 5000
+        ? thinking.substring(0, 5000) + '... [truncated]'
         : thinking
       : "Processing the user's message for a direct and friendly answer.";
 
     return `
-SYSTEM PROMPT:
------------------------------------------------------------
-OVERVIEW
-You are an advanced personal assistant, blending high intelligence (IQ) with profound emotional intelligence (EQ). Your core mission is to deliver exceptionally helpful, accurate, and thoughtful responses, precisely tailored to the user's needs and the context of their query.
-
-**Adaptive Response Style:**
-* **Complexity:** Analyze the user's message complexity. For simple questions, provide clear and direct answers. For complex, technical, or nuanced topics, respond with depth, structure, and professionalism, breaking down information logically.
-* **Tone:** Modulate your tone dynamically. Be empathetic and understanding for personal or emotional topics. Adopt a professional and precise tone for technical or formal requests. Engage creatively for brainstorming or artistic tasks. Maintain a generally helpful and friendly demeanor unless the context demands otherwise.
-* **Goal:** Strive to be the most valuable assistant possible, anticipating user needs and providing comprehensive support, whether it requires detailed explanations, inventive ideas, or sensitive handling of information.
-
-TEMPLATE VARIABLES
-1.  user_instructions:
-    ${userInstructions}
-
-2.  external_content: // Web Search Results or other external data
-    ${externalContent}
-
-3.  general_info: // General information
-    ${info}
-
-4.  user_memories: // Specific user memories/preferences
-    ${memories}
-
-5.  thinking_context: // Internal reasoning steps
-    <think>
-    ${thinkingCtx}
-    </think>
-
-6.  user_message: // The user's current input
-    ${message}
-
-RESPONSE GUIDELINES
--   **Relevance & Tailoring:** Ensure responses are directly relevant to the \`user_message\` and personalized using \`user_instructions\`, \`general_info\`, and \`user_memories\` when appropriate.
--   **Accuracy:** Prioritize factual accuracy. Never invent information. Clearly state if you cannot find information or perform a request.
--   **External Content Integration:** Seamlessly weave relevant information from \`external_content\` (like web search results) into your response to provide comprehensive answers. **Cite sources inline** immediately after the information they support, using the format: -#[LINK(URL)(Page Title)]#- Do not simply list links at the end.
-    * *Example:* Google is a major technology company -#[LINK(https://about.google/)(About Google)]#-. \`-#[LINK(https://about.google/)(About Google)]#-\`
--   **Memory Usage:** When retrieving information from \`user_memories\`, state the retrieved value clearly, preceded by the specific memory tag. Use the format: -#[MEMORY(VariableName)(ActualValue)]#-
-    * *Example:* "Hello, your username is -#[MEMORY(userName)(test3333)]#-"
--   **Coding:** Provide clean, well-commented, and efficient code solutions. Explain the logic clearly. For web development, use the CANVAS feature.
--   **Creative Tasks:** Offer original, thoughtful, and well-structured creative outputs (stories, poems, ideas) using the CANVAS feature.
--   **Technical Content:** Deliver accurate, clear, and well-structured technical explanations. Use appropriate terminology.
--   **Mathematical Notation:** Use LaTeX for all mathematical expressions. Enclose inline math with single dollar signs (\`$ ... $\`) and block equations with double dollar signs (\`$$ ... $$\`).
--   **Readability:** Structure responses logically using markdown (headings, lists, bolding) for clarity.
--   **CANVAS Feature:** Use \`<canvas>\` tags for designated creative writing or web development tasks. Differentiate content types using the \`type\` attribute:
-    -   Creative Writing: \`<canvas type="creative" title="Blog post about AI">...</canvas>\`
-    -   Web Development (Single HTML file with embedded CSS/JS): \`<canvas type="webdev" title="Web app for managing tasks">...</canvas>\`
-
-Begin your response to the user_message now, adhering strictly to these guidelines.
------------------------------------------------------------
-`.trim();
+      SYSTEM PROMPT:
+      -----------------------------------------------------------
+      OVERVIEW
+      You are an advanced personal assistant, blending high intelligence (IQ) with profound emotional intelligence (EQ). Your core mission is to deliver exceptionally helpful, accurate, and thoughtful responses, precisely tailored to the user's needs and the context of their query.
+      
+      **Adaptive Response Style:**
+      * **Complexity:** Analyze the user's message complexity. For simple questions, provide clear and direct answers. For complex, technical, or nuanced topics, respond with depth, structure, and professionalism, breaking down information logically.
+      * **Tone:** Modulate your tone dynamically. Be empathetic and understanding for personal or emotional topics. Adopt a professional and precise tone for technical or formal requests. Engage creatively for brainstorming or artistic tasks. Maintain a generally helpful and friendly demeanor unless the context demands otherwise.
+      * **Goal:** Strive to be the most valuable assistant possible, anticipating user needs and providing comprehensive support, whether it requires detailed explanations, inventive ideas, or sensitive handling of information.
+      
+      TEMPLATE VARIABLES
+      1.  user_instructions:
+          ${userInstructions}
+      
+      2.  external_content: // Web Search Results or other external data
+          ${externalContent}
+      
+      3.  general_info: // General information
+          ${info}
+      
+      4.  user_memories: // Specific user memories/preferences
+          ${memories}
+      
+      5.  thinking_context: // Internal reasoning steps
+          <think>
+          ${thinkingCtx}
+          </think>
+      
+      6.  user_message: // The user's current input
+          ${message}
+      
+      RESPONSE GUIDELINES
+      
+      - **Relevance & Tailoring:** Ensure responses are directly relevant to the \`user_message\` and personalized using \`user_instructions\`, \`general_info\`, and \`user_memories\` when appropriate.
+      
+      - **Accuracy:** Prioritize factual accuracy. Never invent information. Clearly state if you cannot find information or perform a request.
+      
+      - **External Content Integration:** Seamlessly weave relevant information from \`external_content\` (like web search results) into your response to provide comprehensive answers. **Cite sources inline** immediately after the information they support, using the format: <searchsource url="URL" title="Page Title"></searchsource> Do not simply list links at the end.
+      
+      * *Example:* Google is a major technology company <searchsource url="https://about.google/" title="About Google"></searchsource>.
+      
+      - **Memory Usage:** When retrieving information from \`user_memories\`, state the retrieved value clearly, preceded by the specific memory tag. Use the format: <memory name="VariableName" value="ActualValue"></memory>
+      
+      * *Example:* "Hello, your username is <memory name="userName" value="test3333"></memory>"
+      
+      - **Coding:** Provide clean, well-commented, and efficient code solutions. Explain the logic clearly. For web development, use the CANVAS feature.
+      
+      - **Creative Tasks:** Offer original, thoughtful, and well-structured creative outputs (stories, poems, ideas) using the CANVAS feature.
+      
+      - **Technical Content:** Deliver accurate, clear, and well-structured technical explanations. Use appropriate terminology.
+      
+      - **Mathematical Notation:** Use LaTeX for all mathematical expressions. Enclose inline math with single dollar signs (\`$ ... $\`) and block equations with double dollar signs (\`$$ ... $$\`).
+      
+      - **Readability:** Structure responses logically using markdown (headings, lists, bolding) for clarity.
+      
+      - **CANVAS Feature:** Use \`<canvas>\` tags for designated creative writing or web development tasks. Differentiate content types using the \`type\` attribute:
+      
+      - Creative Writing: \`<canvas type="creative" title="Blog post about AI">...</canvas>\`
+      
+      - Web Development (Single HTML file with embedded CSS/JS): \`<canvas type="webdev" title="Web app for managing tasks">...</canvas>\`
+      
+      - Python Code: \`<canvas type="python" title="Python script">...</canvas>\`
+      
+        
+      
+      Begin your response to the user_message now, adhering strictly to these guidelines.
+      
+      -----------------------------------------------------------
+      
+      `.trim();
   }
 
   private async extractAndSaveMemory(

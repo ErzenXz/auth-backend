@@ -520,6 +520,69 @@ export class IntelligenceController {
   }
 
   /**
+   * Edit a message in a thread and delete all subsequent messages
+   * @param {string} threadId - Thread ID
+   * @param {string} messageId - Message ID to edit
+   * @param {IHttpContext} context - The HTTP context containing user information
+   * @param {Object} body - Request body containing new message content
+   */
+  @Put('chat/thread/:threadId/message/:messageId')
+  @Auth()
+  async editThreadMessage(
+    @Param('threadId') threadId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { content: string },
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.editThreadMessage(
+      context.user.id,
+      threadId,
+      messageId,
+      body.content,
+    );
+  }
+
+  /**
+   * Branch off from a message, creating a new thread with all messages up to and including the specified message
+   * @param {string} threadId - Thread ID
+   * @param {string} messageId - Message ID to branch from
+   * @param {IHttpContext} context - The HTTP context containing user information
+   */
+  @Post('chat/thread/:threadId/branch/:messageId')
+  @Auth()
+  async branchThreadFromMessage(
+    @Param('threadId') threadId: string,
+    @Param('messageId') messageId: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.branchThreadFromMessage(
+      context.user.id,
+      threadId,
+      messageId,
+    );
+  }
+
+  /**
+   * Retry from a message by removing it and all subsequent messages
+   * @param {string} threadId - Thread ID
+   * @param {string} messageId - Message ID to retry from
+   * @param {IHttpContext} context - The HTTP context containing user information
+   */
+  @Delete('chat/thread/:threadId/retry/:messageId')
+  @Auth()
+  async retryFromMessage(
+    @Param('threadId') threadId: string,
+    @Param('messageId') messageId: string,
+    @HttpContext() context: IHttpContext,
+  ) {
+    return await this.intelligenceService.retryFromMessage(
+      context.user.id,
+      threadId,
+      messageId,
+    );
+  }
+
+  /**
    * Lists the user's memory.
    * @param {IHttpContext} context - The HTTP context containing user information.
    * @returns {Promise<UserMemory[]>} A promise that resolves to an array of user memory items.

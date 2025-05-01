@@ -76,6 +76,8 @@ model User {
   Agent                 Agent[]
   searchUsage           UserSearchUsage[]
   searchResults         WebSearchResult[]       @relation("UserSearches")
+  groupMembers          GroupMember[]
+  callParticipations    CallParticipant[]
 
   @@index([email])
   @@index([username])
@@ -86,13 +88,15 @@ model User {
 
 // Add model for storing web search results
 model WebSearchResult {
-  id            String            @id @default(uuid())
-  query         String
-  userId        String
-  user          User              @relation("UserSearches", fields: [userId], references: [id])
-  searchResults Json              @db.JsonB // Stores all search results
-  createdAt     DateTime          @default(now())
-  sources       WebSearchSource[]
+  id                String            @id @default(uuid())
+  query             String
+  userId            String
+  user              User              @relation("UserSearches", fields: [userId], references: [id])
+  aiThreadMessageId String?
+  aiThreadMessage   AIThreadMessage?  @relation(fields: [aiThreadMessageId], references: [id])
+  searchResults     Json              @db.JsonB // Stores all search results
+  createdAt         DateTime          @default(now())
+  sources           WebSearchSource[]
 
   @@index([userId])
   @@index([query])
@@ -628,12 +632,13 @@ model AIThread {
 }
 
 model AIThreadMessage {
-  id        String   @id @default(uuid())
-  content   String
-  role      String // 'user' or 'assistant'
-  chatId    String
-  chat      AIThread @relation("AIThreadMessage", fields: [chatId], references: [id])
-  createdAt DateTime @default(now())
+  id              String            @id @default(uuid())
+  content         String
+  role            String // 'user' or 'assistant'
+  chatId          String
+  chat            AIThread          @relation("AIThreadMessage", fields: [chatId], references: [id])
+  createdAt       DateTime          @default(now())
+  WebSearchResult WebSearchResult[]
 
   @@index([chatId])
   @@index([createdAt])
@@ -811,5 +816,73 @@ model UserSearchUsage {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@index([userId])
+}
+
+// Add new models for Group Messaging
+model Group {
+  id          String         @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  createdBy   String
+  members     GroupMember[]
+  messages    GroupMessage[]
+
+  @@index([createdBy])
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  groupId  String
+  userId   String
+  role     String   @default("MEMBER") // ADMIN, MEMBER
+  joinedAt DateTime @default(now())
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model GroupMessage {
+  id        String   @id @default(uuid())
+  groupId   String
+  senderId  String
+  content   String
+  timestamp DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([senderId])
+  @@index([timestamp])
+}
+
+// Add models for voice/video calling
+model CallSession {
+  id           String            @id @default(uuid())
+  initiatorId  String
+  type         String // 'voice' or 'video'
+  startTime    DateTime          @default(now())
+  endTime      DateTime?
+  participants CallParticipant[]
+
+  @@index([initiatorId])
+  @@index([startTime])
+}
+
+model CallParticipant {
+  id        String      @id @default(uuid())
+  callId    String
+  userId    String
+  joinTime  DateTime    @default(now())
+  leaveTime DateTime?
+  call      CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id])
+
+  @@unique([callId, userId])
+  @@index([callId])
   @@index([userId])
 }

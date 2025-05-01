@@ -48,10 +48,18 @@ import Redis from 'ioredis';
         const globalEvents = [
           'message.sent',
           'auth.new-ip-login',
+          'auth.forgot',
+          'auth.forgot.reset',
           'auth.register',
           'user.birthdate',
           'user.name',
           'user.photo',
+          'group.message.sent',
+          'group.created',
+          'group.members.added',
+          'call.initiated',
+          'call.participant.joined',
+          'call.participant.left',
         ];
 
         let isFromRedis = false;
