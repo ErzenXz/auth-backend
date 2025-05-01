@@ -9,6 +9,8 @@ import { response } from 'express';
 import { XCacheService } from 'src/cache/cache.service';
 import { UserSettings } from 'src/privacy/models/user-settings.model';
 import { DetailedUserInfo } from 'src/privacy/models/profile-user.model';
+import { CreateGroupDto, GroupMessageDto } from './dtos/group.dto';
+import { CallType, InitiateCallDto } from './dtos/call.dto';
 
 /**
  * Service for managing messaging functionalities, including sending and retrieving messages.
@@ -449,7 +451,7 @@ export class MessagingService {
   /**
    * Saves a user's subscription for push notifications.
    *
-   * @param {number} userId - The ID of the user subscribing to notifications.
+   * @param {string} userId - The ID of the user subscribing to notifications.
    * @param {any} subscription - The subscription object containing push notification details.
    * @returns {Promise<void>} A promise that resolves when the subscription is saved.
    */
@@ -467,9 +469,73 @@ export class MessagingService {
   }
 
   /**
+   * Finds a subscription by endpoint only, regardless of user.
+   *
+   * @param {string} endpoint - The endpoint of the subscription to find.
+   * @returns {Promise<any>} A promise that resolves to the found subscription or null.
+   */
+  async findSubscriptionByEndpoint(endpoint: string) {
+    return this.prisma.pushSubscription.findFirst({
+      where: {
+        endpoint,
+      },
+    });
+  }
+
+  /**
+   * Finds a subscription by user ID and endpoint.
+   *
+   * @param {string} userId - The ID of the user.
+   * @param {string} endpoint - The endpoint of the subscription to find.
+   * @returns {Promise<any>} A promise that resolves to the found subscription or null.
+   */
+  async findUserSubscriptionByEndpoint(userId: string, endpoint: string) {
+    return this.prisma.pushSubscription.findFirst({
+      where: {
+        userId,
+        endpoint,
+      },
+    });
+  }
+
+  /**
+   * Updates an existing subscription for push notifications.
+   *
+   * @param {string} userId - The ID of the user subscribing to notifications.
+   * @param {any} subscription - The updated subscription object.
+   * @returns {Promise<any>} A promise that resolves to the updated subscription.
+   */
+  async updateSubscription(userId: string, subscription: any) {
+    // First, find the existing subscription
+    const existingSubscription = await this.prisma.pushSubscription.findFirst({
+      where: {
+        userId,
+        endpoint: subscription.endpoint,
+      },
+    });
+
+    if (!existingSubscription) {
+      return null;
+    }
+
+    // Then update it with new keys
+    return this.prisma.pushSubscription.update({
+      where: {
+        id: existingSubscription.id,
+      },
+      data: {
+        keys: {
+          p256dh: subscription.keys.p256dh,
+          auth: subscription.keys.auth,
+        },
+      },
+    });
+  }
+
+  /**
    * Retrieves all push subscriptions for a specific user.
    *
-   * @param {number} userId - The ID of the user whose subscriptions are to be retrieved.
+   * @param {string} userId - The ID of the user whose subscriptions are to be retrieved.
    * @returns {Promise<any[]>} A promise that resolves to an array of subscriptions.
    */
   async getSubscriptions(userId: string) {
@@ -499,6 +565,12 @@ export class MessagingService {
 
     const subscriptions = await this.prisma.pushSubscription.findMany({
       where: { userId: user.id },
+      select: {
+        id: true,
+        userId: true,
+        endpoint: true,
+        keys: true,
+      },
     });
 
     return { user, subscriptions };
@@ -521,5 +593,572 @@ export class MessagingService {
     });
 
     return { message: 'Subscription deleted successfully!' };
+  }
+
+  /**
+   * Creates a new group with the specified name, description, and members.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {CreateGroupDto} createGroupDto - The data transfer object containing group details.
+   * @returns {Promise<any>} A promise that resolves to the created group object.
+   */
+  async createGroup(context: IHttpContext, createGroupDto: CreateGroupDto) {
+    const { name, description, members } = createGroupDto;
+
+    // Create the group
+    const group = await this.prisma.group.create({
+      data: {
+        name,
+        description,
+        createdBy: context.user.id,
+      },
+    });
+
+    // Add the creator as an admin
+    await this.prisma.groupMember.create({
+      data: {
+        groupId: group.id,
+        userId: context.user.id,
+        role: 'ADMIN',
+      },
+    });
+
+    // Add other members
+    if (members && members.length > 0) {
+      const uniqueMembers = [...new Set(members)].filter(
+        (id) => id !== context.user.id,
+      );
+
+      await this.prisma.groupMember.createMany({
+        data: uniqueMembers.map((userId) => ({
+          groupId: group.id,
+          userId,
+          role: 'MEMBER',
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Get the complete group with members
+    const groupWithMembers = await this.prisma.group.findUnique({
+      where: { id: group.id },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                fullName: true,
+                profilePicture: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    this.eventEmitter.emit('group.created', groupWithMembers);
+
+    return groupWithMembers;
+  }
+
+  /**
+   * Retrieves all groups for a user.
+   *
+   * @param {string} userId - The ID of the user.
+   * @returns {Promise<any>} A promise that resolves to an array of groups.
+   */
+  async getUserGroups(userId: string) {
+    const cacheKey = `userGroups:${userId}`;
+    const cachedGroups = await this.cacheService.getCache(cacheKey);
+
+    if (cachedGroups) {
+      return JSON.parse(cachedGroups);
+    }
+
+    const groups = await this.prisma.group.findMany({
+      where: {
+        members: {
+          some: {
+            userId,
+          },
+        },
+      },
+      include: {
+        members: {
+          take: 5,
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                profilePicture: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            members: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    await this.cacheService.setCache(cacheKey, JSON.stringify(groups));
+    return groups;
+  }
+
+  /**
+   * Adds new members to a group.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} groupId - The ID of the group.
+   * @param {string[]} userIds - Array of user IDs to add.
+   * @returns {Promise<any>} A promise that resolves to the updated group object.
+   */
+  async addGroupMembers(
+    context: IHttpContext,
+    groupId: string,
+    userIds: string[],
+  ) {
+    // Check if the user is an admin of the group
+    const membership = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: context.user.id,
+        role: 'ADMIN',
+      },
+    });
+
+    if (!membership) {
+      return { error: 'Only group admins can add members' };
+    }
+
+    // Add new members
+    const uniqueUsers = [...new Set(userIds)];
+    await this.prisma.groupMember.createMany({
+      data: uniqueUsers.map((userId) => ({
+        groupId,
+        userId,
+        role: 'MEMBER',
+      })),
+      skipDuplicates: true,
+    });
+
+    // Clear cache
+    await this.cacheService.delCache(`userGroups:${context.user.id}`);
+
+    // Emit event for real-time updates
+    this.eventEmitter.emit('group.members.added', {
+      groupId,
+      addedBy: context.user.id,
+      newMembers: uniqueUsers,
+    });
+
+    return this.getGroupDetails(groupId);
+  }
+
+  /**
+   * Removes members from a group.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} groupId - The ID of the group.
+   * @param {string[]} userIds - Array of user IDs to remove.
+   * @returns {Promise<any>} A promise that resolves to the updated group object.
+   */
+  async removeGroupMembers(
+    context: IHttpContext,
+    groupId: string,
+    userIds: string[],
+  ) {
+    // Check if the user is an admin of the group
+    const membership = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: context.user.id,
+        role: 'ADMIN',
+      },
+    });
+
+    if (!membership) {
+      return { error: 'Only group admins can remove members' };
+    }
+
+    // Remove members
+    await this.prisma.groupMember.deleteMany({
+      where: {
+        groupId,
+        userId: {
+          in: userIds,
+        },
+        // Ensure admins can't be removed by other admins
+        NOT: {
+          role: 'ADMIN',
+        },
+      },
+    });
+
+    // Clear cache
+    await this.cacheService.delCache(`userGroups:${context.user.id}`);
+    for (const userId of userIds) {
+      await this.cacheService.delCache(`userGroups:${userId}`);
+    }
+
+    // Emit event for real-time updates
+    this.eventEmitter.emit('group.members.removed', {
+      groupId,
+      removedBy: context.user.id,
+      removedMembers: userIds,
+    });
+
+    return this.getGroupDetails(groupId);
+  }
+
+  /**
+   * Retrieves details for a specific group.
+   *
+   * @param {string} groupId - The ID of the group.
+   * @returns {Promise<any>} A promise that resolves to the group details.
+   */
+  async getGroupDetails(groupId: string) {
+    return this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                fullName: true,
+                profilePicture: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Sends a message to a group and notifies all members.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} groupId - The ID of the group.
+   * @param {GroupMessageDto} messageDto - The data transfer object containing the message content.
+   * @returns {Promise<any>} A promise that resolves to the created message object.
+   */
+  async sendGroupMessage(
+    context: IHttpContext,
+    groupId: string,
+    messageDto: GroupMessageDto,
+  ) {
+    // Check if user is a member of the group
+    const membership = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: context.user.id,
+      },
+    });
+
+    if (!membership) {
+      return { error: 'You are not a member of this group' };
+    }
+
+    const encryptedMessage = this.encryptionService.encrypt(messageDto.content);
+
+    const message = await this.prisma.groupMessage.create({
+      data: {
+        groupId,
+        senderId: context.user.id,
+        content: JSON.stringify(encryptedMessage),
+      },
+    });
+
+    // Emit event for real-time updates
+    this.eventEmitter.emit('group.message.sent', {
+      message,
+      sender: context.user,
+      groupId,
+      content: messageDto.content,
+    });
+
+    // Clear cache
+    await this.cacheService.delCache(`groupMessages:${groupId}`);
+
+    return message;
+  }
+
+  /**
+   * Retrieves messages for a specific group.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} groupId - The ID of the group.
+   * @param {number} pageSize - The number of messages to retrieve per page.
+   * @param {number} page - The page number to retrieve.
+   * @returns {Promise<any[]>} A promise that resolves to an array of messages for the group.
+   */
+  async getGroupMessages(
+    context: IHttpContext,
+    groupId: string,
+    pageSize: number = 20,
+    page: number = 1,
+  ) {
+    // Check if user is a member of the group
+    const membership = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: context.user.id,
+      },
+    });
+
+    if (!membership) {
+      return { error: 'You are not a member of this group' };
+    }
+
+    const cacheKey = `groupMessages:${groupId}:${page}:${pageSize}`;
+    const cachedMessages = await this.cacheService.getCache(cacheKey);
+
+    if (cachedMessages) {
+      return JSON.parse(cachedMessages);
+    }
+
+    const messages = await this.prisma.groupMessage.findMany({
+      where: {
+        groupId,
+      },
+      orderBy: {
+        timestamp: 'desc',
+      },
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      include: {
+        group: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const messagesWithSenders = await Promise.all(
+      messages.map(async (message) => {
+        const sender = await this.prisma.user.findUnique({
+          where: { id: message.senderId },
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            profilePicture: true,
+          },
+        });
+
+        return {
+          ...message,
+          content: this.encryptionService.decrypt(
+            JSON.parse(message.content).iv,
+            JSON.parse(message.content).content,
+          ),
+          sender,
+        };
+      }),
+    );
+
+    const result = messagesWithSenders.reverse();
+    await this.cacheService.setCache(cacheKey, JSON.stringify(result));
+
+    return result;
+  }
+
+  /**
+   * Initiates a call session and notifies participants.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {InitiateCallDto} callDto - The data transfer object containing call details.
+   * @returns {Promise<any>} A promise that resolves to the created call session.
+   */
+  async initiateCall(context: IHttpContext, callDto: InitiateCallDto) {
+    const { type, participants } = callDto;
+
+    // Create call session
+    const callSession = await this.prisma.callSession.create({
+      data: {
+        initiatorId: context.user.id,
+        type,
+      },
+    });
+
+    // Add initiator as participant
+    await this.prisma.callParticipant.create({
+      data: {
+        callId: callSession.id,
+        userId: context.user.id,
+      },
+    });
+
+    // Emit event for real-time notification to participants
+    this.eventEmitter.emit('call.initiated', {
+      callId: callSession.id,
+      initiator: {
+        id: context.user.id,
+        username: context.user.username,
+        fullName: context.user.fullName,
+        profilePicture: context.user.profilePicture,
+      },
+      participants,
+      type,
+    });
+
+    return {
+      callId: callSession.id,
+      type,
+      initiator: context.user.id,
+      participants,
+    };
+  }
+
+  /**
+   * Records that a user has joined a call.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} callId - The ID of the call session.
+   * @returns {Promise<any>} A promise that resolves to the updated call session.
+   */
+  async joinCall(context: IHttpContext, callId: string) {
+    // Check if call exists
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      include: {
+        participants: true,
+      },
+    });
+
+    if (!call) {
+      return { error: 'Call session not found' };
+    }
+
+    // Check if user is already in the call
+    const existingParticipant = call.participants.find(
+      (p) => p.userId === context.user.id,
+    );
+
+    if (!existingParticipant) {
+      // Add user as participant
+      await this.prisma.callParticipant.create({
+        data: {
+          callId,
+          userId: context.user.id,
+        },
+      });
+    } else if (existingParticipant.leaveTime) {
+      // If user left and is rejoining, update leave time to null
+      await this.prisma.callParticipant.update({
+        where: { id: existingParticipant.id },
+        data: { leaveTime: null },
+      });
+    }
+
+    // Emit event for real-time update
+    this.eventEmitter.emit('call.participant.joined', {
+      callId,
+      userId: context.user.id,
+      username: context.user.username,
+      fullName: context.user.fullName,
+      profilePicture: context.user.profilePicture,
+    });
+
+    return {
+      callId,
+      joined: true,
+    };
+  }
+
+  /**
+   * Records that a user has left a call.
+   *
+   * @param {IHttpContext} context - The HTTP context containing request metadata and user information.
+   * @param {string} callId - The ID of the call session.
+   * @returns {Promise<any>} A promise that resolves to the updated call session.
+   */
+  async leaveCall(context: IHttpContext, callId: string) {
+    // Find participant record
+    const participant = await this.prisma.callParticipant.findFirst({
+      where: {
+        callId,
+        userId: context.user.id,
+        leaveTime: null,
+      },
+    });
+
+    if (!participant) {
+      return { error: 'User is not in the call' };
+    }
+
+    // Update leave time
+    await this.prisma.callParticipant.update({
+      where: { id: participant.id },
+      data: { leaveTime: new Date() },
+    });
+
+    // Check if this was the last participant
+    const remainingParticipants = await this.prisma.callParticipant.count({
+      where: {
+        callId,
+        leaveTime: null,
+      },
+    });
+
+    // If no participants remain, end the call
+    if (remainingParticipants === 0) {
+      await this.prisma.callSession.update({
+        where: { id: callId },
+        data: { endTime: new Date() },
+      });
+    }
+
+    // Emit event for real-time update
+    this.eventEmitter.emit('call.participant.left', {
+      callId,
+      userId: context.user.id,
+    });
+
+    return {
+      callId,
+      left: true,
+      callEnded: remainingParticipants === 0,
+    };
+  }
+
+  /**
+   * Gets active participants in a call.
+   *
+   * @param {string} callId - The ID of the call session.
+   * @returns {Promise<any>} A promise that resolves to the list of participants.
+   */
+  async getCallParticipants(callId: string) {
+    const participants = await this.prisma.callParticipant.findMany({
+      where: {
+        callId,
+        leaveTime: null,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    return participants;
   }
 }

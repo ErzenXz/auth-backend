@@ -129,6 +129,9 @@ export class OpenRouterProvider implements AIProviderBase {
         messages: [...messagesHistory, { role: 'user', content: prompt }],
         model,
         stream: true,
+        reasoning: {
+          exclude: false,
+        },
         ...options,
       })) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
 

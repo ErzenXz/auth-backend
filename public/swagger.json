@@ -1417,6 +1417,287 @@
         ]
       }
     },
+    "/messaging/groups": {
+      "post": {
+        "operationId": "MessagingController_createGroup",
+        "summary": "Create a new group chat",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "get": {
+        "operationId": "MessagingController_getUserGroups",
+        "summary": "Get all groups for the current user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/groups/{groupId}": {
+      "get": {
+        "operationId": "MessagingController_getGroupDetails",
+        "summary": "Get details for a specific group",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/groups/{groupId}/members": {
+      "post": {
+        "operationId": "MessagingController_addGroupMembers",
+        "summary": "Add members to a group",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddGroupMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "delete": {
+        "operationId": "MessagingController_removeGroupMembers",
+        "summary": "Remove members from a group",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddGroupMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/groups/{groupId}/messages": {
+      "post": {
+        "operationId": "MessagingController_sendGroupMessage",
+        "summary": "Send a message to a group",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "get": {
+        "operationId": "MessagingController_getGroupMessages",
+        "summary": "Get messages for a group",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/calls": {
+      "post": {
+        "operationId": "MessagingController_initiateCall",
+        "summary": "Initiate a new call",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateCallDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/calls/{callId}/join": {
+      "post": {
+        "operationId": "MessagingController_joinCall",
+        "summary": "Join a call",
+        "parameters": [
+          {
+            "name": "callId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/calls/{callId}/leave": {
+      "post": {
+        "operationId": "MessagingController_leaveCall",
+        "summary": "Leave a call",
+        "parameters": [
+          {
+            "name": "callId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/messaging/calls/{callId}/participants": {
+      "get": {
+        "operationId": "MessagingController_getCallParticipants",
+        "summary": "Get active participants in a call",
+        "parameters": [
+          {
+            "name": "callId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
     "/intelligence/dev/instructions": {
       "get": {
         "operationId": "IntelligenceController_listInstructions",
@@ -2032,6 +2313,99 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{threadId}/message/{messageId}": {
+      "put": {
+        "operationId": "IntelligenceController_editThreadMessage",
+        "parameters": [
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{threadId}/branch/{messageId}": {
+      "post": {
+        "operationId": "IntelligenceController_branchThreadFromMessage",
+        "parameters": [
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Intelligence"
+        ]
+      }
+    },
+    "/intelligence/chat/thread/{threadId}/retry/{messageId}": {
+      "delete": {
+        "operationId": "IntelligenceController_retryFromMessage",
+        "parameters": [
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -4060,7 +4434,7 @@
   "tags": [],
   "servers": [
     {
-      "url": "https://localhost:3000",
+      "url": "https://localhost:3001",
       "description": "LOCAL server"
     },
     {
@@ -4352,6 +4726,97 @@
       "MessageDto": {
         "type": "object",
         "properties": {}
+      },
+      "CreateGroupDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the group",
+            "example": "Project Team"
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the group",
+            "example": "Group for project discussions"
+          },
+          "members": {
+            "description": "Array of user IDs to add to the group",
+            "example": [
+              "user-id-1",
+              "user-id-2"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "members"
+        ]
+      },
+      "AddGroupMemberDto": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "description": "Array of user IDs to add to the group",
+            "example": [
+              "user-id-1",
+              "user-id-2"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "userIds"
+        ]
+      },
+      "GroupMessageDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The content of the message",
+            "example": "Hello everyone!"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "InitiateCallDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "The type of call (voice or video)",
+            "enum": [
+              "voice",
+              "video"
+            ],
+            "example": "video"
+          },
+          "participants": {
+            "description": "Array of user IDs to invite to the call",
+            "example": [
+              "user-id-1",
+              "user-id-2"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "participants"
+        ]
       },
       "CreateApplicationDto": {
         "type": "object",

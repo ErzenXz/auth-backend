@@ -18,6 +18,7 @@ import { OpenRouterProvider } from './OpenRouter.provider';
 import { LlamaProvider } from './Llama.provider';
 import { GroqProvider } from './Groq.provider';
 import { AnthropicProvider } from './Anthropic.provider';
+import { PostHogService } from 'src/services/posthog.service';
 
 @Injectable()
 export class AiWrapperService {
@@ -32,6 +33,7 @@ export class AiWrapperService {
     private readonly llamaProvider: LlamaProvider,
     private readonly groqProvider: GroqProvider,
     private readonly anthropicProvider: AnthropicProvider,
+    private readonly postHogService?: PostHogService,
   ) {
     this.providers = new Map<AIProvider, AIProviderBase>([
       [AI_PROVIDERS.GOOGLE, this.googleProvider],
@@ -63,6 +65,13 @@ export class AiWrapperService {
   ): Promise<AIResponse> {
     const provider = this.getProviderForModel(model);
     const response = await provider.generateContent(prompt, model, options);
+    this.postHogService.captureEvent('ai_generate_content', model, {
+      totalTokens: response.usage.totalTokens,
+      promptTokens: response.usage.promptTokens,
+      completionTokens: response.usage.completionTokens,
+      model: model,
+      provider: provider.constructor.name,
+    });
     return response;
   }
 
@@ -85,7 +94,10 @@ export class AiWrapperService {
         usage: response.usage,
       };
     }
-
+    this.postHogService.captureEvent('ai_generate_content_stream', model, {
+      model: model,
+      provider: provider.constructor.name,
+    });
     return provider.generateContentStream(prompt, model, options);
   }
 
@@ -146,6 +158,15 @@ export class AiWrapperService {
         usage: response.usage,
       };
     }
+
+    this.postHogService.captureEvent(
+      'ai_generate_content_stream_history',
+      model,
+      {
+        model: model,
+        provider: provider.constructor.name,
+      },
+    );
 
     return provider.generateContentStreamHistory(
       prompt,
