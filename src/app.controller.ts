@@ -71,12 +71,66 @@ export class AppController {
   getSystemInfo(): any {
     return {
       platform: os.platform(),
-      cpus: os.cpus(),
-      totalMemory: os.totalmem(),
-      freeMemory: os.freemem(),
-      uptime: os.uptime(),
-      release: os.release(),
-      loadAverage: os.loadavg(),
+      arch: os.arch(),
+      hostname: os.hostname(),
+      type: os.type(),
+      cpus: {
+        count: os.cpus().length,
+        model: os.cpus()[0].model,
+        speed: os.cpus()[0].speed,
+        times: os.cpus()[0].times,
+        details: os.cpus(),
+      },
+      memory: {
+        total: {
+          bytes: os.totalmem(),
+          gigabytes:
+            Math.round((os.totalmem() / 1024 / 1024 / 1024) * 100) / 100,
+        },
+        free: {
+          bytes: os.freemem(),
+          gigabytes:
+            Math.round((os.freemem() / 1024 / 1024 / 1024) * 100) / 100,
+        },
+        used: {
+          bytes: os.totalmem() - os.freemem(),
+          gigabytes:
+            Math.round(
+              ((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024) * 100,
+            ) / 100,
+        },
+        usagePercentage: Math.round(
+          ((os.totalmem() - os.freemem()) / os.totalmem()) * 100,
+        ),
+      },
+      time: {
+        uptime: {
+          seconds: os.uptime(),
+          minutes: Math.round((os.uptime() / 60) * 100) / 100,
+          hours: Math.round((os.uptime() / 60 / 60) * 100) / 100,
+          days: Math.round((os.uptime() / 60 / 60 / 24) * 100) / 100,
+        },
+        systemTime: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezoneOffset: new Date().getTimezoneOffset(),
+      },
+      os: {
+        release: os.release(),
+        version: os.version(),
+        endianness: os.endianness(),
+      },
+      network: {
+        interfaces: os.networkInterfaces(),
+      },
+      performance: {
+        loadAverage: os.loadavg(),
+      },
+      user: {
+        username: os.userInfo().username,
+        homedir: os.userInfo().homedir,
+        uid: os.userInfo().uid,
+        gid: os.userInfo().gid,
+      },
     };
   }
 
