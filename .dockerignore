@@ -1,13 +1,15 @@
-# NestJS Dockerignore
+# keep lockfile
+!yarn.lock
 
 node_modules
 dist
-yarn.lock
-newrelic_agent.log
-npm-debug.log
-Dockerfile
 .dockerignore
-.git
-.gitignore
+Dockerfile*
+docker-compose*.yml
+.git*
 README.md
-.env
+.env*
+*.log
+.vscode/
+coverage/
+test/

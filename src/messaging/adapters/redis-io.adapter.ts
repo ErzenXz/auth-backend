@@ -21,6 +21,7 @@ export class RedisIoAdapter extends IoAdapter {
       password: process.env.REDIS_PASSWORD,
       // Explicitly set database to 0 to ensure consistency with other Redis clients
       db: 0,
+      tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
       // Add retry strategy
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);

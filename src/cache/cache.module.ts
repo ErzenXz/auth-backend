@@ -12,6 +12,7 @@ import { XCacheService } from './cache.service';
             host: process.env.REDIS_URL,
             port: parseInt(process.env.REDIS_PORT, 10) || 6379,
             timeout: 10000,
+            tls: process.env.REDIS_TLS === 'true',
           },
           ttl: 600,
           username: process.env.REDIS_USER || 'default',
