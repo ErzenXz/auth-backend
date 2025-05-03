@@ -34,6 +34,7 @@ export class CommandControlService implements OnModuleInit, OnModuleDestroy {
       port: parseInt(process.env.REDIS_PORT, 10) || 6379,
       username: process.env.REDIS_USER || 'default',
       password: process.env.REDIS_PASSWORD,
+      tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
     });
     this.subscriber = this.redisClient.duplicate();
   }

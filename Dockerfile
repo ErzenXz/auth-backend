@@ -1,48 +1,77 @@
-# Dockerfile for Building and Running a XENSystem
-## This Dockerfile defines a multi-stage build process for a Node.js application using the Alpine Linux distribution for a lightweight image. It sets up the application environment, installs dependencies, generates Prisma client code, builds the application, and configures the runtime environment.
+#########################################
+# Stage 1: install production dependencies
+#########################################
+FROM node:20.18.0-alpine3.19 AS deps
+WORKDIR /app
 
-### Build Stage
+# copy just the lockfile + manifest and install prod deps
+COPY package.json yarn.lock ./
+RUN yarn install \
+    --frozen-lockfile \
+    --production \
+    && yarn cache clean
+
+#########################################
+# Stage 2: install all deps & build
+#########################################
 FROM node:20.18.0-alpine3.19 AS build
-
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache g++ make python3
+# bring in build tools
+RUN apk add --no-cache --virtual .build-deps \
+    python3 \
+    make \
+    g++
 
-COPY package*.json ./
+# copy manifest & lock, install everything (prod+dev)
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile \
+    && yarn cache clean
 
-# Allow scripts to run for native module compilation
-RUN yarn install
-
+# copy source & generate + build
 COPY . .
+RUN yarn prisma generate \
+    && yarn build
 
-RUN yarn prisma generate && yarn build
+# remove build tools
+RUN apk del .build-deps
 
-### Production Stage
-
+#########################################
+# Stage 3: final production image
+#########################################
 FROM node:20.18.0-alpine3.19 AS production
-
-RUN apk add --no-cache bash curl && curl -1sLf \
-    'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.alpine.sh' | bash \
-    && apk add --no-cache infisical
-
-
 WORKDIR /app
-
 ENV NODE_ENV=production
 
-COPY --from=build /app ./
+# install Infisical CLI → remove bash+curl
+RUN apk add --no-cache bash curl \
+    && curl -1sLf \
+    "https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.alpine.sh" \
+    | bash \
+    && apk add --no-cache infisical \
+    && apk del bash curl
 
-# Install only production dependencies without running scripts, create a non-root user, and change ownership
-RUN yarn install --production --ignore-scripts && \
-    addgroup -S appgroup && adduser -S appuser -G appgroup && \
-    chown -R appuser:appgroup /app
+# 1) bring in prod deps
+COPY --from=deps  /app/node_modules   ./node_modules
 
-COPY script.sh /app/script.sh
-RUN chmod +x /app/script.sh
+# 2) overwrite Prisma artifacts
+COPY --from=build /app/node_modules/@prisma   ./node_modules/@prisma
+COPY --from=build /app/node_modules/.prisma    ./node_modules/.prisma
 
-USER appuser
+# 3) copy dist
+COPY --from=build /app/dist                ./dist
+
+# 4) copy your scripts + manifest
+COPY --from=build /app/package.json        ./package.json
+COPY --from=build /app/yarn.lock           ./yarn.lock
+COPY    script.sh                          ./
+RUN chmod +x script.sh
+
+# drop privileges
+RUN addgroup -S appgrp \
+    && adduser  -S appusr -G appgrp \
+    && chown -R appusr:appgrp /app
+USER appusr
 
 EXPOSE 3000
-
-CMD ["/app/script.sh"]
+ENTRYPOINT ["./script.sh"]
