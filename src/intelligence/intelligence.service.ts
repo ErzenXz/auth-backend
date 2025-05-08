@@ -1663,15 +1663,13 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
       ? instructions.map((ui) => ui.job).join(', ')
       : 'None';
 
-    // Optimize external content
+    // Optimize external content (Your existing logic here is good)
     let externalContent = 'No relevant external content';
     if (external) {
-      // Check if external is already a string representation of an object
       let parsedExternal: any;
       let isObject = false;
       if (typeof external === 'string') {
         try {
-          // Attempt to parse if it looks like JSON
           if (
             (external.startsWith('{') && external.endsWith('}')) ||
             (external.startsWith('[') && external.endsWith(']'))
@@ -1679,53 +1677,41 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
             parsedExternal = JSON.parse(external);
             isObject = true;
           } else {
-            // Treat as plain string if not clearly JSON
             parsedExternal = external;
           }
         } catch (e) {
-          // If parsing fails, treat it as a plain string
           console.warn(
             'External content looked like JSON but failed to parse, treating as string.',
           );
           parsedExternal = external;
         }
       } else if (typeof external === 'object' && external !== null) {
-        // Handle cases where external is already an object
         parsedExternal = external;
         isObject = true;
       } else {
-        // Fallback for other unexpected types, treat as string if possible
         parsedExternal = String(external);
       }
 
       if (isObject && typeof parsedExternal === 'object') {
-        // Now handle the object case (specifically looking for search results)
         if (
           parsedExternal.searchResults &&
           Array.isArray(parsedExternal.searchResults) &&
           parsedExternal.searchResults.length > 0
         ) {
-          // Format search results using the new inline citation format -#[LINK(URL)(Title)]#-
-          // Note: The prompt expects inline citation, but here we are preparing the *context*
-          // The AI model will use this context to *generate* the inline citations in its response.
-          // We should format the context clearly for the AI. Listing them might be best here.
           const formattedResults = parsedExternal.searchResults
-            .map((result, index) => {
-              // Provide URL and Title clearly for the AI to use
+            .map((result: any, index: number) => {
               const title = result.title || 'Source';
-              const url = result.url || '#'; // Use '#' if URL is missing
-              return `[${index + 1}] Title: ${title}, URL: ${url}`; // Clear format for the AI
+              const url = result.url || '#';
+              return `[${index + 1}] Title: ${title}, URL: ${url}`;
             })
             .join('\n');
-
           externalContent = `Web Search Results:\n${formattedResults}`;
         } else {
           externalContent =
             'No relevant search results found in the provided object.';
         }
       } else if (typeof parsedExternal === 'string') {
-        // Handle plain string external content (truncation)
-        if (parsedExternal.length > 2000) {
+        if (parsedExternal.length > 3000) {
           externalContent =
             parsedExternal.substring(0, 2000) + '... [content truncated]';
         } else if (parsedExternal.trim() === '') {
@@ -1739,84 +1725,90 @@ Respond ONLY with "no" or 1-2 brief search queries on separate lines.`;
       }
     }
 
-    // Truncate thinking context if too long
     const thinkingCtx = thinking
       ? thinking.length > 5000
         ? thinking.substring(0, 5000) + '... [truncated]'
         : thinking
       : "Processing the user's message for a direct and friendly answer.";
 
+    // --- IMPROVED SYSTEM PROMPT SECTION ---
     return `
-      SYSTEM PROMPT:
-      -----------------------------------------------------------
-      OVERVIEW
-      You are an advanced personal assistant, blending high intelligence (IQ) with profound emotional intelligence (EQ). Your core mission is to deliver exceptionally helpful, accurate, and thoughtful responses, precisely tailored to the user's needs and the context of their query.
-      
-      **Adaptive Response Style:**
-      * **Complexity:** Analyze the user's message complexity. For simple questions, provide clear and direct answers. For complex, technical, or nuanced topics, respond with depth, structure, and professionalism, breaking down information logically.
-      * **Tone:** Modulate your tone dynamically. Be empathetic and understanding for personal or emotional topics. Adopt a professional and precise tone for technical or formal requests. Engage creatively for brainstorming or artistic tasks. Maintain a generally helpful and friendly demeanor unless the context demands otherwise.
-      * **Goal:** Strive to be the most valuable assistant possible, anticipating user needs and providing comprehensive support, whether it requires detailed explanations, inventive ideas, or sensitive handling of information.
-      
-      TEMPLATE VARIABLES
-      1.  user_instructions:
-          ${userInstructions}
-      
-      2.  external_content: // Web Search Results or other external data
-          ${externalContent}
-      
-      3.  general_info: // General information
-          ${info}
-      
-      4.  user_memories: // Specific user memories/preferences
-          ${memories}
-      
-      5.  thinking_context: // Internal reasoning steps
-          <think>
-          ${thinkingCtx}
-          </think>
-      
-      6.  user_message: // The user's current input
-          ${message}
-      
-      RESPONSE GUIDELINES
-      
-      - **Relevance & Tailoring:** Ensure responses are directly relevant to the \`user_message\` and personalized using \`user_instructions\`, \`general_info\`, and \`user_memories\` when appropriate.
-      
-      - **Accuracy:** Prioritize factual accuracy. Never invent information. Clearly state if you cannot find information or perform a request.
-      
-      - **External Content Integration:** Seamlessly weave relevant information from \`external_content\` (like web search results) into your response to provide comprehensive answers. **Cite sources inline** immediately after the information they support, using the format: <searchsource url="URL" title="Page Title"></searchsource> Do not simply list links at the end.
-      
-      * *Example:* Google is a major technology company <searchsource url="https://about.google/" title="About Google"></searchsource>.
-      
-      - **Memory Usage:** When retrieving information from \`user_memories\`, state the retrieved value clearly, preceded by the specific memory tag. Use the format: <memory name="VariableName" value="ActualValue"></memory>
-      
-      * *Example:* "Hello, your username is <memory name="userName" value="test3333"></memory>"
-      
-      - **Coding:** Provide clean, well-commented, and efficient code solutions. Explain the logic clearly. For web development, use the CANVAS feature.
-      
-      - **Creative Tasks:** Offer original, thoughtful, and well-structured creative outputs (stories, poems, ideas) using the CANVAS feature.
-      
-      - **Technical Content:** Deliver accurate, clear, and well-structured technical explanations. Use appropriate terminology.
-      
-      - **Mathematical Notation:** Use LaTeX for all mathematical expressions. Enclose inline math with single dollar signs (\`$ ... $\`) and block equations with double dollar signs (\`$$ ... $$\`).
-      
-      - **Readability:** Structure responses logically using markdown (headings, lists, bolding) for clarity.
-      
-      - **CANVAS Feature:** Use \`<canvas>\` tags for designated creative writing or web development tasks. Differentiate content types using the \`type\` attribute:
-      
-      - Creative Writing: \`<canvas type="creative" title="Blog post about AI">...</canvas>\`
-      
-      - Web Development (Single HTML file with embedded CSS/JS): \`<canvas type="webdev" title="Web app for managing tasks">...</canvas>\`
-      
-      - Python Code: \`<canvas type="python" title="Python script">...</canvas>\`
-      
-        
-      
-      Begin your response to the user_message now, adhering strictly to these guidelines.
-      
-      -----------------------------------------------------------
-      
-      `.trim();
+SYSTEM PROMPT:
+-----------------------------------------------------------
+OVERVIEW
+You are an advanced personal assistant, blending high intelligence (IQ) with profound emotional intelligence (EQ). Your core mission is to deliver exceptionally helpful, accurate, and thoughtful responses, precisely tailored to the user's needs and the context of their query.
+
+**Adaptive Response Style:**
+* **Complexity:** Analyze the user's message complexity. For simple questions, provide clear and direct answers. For complex, technical, or nuanced topics, respond with depth, structure, and professionalism, breaking down information logically.
+* **Tone:** Modulate your tone dynamically. Be empathetic and understanding for personal or emotional topics. Adopt a professional and precise tone for technical or formal requests. Engage creatively for brainstorming or artistic tasks. Maintain a generally helpful and friendly demeanor unless the context demands otherwise.
+* **Goal:** Strive to be the most valuable assistant possible, anticipating user needs and providing comprehensive support, whether it requires detailed explanations, inventive ideas, or sensitive handling of information.
+
+TEMPLATE VARIABLES
+1.  user_instructions:
+    ${userInstructions}
+
+2.  external_content: // Web Search Results or other external data
+    ${externalContent}
+
+3.  general_info: // General information
+    ${info}
+
+4.  user_memories: // Specific user memories/preferences
+    ${memories}
+
+5.  thinking_context: // Internal reasoning steps (your thought process)
+    <think>
+    ${thinkingCtx}
+    </think>
+
+6.  user_message: // The user's current input
+    ${message}
+
+RESPONSE GUIDELINES
+
+-   **Relevance & Tailoring:** Ensure responses are directly relevant to the \`user_message\` and personalized using \`user_instructions\`, \`general_info\`, and \`user_memories\` when appropriate.
+
+-   **Accuracy:** Prioritize factual accuracy. Never invent information. Clearly state if you cannot find information or perform a request.
+
+-   **External Content Integration:** Seamlessly weave relevant information from \`external_content\` (like web search results) into your response to provide comprehensive answers. **Cite sources inline** immediately after the information they support using the format -#[LINK(URL)(Title)]#-.
+
+-   **Coding:** Provide clean, well-commented, and efficient code solutions. Explain the logic clearly.
+    * For general code snippets (e.g., Python, JavaScript not part of a full webpage), use triple backticks with language identifiers.
+    * For standalone, single-file web development tasks (HTML with embedded CSS/JS), use the CANVAS feature as described below.
+
+-   **Creative Tasks:** Offer original, thoughtful, and well-structured creative outputs (stories, poems, ideas). For longer or structured creative pieces, use the CANVAS feature as described below. Shorter creative elements can be part of the main response.
+
+-   **Technical Content:** Deliver accurate, clear, and well-structured technical explanations. Use appropriate terminology.
+
+-   **Mathematical Notation:** Use LaTeX for all mathematical expressions. Enclose inline math with single dollar signs (\`$ ... $\`) and block equations with double dollar signs (\`$$ ... $$\`).
+
+-   **Readability:** Structure responses logically using markdown (headings, lists, bolding) for clarity. Break down long paragraphs.
+
+-   **CANVAS Feature - CRITICAL INSTRUCTIONS:**
+    The CANVAS feature is used for specific, self-contained blocks of content like creative writing, web development outputs, or Python scripts.
+    * **MANDATORY TAG FORMAT:** **ALWAYS use a full opening tag (e.g., \`<canvas type="creative" title="My Story">\`) and a corresponding, separate closing tag (\`</canvas>\`).**
+        * **DO NOT use self-closing tags (e.g., \`<canvas ... />\`).**
+        * **DO NOT use incomplete tags (e.g., just \`<canvas>\` without content and a closing tag).**
+        * The content, regardless of its length, MUST be enclosed *between* the opening and closing tags.
+        * Example of CORRECT usage: \`<canvas type="webdev" title="Task Manager UI">\n\n</canvas>\`
+        * Example of INCORRECT usage: \`<canvas type="creative" title="My Poem"/>\` or \`<canvas>\` (alone)
+    * **Content Type Attribute (\`type\`):** Clearly differentiate content using the \`type\` attribute:
+        * **Creative Writing:** \`<canvas type="creative" title="Descriptive title for the creative piece">\`
+            * The content *inside* these canvas tags MUST be well-written, engaging, and **formatted using Markdown** (e.g., # Headings, *italics*, **bold**, lists) to enhance readability and structure.
+            * Ensure the creative output is complete and makes sense within the given title.
+        * **Web Development (Single HTML file with embedded CSS/JS):** \`<canvas type="webdev" title="Descriptive title for the web page/component">\`
+            * The content MUST be a complete, valid HTML structure.
+            * CSS should be within \`<style>\` tags in the \`<head>\` or inline.
+            * JavaScript should be within \`<script>\` tags, typically before the closing \`</body>\` tag, or in the \`<head>\` if deferred/async.
+            * The output should be a single, self-contained HTML document.
+        * **Python Code:** \`<canvas type="python" title="Descriptive title for the Python script">\`
+            * The content MUST be valid Python code.
+            * Include comments where necessary to explain the code.
+    * **Title Attribute (\`title\`):** Always include a concise, descriptive \`title\` attribute that accurately reflects the content within the canvas.
+
+Begin your response to the user_message now, adhering strictly to these guidelines.
+-----------------------------------------------------------
+`.trim();
   }
 
   private async extractAndSaveMemory(
@@ -3538,48 +3530,117 @@ MEMORY GUIDELINES:
         }
 
         try {
-          // Group files by directories
+          // Normalize path separator to handle both '/' and '\'
+          const normalizedRelativePath = relativePath.replace(/\\/g, '/');
+          
+          // Create a map to track all directories and their contents
           const directoryMap = new Map<
             string,
-            Array<{ name: string; type: 'file' | 'directory' }>
+            Array<{ name: string; type: 'file' | 'directory'; size?: number; childCount?: number }>
           >();
-
+          
+          // Initialize root directory if needed
+          if (!directoryMap.has('')) {
+            directoryMap.set('', []);
+          }
+          
+          // First pass: collect all directories
+          const directories = new Set<string>();
           projectFiles.forEach((file) => {
-            const parts = file.path.split('/');
-            const fileName = parts.pop() || '';
+            // Normalize file path
+            const normalizedPath = file.path.replace(/\\/g, '/');
+            const parts = normalizedPath.split('/');
+            
+            // Track all parent directories
+            let currentDir = '';
+            for (let i = 0; i < parts.length - 1; i++) {
+              const part = parts[i];
+              if (i === 0) {
+                currentDir = part;
+              } else {
+                currentDir = `${currentDir}/${part}`;
+              }
+              directories.add(currentDir);
+            }
+          });
+          
+          // Add all directories to the map
+          directories.forEach(dir => {
+            const parentDir = dir.substring(0, dir.lastIndexOf('/'));
+            const dirName = dir.substring(dir.lastIndexOf('/') + 1);
+            
+            // Add directory to parent
+            if (!directoryMap.has(parentDir)) {
+              directoryMap.set(parentDir, []);
+            }
+            
+            const parentContents = directoryMap.get(parentDir);
+            if (!parentContents.some(item => item.name === dirName && item.type === 'directory')) {
+              parentContents.push({
+                name: dirName,
+                type: 'directory',
+                childCount: 0 // Will be updated in next pass
+              });
+            }
+            
+            // Ensure directory has its own entry
+            if (!directoryMap.has(dir)) {
+              directoryMap.set(dir, []);
+            }
+          });
+          
+          // Second pass: add all files and update directory child counts
+          projectFiles.forEach((file) => {
+            // Normalize file path
+            const normalizedPath = file.path.replace(/\\/g, '/');
+            const parts = normalizedPath.split('/');
+            const fileName = parts.pop();
             const dirPath = parts.join('/');
-
+            
+            // Add file to its directory
             if (!directoryMap.has(dirPath)) {
               directoryMap.set(dirPath, []);
             }
-
-            directoryMap.get(dirPath)?.push({
+            
+            directoryMap.get(dirPath).push({
               name: fileName,
               type: 'file',
+              size: file.content.length // Use content length as file size
             });
-
-            // Add directories recursively
-            let currentPath = '';
-            for (const part of parts) {
-              const parentPath = currentPath;
-              currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-              if (!directoryMap.has(parentPath)) {
-                directoryMap.set(parentPath, []);
+            
+            // Update child counts for all parent directories
+            let currentDir = '';
+            for (let i = 0; i < parts.length; i++) {
+              const part = parts[i];
+              if (i === 0) {
+                currentDir = part;
+              } else {
+                currentDir = `${currentDir}/${part}`;
               }
-
-              const parent = directoryMap.get(parentPath);
-              if (parent && !parent.some((item) => item.name === part)) {
-                parent.push({
-                  name: part,
-                  type: 'directory',
-                });
+              
+              const parentDir = i === 0 ? '' : parts.slice(0, i).join('/');
+              const dirName = parts[i];
+              
+              // Find the directory in its parent and increment child count
+              const parentContents = directoryMap.get(parentDir);
+              const dirEntry = parentContents.find(item => item.name === dirName && item.type === 'directory');
+              if (dirEntry) {
+                dirEntry.childCount = (dirEntry.childCount || 0) + 1;
               }
             }
           });
-
+          
           // Get contents for the requested path
-          const contents = directoryMap.get(relativePath) || [];
+          const contents = directoryMap.get(normalizedRelativePath) || [];
+          
+          // Sort: directories first, then files, both alphabetically
+          contents.sort((a, b) => {
+            if (a.type !== b.type) {
+              return a.type === 'directory' ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+          });
+          
           const result = {
             path: relativePath,
             contents,
@@ -3992,60 +4053,89 @@ MEMORY GUIDELINES:
 
     // 7. Build the system prompt with enhanced context
     const systemPrompt = `
-# AI Coding Agent
+# System Prompt
 
-You are an advanced AI coding agent that helps users build software projects. Your capabilities include:
+## Initial Context and Setup
 
-1. Reading and understanding project files
-2. Creating new files or modifying existing ones 
-3. Proposing terminal commands to compile, test, or run the code
-4. Searching the web for relevant information
-5. Using semantic and regex search to navigate the codebase
+You are a powerful agentic AI coding assistant. You operate as an expert developer to help users build software projects. You are pair programming with a user to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
 
 ## Project Context
 Project Name: ${project.name}
 Description: ${project.description || 'No description provided'}
 Files: ${project.files.length} file(s)
 
+## Communication Guidelines
+
+1. Be conversational but professional.
+2. Refer to the user in the second person and yourself in the first person.
+3. Format your responses in markdown. Use backticks to format file, directory, function, and class names.
+4. NEVER lie or make things up.
+5. Refrain from apologizing all the time when results are unexpected. Instead, just try your best to proceed or explain the circumstances to the user without apologizing.
+
 ## Available Tools
-You can use the following tools by calling them exactly as shown:
+You have access to the following tools to help the user with their coding task. Use these tools to gather information, edit code, and execute commands to solve the user's requirements.
 
-- **codebase_search**: Find relevant code snippets using semantic search
-  Example: codebase_search("search query", ["optional/target/directory"])
+### Search and Information Gathering
 
-- **read_file**: View contents of a specific file
-  Example: read_file("path/to/file.js", 1, 100)
+1. **codebase_search** - Find snippets of code from the codebase most relevant to the search query. This is a semantic search tool, so the query should ask for something semantically matching what is needed. If it makes sense to only search in particular directories, please specify them in the targetDirs field.
+   Usage: codebase_search("search query", ["optional/target/directory"])
 
-- **run_terminal_cmd**: Propose terminal commands to execute
-  Example: run_terminal_cmd("npm install express", false)
+2. **grep_search** - Fast text-based regex search that finds exact pattern matches within files or directories. Results will be formatted and can be configured to include line numbers and content.
+   Usage: grep_search("exact pattern", caseSensitive, "include_pattern", "exclude_pattern")
 
-- **list_dir**: List contents of a directory
-  Example: list_dir("src/components")
+3. **read_file** - Read the contents of a file. You can specify line ranges to view specific sections.
+   Usage: read_file("path/to/file.js", startLine, endLine)
 
-- **grep_search**: Search for patterns across files
-  Example: grep_search("function searchPattern", true)
+4. **list_dir** - List the contents of a directory. This is useful for exploring the project structure before diving deeper into specific files.
+   Usage: list_dir("path/to/directory")
 
-- **edit_file**: Create or modify files
-  To use this tool, format your response like:
-  \`\`\`tool_code
-  edit_file
-  \`\`\`
-  **File: filename.ext**
-  \`\`\`language
-  file content goes here
-  \`\`\`
+5. **file_search** - Fast file search based on fuzzy matching against file path. Use if you know part of the file path but don't know its exact location.
+   Usage: file_search("partial/file/path")
 
-- **file_search**: Find files by name
-  Example: file_search("component")
+6. **web_search** - Search the web for real-time information about any topic. Useful for up-to-date information that might not be in your training data.
+   Usage: web_search("search query")
 
-- **delete_file**: Remove files from the project
-  Example: delete_file("path/to/file.js")
+### Code Editing and File Operations
 
-- **web_search**: Research information online
-  Example: web_search("tailwind css responsive design")
+7. **edit_file** - Use this tool to edit an existing file or create a new file.
+   Usage: edit_file("path/to/file.js", "file content", "description of changes")
 
-- **thinking**: Record your reasoning about what the user might want to do
-  Example: thinking("The user wants to build a portfolio site, so I should start by creating an HTML structure with key sections like header, about, projects, and contact")
+8. **delete_file** - Deletes a file at the specified path.
+   Usage: delete_file("path/to/file.js")
+
+### Command Execution
+
+9. **run_terminal_cmd** - Propose a command to run on behalf of the user. The user will need to approve the command before it is executed.
+   Usage: run_terminal_cmd("npm install express", isBackground)
+
+### Thinking Process
+
+10. **thinking** - Record your thought process to help explain your reasoning to the user.
+    Usage: thinking("detailed explanation of your thought process")
+
+## Tool Usage Guidelines
+
+1. Before calling each tool, first explain to the user why you are calling it.
+
+Remember to use the available tools to gather information, analyze the project, and implement solutions. Be thorough in your analysis and clear in your explanations.
+
+## Code Change Guidelines
+
+When making code changes, follow these best practices:
+
+1. Add all necessary import statements, dependencies, and endpoints required to run the code.
+2. If you're creating the codebase from scratch, create appropriate dependency management files with package versions.
+3. If you're building a web app, give it a beautiful and modern UI with best UX practices.
+4. Make sure your generated code is immediately runnable.
+
+## Debugging Guidelines
+
+When debugging, follow these practices:
+
+1. Address the root cause instead of just the symptoms.
+2. Add descriptive logging statements and error messages to track variable and code state.
+3. Add test functions or statements to isolate the problem.
+4. Look for common issues like race conditions, type mismatches, and improper error handling.
 
 ## Guidelines
 - Understand the user's request thoroughly before taking action
@@ -4260,6 +4350,495 @@ Use your available tools to help solve the task efficiently.
     }
 
     return source;
+  }
+
+  /**
+   * Stream version of executeAgentPipeline that emits results via callback
+   * This allows real-time updates to be sent to clients via WebSockets
+   * @param message User's message/instruction
+   * @param projectId Project ID
+   * @param threadId Optional thread ID for conversation context
+   * @param userId User ID for authorization and context
+   * @param emitCallback Callback function to emit events during processing
+   */
+  async executeAgentPipelineStream(
+    message: string,
+    projectId: string,
+    threadId: string | undefined,
+    userId: string,
+    emitCallback: (data: any) => void,
+  ): Promise<void> {
+    try {
+      // 1. Emit initial status
+      emitCallback({
+        type: 'status',
+        message: 'Starting agent pipeline...',
+        timestamp: new Date().toISOString(),
+      });
+
+      // 2. Validate project access and get project context
+      const project = await this.prisma.aIProject.findFirst({
+        where: {
+          id: projectId,
+          OR: [{ ownerId: userId }, { collaborators: { some: { userId } } }],
+        },
+        include: { files: { include: { currentVersion: true } } },
+      });
+
+      if (!project) {
+        emitCallback({
+          type: 'error',
+          message: 'Project not found or you do not have access',
+          timestamp: new Date().toISOString(),
+        });
+        throw new NotFoundException('Project not found or you do not have access');
+      }
+
+      emitCallback({
+        type: 'status',
+        message: `Project "${project.name}" loaded with ${project.files.length} files`,
+        timestamp: new Date().toISOString(),
+      });
+
+    // 3. Get or create a thread for conversation context
+    let currentThreadId = threadId;
+    try {
+      if (!currentThreadId) {
+        const newThread = await this.prisma.aIThread.create({
+          data: {
+            title: `${message.split('\n')[0].slice(0, 50)}...`,
+            userId,
+            projectId,
+          },
+        });
+        currentThreadId = newThread.id;
+        
+        emitCallback({
+          type: 'thread',
+          threadId: currentThreadId,
+          message: 'Created new conversation thread',
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        const thread = await this.prisma.aIThread.findFirst({
+          where: { id: currentThreadId, projectId },
+        });
+        if (!thread) {
+          emitCallback({
+            type: 'error',
+            message: 'Thread not found or does not belong to this project',
+            timestamp: new Date().toISOString(),
+          });
+          throw new NotFoundException(
+            'Thread not found or does not belong to this project',
+          );
+        }
+        
+        emitCallback({
+          type: 'thread',
+          threadId: currentThreadId,
+          message: 'Using existing conversation thread',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      emitCallback({
+        type: 'error',
+        message: `Error managing thread: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      });
+      throw error;
+    }
+
+    // 4. Retrieve conversation history for context
+    let conversationHistory = [];
+    try {
+      const previousMessages = await this.prisma.aIThreadMessage.findMany({
+        where: { chatId: currentThreadId },
+        orderBy: { createdAt: 'asc' },
+        take: 100, // Limit history to recent messages
+      });
+
+      conversationHistory = previousMessages.map((msg) => ({
+        role: msg.role,
+        message: msg.content,
+      }));
+
+      emitCallback({
+        type: 'context',
+        messageCount: previousMessages.length,
+        message: 'Loaded conversation history',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      emitCallback({
+        type: 'warning',
+        message: `Error loading conversation history: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      });
+      // Continue without history if there's an error
+    }
+
+    const startTime = new Date().getTime();
+
+    // 5. Add the user's message to the conversation history
+    try {
+      await this.prisma.aIThreadMessage.create({
+        data: {
+          chatId: currentThreadId,
+          role: 'user',
+          content: message,
+          createdAt: new Date(startTime),
+        },
+      });
+      
+      emitCallback({
+        type: 'message',
+        role: 'user',
+        content: message,
+        timestamp: new Date(startTime).toISOString(),
+      });
+    } catch (error) {
+      emitCallback({
+        type: 'warning',
+        message: `Error saving user message: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      });
+      // Continue even if saving the message fails
+    }
+
+    // 6. Initialize agent state with project context
+    const projectFiles = project.files.map((file) => ({
+      id: file.id,
+      name: file.name,
+      path: file.path,
+      content: file.currentVersion?.content || '',
+      lastModified: file.currentVersion?.createdAt || new Date(),
+    }));
+
+    emitCallback({
+      type: 'status',
+      message: 'Initializing AI agent...',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Model selection based on task complexity
+    const defaultModel = AIModels.GeminiFlash_2_5; // Default to Gemini Flash 2.5
+
+    // Track function execution results
+    const functionExecutionResults = [];
+    
+    // Define tool functions with streaming support
+    const toolFunctions = {
+      codebase_search: async (query: string, targetDirs: string[] = []) => {
+        try {
+          emitCallback({
+            type: 'function_start',
+            tool: 'codebase_search',
+            params: { query, targetDirs },
+            timestamp: new Date().toISOString(),
+          });
+          
+          // Implement semantic search across project files
+          const relevantFiles = projectFiles
+            .filter((file) => {
+              if (targetDirs.length === 0) return true;
+              return targetDirs.some((dir) => file.path.startsWith(dir));
+            })
+            .map((file) => ({
+              path: file.path,
+              content: file.content,
+              relevance: this.calculateRelevance(query, file.content),
+            }))
+            .sort((a, b) => b.relevance - a.relevance)
+            .slice(0, 5);
+
+          const result = { results: relevantFiles };
+          const executionResult = {
+            tool: 'codebase_search',
+            query,
+            result,
+          };
+          
+          functionExecutionResults.push(executionResult);
+          
+          emitCallback({
+            type: 'function_result',
+            tool: 'codebase_search',
+            result: executionResult,
+            timestamp: new Date().toISOString(),
+          });
+          
+          return result;
+        } catch (error) {
+          console.error('Error in codebase search:', error);
+          const errorResult = { error: String(error), results: [] };
+          const executionResult = {
+            tool: 'codebase_search',
+            query,
+            error: String(error),
+          };
+          
+          functionExecutionResults.push(executionResult);
+          
+          emitCallback({
+            type: 'function_error',
+            tool: 'codebase_search',
+            error: String(error),
+            timestamp: new Date().toISOString(),
+          });
+          
+          return errorResult;
+        }
+      },
+
+      read_file: async (
+        filePath: string,
+        startLine: number = 1,
+        endLine?: number,
+      ) => {
+        try {
+          emitCallback({
+            type: 'function_start',
+            tool: 'read_file',
+            params: { filePath, startLine, endLine },
+            timestamp: new Date().toISOString(),
+          });
+          
+          const file = projectFiles.find((f) => f.path === filePath);
+          if (!file) {
+            const error = `File not found: ${filePath}`;
+            const executionResult = {
+              tool: 'read_file',
+              filePath,
+              error,
+            };
+            
+            functionExecutionResults.push(executionResult);
+            
+            emitCallback({
+              type: 'function_error',
+              tool: 'read_file',
+              error,
+              timestamp: new Date().toISOString(),
+            });
+            
+            throw new NotFoundException(error);
+          }
+
+          const lines = file.content.split('\n');
+          const start = Math.max(0, startLine - 1);
+          const end = endLine ? Math.min(lines.length, endLine) : lines.length;
+
+          const content = lines.slice(start, end).join('\n');
+          const result = {
+            content,
+            totalLines: lines.length,
+            readLines: `${startLine}-${end}`,
+          };
+
+          const executionResult = {
+            tool: 'read_file',
+            filePath,
+            lines: `${startLine}-${end}`,
+            success: true,
+          };
+          
+          functionExecutionResults.push(executionResult);
+          
+          emitCallback({
+            type: 'function_result',
+            tool: 'read_file',
+            result: executionResult,
+            timestamp: new Date().toISOString(),
+          });
+
+          return result;
+        } catch (error) {
+          console.error(`Error reading file ${filePath}:`, error);
+          const executionResult = {
+            tool: 'read_file',
+            filePath,
+            error: String(error),
+          };
+          
+          functionExecutionResults.push(executionResult);
+          
+          emitCallback({
+            type: 'function_error',
+            tool: 'read_file',
+            error: String(error),
+            timestamp: new Date().toISOString(),
+          });
+          
+          throw error;
+        }
+      },
+      
+      // Add other tool functions with streaming support here...
+    };
+    
+    // System prompt construction (similar to non-streaming version)
+    const systemPrompt = `
+# System Prompt
+
+## Initial Context and Setup
+
+You are a powerful agentic AI coding assistant. You operate as an expert developer to help users build software projects. You are pair programming with a user to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
+
+## Project Context
+Project Name: ${project.name}
+Description: ${project.description || 'No description provided'}
+Files: ${project.files.length} file(s)
+
+## Communication Guidelines
+
+1. Be conversational but professional.
+2. Refer to the user in the second person and yourself in the first person.
+3. Format your responses in markdown. Use backticks to format file, directory, function, and class names.
+4. NEVER lie or make things up.
+5. Refrain from apologizing all the time when results are unexpected. Instead, just try your best to proceed or explain the circumstances to the user without apologizing.
+
+## Task Instructions
+Your task is to help the user with the following request:
+
+"${message}"
+
+Remember to use the available tools to gather information, analyze the project, and implement solutions. Be thorough in your analysis and clear in your explanations.
+`;
+    
+    try {
+      emitCallback({
+        type: 'status',
+        message: 'Processing with AI model...',
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Process user's request using the AI model with function calling
+      const response = await this.aiWrapper.generateFunctionCallingContent(
+        defaultModel,
+        systemPrompt,
+        conversationHistory,
+        toolFunctions,
+      );
+      
+      // Process response and extract function calls
+      const processedResponse = {
+        content: response.content,
+        functionCalls: response.functionCalls || [],
+      };
+      
+      emitCallback({
+        type: 'thinking',
+        content: 'Analyzing your request and project structure...',
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Log executed functions for context tracking
+      if (functionExecutionResults.length > 0) {
+        await this.prisma.aIThreadMessage.create({
+          data: {
+            chatId: currentThreadId,
+            role: 'system',
+            content: JSON.stringify({
+              type: 'function_execution_log',
+              executions: functionExecutionResults,
+            }),
+            createdAt: new Date(),
+          },
+        });
+        
+        emitCallback({
+          type: 'functions_summary',
+          count: functionExecutionResults.length,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      
+      // Save AI response to thread
+      await this.prisma.aIThreadMessage.create({
+        data: {
+          chatId: currentThreadId,
+          role: 'assistant',
+          content: response.content,
+          createdAt: new Date(),
+        },
+      });
+      
+      // Stream the final response in smaller chunks for better UX
+      const chunks = this.chunkResponse(response.content);
+      for (const chunk of chunks) {
+        emitCallback({
+          type: 'response_chunk',
+          content: chunk,
+          timestamp: new Date().toISOString(),
+        });
+        
+        // Small delay to simulate realistic typing/streaming
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      // Send the final complete response
+      emitCallback({
+        type: 'response_complete',
+        content: response.content,
+        threadId: currentThreadId,
+        functionCalls: processedResponse.functionCalls,
+        executedFunctions: functionExecutionResults,
+        timestamp: new Date().toISOString(),
+      });
+      
+    } catch (error: any) {
+      // Enhanced error logging and handling
+      console.error('Agent pipeline stream error:', error);
+      const errorDetails = {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+      };
+
+      await this.prisma.aIThreadMessage.create({
+        data: {
+          chatId: currentThreadId,
+          role: 'system',
+          content: JSON.stringify({
+            type: 'error',
+            details: errorDetails,
+          }),
+          createdAt: new Date(),
+        },
+      });
+      
+      emitCallback({
+        type: 'error',
+        message: `Error processing your request: ${error.message}`,
+        details: errorDetails,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+  
+  /**
+   * Helper method to chunk a larger response into smaller pieces for streaming
+   * @param text Full text response
+   * @returns Array of smaller chunks
+   */
+  /**
+   * Breaks a text response into smaller chunks for smoother streaming
+   */
+  private chunkResponse(text: string): string[] {
+    if (!text) return [];
+    
+    const chunkSize = 100; // Characters per chunk
+    const result: string[] = [];
+    let i = 0;
+    
+    while (i < text.length) {
+      result.push(text.slice(i, i + chunkSize));
+      i += chunkSize;
+    }
+    
+    return result.length > 0 ? result : [text];
   }
 
   /**
