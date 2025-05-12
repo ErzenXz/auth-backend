@@ -60,7 +60,7 @@
     "ajv-formats": "^3.0.1",
     "aws-sdk": "^2.1691.0",
     "axios": "^1.8.4",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "bullmq": "^5.28.1",
     "cache-manager": "5.7.6",
     "cache-manager-redis-store": "3.0.1",
