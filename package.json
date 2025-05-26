@@ -44,7 +44,7 @@
     "@nestjs/graphql": "^13.0.2",
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/passport": "^10.0.3",
-    "@nestjs/platform-express": "^10.4.5",
+    "@nestjs/platform-express": "^11.1.2",
     "@nestjs/platform-socket.io": "^10.4.7",
     "@nestjs/swagger": "^7.4.2",
     "@nestjs/throttler": "^6.2.1",
